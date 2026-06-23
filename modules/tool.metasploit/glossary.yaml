@@ -1,0 +1,35 @@
+terms:
+  - term: framework
+    definition: "Metasploit is a framework of modules, not one command."
+  - term: module_types
+    definition: "exploit, payload, auxiliary, post, encoder, nop, evasion."
+  - term: exploit
+    definition: "The module that breaks in."
+  - term: payload
+    definition: "What runs on the target after the exploit succeeds."
+  - term: auxiliary
+    definition: "No-payload tools (scanners/fuzzers/enumeration)."
+  - term: post
+    definition: "After-access tasks run against a session."
+  - term: meterpreter
+    definition: "The in-memory post-exploitation payload/session with rich commands."
+  - term: rhosts_lhost
+    definition: "RHOSTS target(s) / LHOST your listener IP / LPORT your listener port."
+  - term: staged_stageless
+    definition: "Staged uses / (small stager + stage); stageless uses _ (one self-contained blob)."
+  - term: reverse_bind
+    definition: "Reverse connects back to you (NAT-friendly); bind opens a port on the target."
+  - term: session
+    definition: "An active connection to a compromised target."
+  - term: job
+    definition: "A backgrounded task (-j), e.g. a handler listener."
+  - term: handler
+    definition: "The listener (exploit/multi/handler) that catches a reverse payload."
+  - term: datastore
+    definition: "The set/setg option values for the current module/global."
+  - term: workspace
+    definition: "A named DB container to separate engagements."
+  - term: msfvenom
+    definition: "Standalone payload/shellcode generator (a real CLI tool)."
+  - term: msfdb
+    definition: "Sets up the PostgreSQL database the console uses."

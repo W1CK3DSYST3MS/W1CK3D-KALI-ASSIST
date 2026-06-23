@@ -1,0 +1,189 @@
+tool_id: aircrack-ng
+display_name: "aircrack-ng suite"
+binary_candidates: [aircrack-ng, airmon-ng, airodump-ng, aireplay-ng]
+categories: [wireless]
+os_profile: kali
+one_liner: "Capture and crack Wi-Fi (WPA/WPA2) authentication on networks you own/are authorized to test."
+authorization_gate: true
+authorization_text: >
+  Testing Wi-Fi networks you do not own or lack explicit written permission to test is illegal
+  almost everywhere. Deauthentication disrupts real users' connectivity. Continue only for your
+  own network or an authorized lab. The active deauth/PMKID steps require a SECOND confirmation.
+  Needs an adapter that supports monitor mode (and injection for deauth). Continue?
+flows:
+  - flow_id: monitor
+    title: "Enable monitor mode (airmon-ng)"
+    goal: "Put the adapter into monitor mode."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac1
+        title: "Stop interferers, then start monitor"
+        slot_target: POSITIONAL_ARGS
+        destructive: true
+        recovery: "check kill stops NetworkManager → no normal Wi-Fi/internet until you run `sudo systemctl start NetworkManager` (cleanup flow)."
+        glossary_refs: [monitor_mode, injection]
+        explanation:
+          what: "`sudo airmon-ng check kill` stops interfering processes; `sudo airmon-ng start wlan0` creates wlan0mon."
+          why: "Capturing Wi-Fi frames needs monitor mode; NetworkManager/wpa_supplicant grab the adapter."
+          where: "airmon-ng subcommand (start/check kill); iface is POSITIONAL."
+        try_this: "sudo airmon-ng check kill   # then: sudo airmon-ng start wlan0"
+        success_criteria: "iw dev shows a type monitor interface (e.g. wlan0mon)."
+        alternatives:
+          - trigger: "adapter can't do monitor mode"
+            cause: "Chipset/driver limitation."
+            fix: "Use a compatible adapter (see the Networking troubleshooter, monitor-mode symptom)."
+            check: "iw list shows '* monitor' in supported modes."
+  - flow_id: discover
+    title: "Discover networks (airodump-ng)"
+    goal: "Find the target AP's BSSID/channel/ESSID."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac2
+        title: "Scan all channels"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [bssid, essid, channel]
+        explanation:
+          what: "`sudo airodump-ng wlan0mon` lists APs + clients; note BSSID (AP MAC), channel, ESSID (name)."
+          why: "You need the target's BSSID and channel to lock the capture."
+          where: "monitor interface is POSITIONAL."
+        try_this: "sudo airodump-ng wlan0mon"
+        success_criteria: "A live list of APs + connected clients."
+        alternatives:
+          - trigger: "target not appearing"
+            cause: "5 GHz band, hidden SSID, or channel cycling."
+            fix: "Confirm band support; let it cycle channels; wait."
+            check: "Watch a few channel cycles."
+  - flow_id: capture
+    title: "Capture the handshake (airodump-ng, locked)"
+    goal: "Record the WPA 4-way handshake to a file."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac3
+        title: "Lock to the AP and write a capture"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [handshake, eapol]
+        explanation:
+          what: "`-c <channel> --bssid <AP> -w <prefix> wlan0mon` locks on and writes capture-01.cap."
+          why: "When a client (re)connects the top line shows 'WPA handshake: <BSSID>'."
+          where: "-c/--bssid in ACTION; -w in OUTPUT; iface POSITIONAL."
+        try_this: "sudo airodump-ng -c 6 --bssid AA:BB:CC:DD:EE:FF -w capture wlan0mon"
+        success_criteria: "'WPA handshake' appears; capture-01.cap is written."
+        alternatives:
+          - trigger: "no handshake appearing"
+            cause: "No client (re)connected during capture."
+            fix: "Wait for a client, force one with a deauth, or try PMKID (clientless)."
+            check: "Switch to the deauth or pmkid flow."
+  - flow_id: deauth
+    title: "Force a handshake with a deauth (aireplay-ng) — ACTIVE"
+    goal: "Nudge a client to reconnect so the handshake is captured."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac4
+        title: "Send a targeted deauth (SECOND gate)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "A deauth actively kicks a real device off the network — your own network / authorized lab only. Abort if unsure."
+        glossary_refs: [deauth, injection]
+        explanation:
+          what: "`--deauth <count>` (0 = continuous), `-a <AP>`, `-c <client>` targets one client (gentler than broadcast)."
+          why: "Disconnecting a client makes it reconnect, revealing the handshake."
+          where: "ACTION_OPTIONS; monitor interface POSITIONAL."
+        try_this: "sudo aireplay-ng --deauth 5 -a AA:BB:CC:DD:EE:FF -c 11:22:33:44:55:66 wlan0mon"
+        success_criteria: "Back in airodump, the handshake is captured."
+        alternatives:
+          - trigger: "no injection"
+            cause: "Adapter/driver doesn't support injection."
+            fix: "Test with `sudo aireplay-ng --test wlan0mon`; use a compatible adapter."
+            check: "Review monitor-mode adapter support."
+  - flow_id: crack
+    title: "Crack the handshake (aircrack-ng)"
+    goal: "Test the captured handshake against a wordlist."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac5
+        title: "Run a wordlist against the capture"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [handshake]
+        explanation:
+          what: "`-w <wordlist> -b <BSSID> <capture.cap>`; rockyou is gzipped on Kali (gunzip once)."
+          why: "Offline test of the passphrase; no network involved now."
+          where: "ACTION_OPTIONS; capture file POSITIONAL."
+        try_this: "aircrack-ng -w /usr/share/wordlists/rockyou.txt -b AA:BB:CC:DD:EE:FF capture-01.cap"
+        success_criteria: "'KEY FOUND! [ password ]' if the passphrase is in the list."
+        alternatives:
+          - trigger: "no valid handshake / got 0 handshakes"
+            cause: "The capture lacks a complete handshake."
+            fix: "Re-capture (capture/deauth flows)."
+            check: "Confirm 'WPA handshake' was seen during capture."
+          - trigger: "not in wordlist"
+            cause: "Passphrase not in the list."
+            fix: "Use a bigger/targeted list, or convert to hashcat 22000 for GPU speed + rules/masks."
+            check: "Switch engine to hashcat."
+  - flow_id: pmkid
+    title: "PMKID / clientless capture -> hashcat"
+    goal: "Grab a PMKID without any client, then crack in hashcat."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac6
+        title: "Convert a capture and crack with hashcat"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Clientless capture still targets a live AP — authorized networks only."
+        glossary_refs: [pmkid, hc22000]
+        explanation:
+          what: "Capture with hcxdumptool, convert with hcxpcapngtool to .hc22000, crack in hashcat -m 22000."
+          why: "Many APs leak a PMKID, letting you skip waiting for a client/deauth."
+          where: "Conversion + hashcat (see the hashcat module)."
+        try_this: "hcxpcapngtool -o hash.hc22000 capture.pcapng   # then: hashcat -m 22000 -a 0 hash.hc22000 rockyou.txt"
+        success_criteria: "A .hc22000 file is produced and cracked in hashcat."
+        alternatives:
+          - trigger: "no PMKID"
+            cause: "Not all APs are vulnerable."
+            fix: "Fall back to handshake capture (capture/deauth flows)."
+            check: "Confirm the AP exposes a PMKID."
+  - flow_id: cleanup
+    title: "Clean up / restore normal Wi-Fi"
+    goal: "Reverse monitor mode and bring back networking."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac7
+        title: "Stop monitor and restart NetworkManager"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`sudo airmon-ng stop wlan0mon` then `sudo systemctl start NetworkManager`."
+          why: "Reverses the check-kill from the monitor flow so normal Wi-Fi/internet returns."
+          where: "airmon-ng stop; iface POSITIONAL."
+        try_this: "sudo airmon-ng stop wlan0mon   # then: sudo systemctl start NetworkManager"
+        success_criteria: "nmcli device status shows normal Wi-Fi restored."
+        alternatives:
+          - trigger: "still no internet"
+            cause: "NetworkManager not restarted, or interface stuck."
+            fix: "Run `sudo systemctl start NetworkManager`; see the Networking troubleshooter."
+            check: "nmcli device status."
+  - flow_id: wep_note
+    title: "WEP note (legacy)"
+    goal: "Understand why WEP is out of scope."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM]
+    steps:
+      - step_id: ac8
+        title: "WEP is essentially extinct"
+        slot_target: null
+        explanation:
+          what: "Old WEP cracks differently/easily (IV collection + aircrack-ng), but WEP is virtually gone."
+          why: "Mentioned for completeness; modern targets are WPA/WPA2/3."
+          where: "Concept only."
+        try_this: "(No command — modern targets use WPA2/3; use the capture+crack flows.)"
+        success_criteria: "You understand WEP is legacy and out of scope here."
+        alternatives:
+          - trigger: "you actually have a WEP target"
+            cause: "Rare legacy equipment."
+            fix: "Collect IVs with airodump then aircrack-ng the .cap; consult the suite docs."
+            check: "Confirm it's genuinely WEP, not WPA."

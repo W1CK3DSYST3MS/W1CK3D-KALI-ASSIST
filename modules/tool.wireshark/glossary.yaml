@@ -1,0 +1,21 @@
+terms:
+  - term: packet
+    definition: "A unit of network data captured on the wire."
+  - term: pcap
+    definition: "The packet-capture file format."
+  - term: interface
+    definition: "The NIC you capture on (-D lists them)."
+  - term: capture_filter
+    definition: "-f (BPF) drops packets before saving; libpcap syntax."
+  - term: display_filter
+    definition: "-Y (Wireshark) hides packets after capture; Wireshark syntax."
+  - term: bpf
+    definition: "Berkeley Packet Filter, the capture-filter language."
+  - term: promiscuous
+    definition: "Capturing all frames the NIC sees, not just yours (-p disables)."
+  - term: stream
+    definition: "A reassembled conversation (e.g. one TCP session)."
+  - term: snaplen
+    definition: "-s how many bytes of each packet to keep."
+  - term: protocol_hierarchy
+    definition: "-z io,phs a breakdown of protocols in a capture."

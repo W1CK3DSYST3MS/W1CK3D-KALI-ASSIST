@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wizard_core.builders import get_builder
+from wizard_core.builders import assemble, get_builder
 from wizard_core.models import ToolSpec
 
 from .auth_gate import confirm_authorization
@@ -90,9 +90,12 @@ class ToolPage(QWidget):
 
         self._profile = QComboBox()
         self._profile.addItem("(none)", None)
-        for p in _NMAP_PROFILES:
-            self._profile.addItem(p, p)
-        self._profile.setCurrentText("standard")
+        # Profiles are tool-specific; only nmap's simple form is wired into BUILD.
+        # Other tools are built via "Walk this flow" until per-tool forms land (M4).
+        if self._tool.tool_id == "nmap":
+            for p in _NMAP_PROFILES:
+                self._profile.addItem(p, p)
+            self._profile.setCurrentText("standard")
         form.addRow("Profile", self._profile)
 
         self._targets = QLineEdit()
@@ -134,21 +137,40 @@ class ToolPage(QWidget):
                 self._on_auth_ack(self._tool.tool_id)
         return ok
 
+    def _selected_flow(self):
+        flow_id = self._flow.currentData()
+        for f in self._tool.flows:
+            if f.flow_id == flow_id:
+                return f
+        return self._tool.flows[0]
+
     def _build_command(self) -> None:
         if not self._ensure_authorized():
             return
+        flow = self._selected_flow()
+        target = self._targets.text().strip()
+        out = self._out.text().strip()
+        # The simple form is nmap-shaped; pass the target under the common keys other
+        # builders read (each ignores keys it doesn't use). Full per-tool forms: M4.
         inputs: dict[str, object] = {
             "profile": self._profile.currentData(),
-            "targets": self._targets.text().strip(),
-            "output_format": "all" if self._out.text().strip() else None,
-            "output_path": self._out.text().strip() or None,
+            "targets": target, "target": target, "url": target, "host": target,
+            "output_format": "all" if out else None,
+            "output_path": out or None,
+            "output": out or None,
         }
         if self._ports.text().strip():
             inputs["ports"] = self._ports.text().strip()
-        plan = get_builder(self._tool.flows[0].command_builder_id)(inputs)
+        try:
+            plan = get_builder(flow.command_builder_id)(inputs)
+        except Exception as exc:  # builder validation (fail-loudly) -> show, don't crash
+            plan = assemble(self._tool.tool_id, {}, notes=[
+                f"Could not build from the simple form: {exc}",
+                "Use 'Walk this flow (adaptive stepper)' for guided, correct commands.",
+            ])
         self._preview.set_plan(plan)
         if self._on_preview:
-            self._on_preview(self._tool.tool_id, self._flow.currentData())
+            self._on_preview(self._tool.tool_id, flow.flow_id)
 
     def _walk(self) -> None:
         if not self._ensure_authorized():

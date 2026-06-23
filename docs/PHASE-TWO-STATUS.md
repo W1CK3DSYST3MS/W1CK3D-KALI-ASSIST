@@ -84,10 +84,29 @@ TODO to finish Milestone 1: produce the **Kali/Linux** binary by running the sam
 `pyinstaller` command on Kali (PyInstaller can't cross-compile), then run the BUILD-BRIEF
 acceptance pass on a clean Kali VM. Optionally wrap as an AppImage for distribution.
 
-## Phase Two — remaining (Milestones 2–4)
-- M2: convert the rest of the CLI Top 10 (sqlmap…nikto) to runtime tool modules.
-- M3: convert troubleshooters T02–T05 + Module-00 setup/securing lesson.
-- M4: theme polish, onboarding checklist, settings (output base dir); finalize AppImage.
+## Milestone 2 — CLI Top 10 tool modules (COMPLETE)
+
+All ten tools are runtime modules with registered builders, authored to the nmap
+template (flows, authorization gates, glossaries, destructive guardrails):
+nmap, sqlmap, gobuster, nikto, hydra, john, hashcat, aircrack-ng, tshark, metasploit.
+
+Engine additions for M2:
+- assembler `subcommand=` support (gobuster modes, msfconsole) and `elevation=`
+  already supported sudo (aircrack/airmon/airodump/aireplay).
+- builders auto-discover via `*_builder.py`.
+- builders: sqlmap, gobuster, nikto, hydra, john, hashcat, aircrack-ng (suite
+  dispatch), tshark (source XOR guard), msfvenom + msfconsole.
+- 42 tests pass (14 new builder tests); GUI smoke + `--self-test` green (tools=10).
+- GUI ToolPage made tool-agnostic/defensive: only nmap shows its profiles; other
+  tools build via "Walk this flow" or a best-effort partial (no crashes).
+
+Known for M4: per-tool input forms in the GUI (right now the simple BUILD form is
+nmap-shaped; the adaptive stepper is the correct path for the other tools).
+
+## Phase Two — remaining (Milestones 3–4)
+- M3: convert troubleshooters T02–T05 + Module-00 setup/securing lesson to runtime.
+- M4: per-tool GUI forms, theme polish, onboarding checklist, settings (output base
+  dir); finalize AppImage; rebuild the binary (now bundles 10 tools).
 
 ## Distribution guard (do not forget)
 This repo is **PRIVATE / closed source** — source + `docs/specs` blueprints never ship.

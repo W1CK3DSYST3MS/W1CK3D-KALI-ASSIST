@@ -1,0 +1,18 @@
+module_id: tool.wireshark
+name: "Wireshark / tshark — Traffic Analysis"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: tshark
+  flows: [setup_caps, live_capture, filters, read_pcap, fields_csv, stats, follow_stream, file_utils, gui, tls]
+  glossary_terms: [packet, pcap, interface, capture_filter, display_filter, bpf, promiscuous, stream, snaplen, protocol_hierarchy]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against tshark/wireshark-filter man pages + wireshark.org docs"
+license: "project-proprietary lesson text; Wireshark is GPL (referenced, not bundled)"
+checksum: ""

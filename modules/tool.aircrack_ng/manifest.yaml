@@ -1,0 +1,18 @@
+module_id: tool.aircrack_ng
+name: "aircrack-ng — Wi-Fi Security Suite"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: aircrack-ng
+  flows: [monitor, discover, capture, deauth, crack, pmkid, cleanup, wep_note]
+  glossary_terms: [monitor_mode, bssid, essid, channel, handshake, pmkid, deauth, injection, eapol, hc22000]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against aircrack-ng suite man pages / aircrack-ng.org docs"
+license: "project-proprietary lesson text; aircrack-ng is GPL (referenced, not bundled)"
+checksum: ""

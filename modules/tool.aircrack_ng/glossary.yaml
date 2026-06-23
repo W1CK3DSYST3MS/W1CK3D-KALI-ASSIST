@@ -1,0 +1,21 @@
+terms:
+  - term: monitor_mode
+    definition: "Adapter mode that captures all nearby Wi-Fi frames."
+  - term: injection
+    definition: "Sending crafted frames (needed for deauth); not all adapters support it."
+  - term: bssid
+    definition: "The access point's MAC address."
+  - term: essid
+    definition: "The network name (SSID)."
+  - term: channel
+    definition: "The AP's radio channel; lock airodump to it with -c."
+  - term: handshake
+    definition: "The WPA 4-way auth exchange; capturing it lets you test the passphrase offline."
+  - term: eapol
+    definition: "The protocol frames that make up the handshake."
+  - term: deauth
+    definition: "A frame that forces a client to disconnect (active, disruptive)."
+  - term: pmkid
+    definition: "An AP-side value that can enable clientless cracking on some APs."
+  - term: hc22000
+    definition: "The hashcat mode-22000 format for WPA (via hcxpcapngtool)."
