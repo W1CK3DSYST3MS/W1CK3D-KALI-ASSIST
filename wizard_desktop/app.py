@@ -19,12 +19,13 @@ from PySide6.QtWidgets import QApplication
 from wizard_core.audit import AuditLogger
 from wizard_core.loader import load_modules
 
+from wizard_desktop.fonts import load_fonts
+from wizard_desktop.resources import modules_dir
 from wizard_desktop.theme import build_qss
 from wizard_desktop.ui.login_window import LoginWindow
 from wizard_desktop.ui.main_window import MainWindow
 
-_REPO = Path(__file__).resolve().parents[1]
-MODULES_DIR = _REPO / "modules"
+MODULES_DIR = modules_dir()
 
 
 def _audit_path() -> Path:
@@ -33,9 +34,32 @@ def _audit_path() -> Path:
     return base / "activity.audit.jsonl"
 
 
+def _self_test() -> int:
+    """Verify the (possibly bundled) app finds its packaged resources. No GUI."""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app = QApplication(sys.argv)
+    app.setStyleSheet(build_qss())
+    fams = load_fonts()
+    reg = load_modules(MODULES_DIR)
+    from wizard_core.builders import get_builder
+
+    plan = get_builder("nmap")({"profile": "standard", "targets": "scanme.nmap.org"})
+    assert len(fams) >= 5, f"expected >=5 fonts, got {fams}"
+    assert reg.tools and reg.lessons and reg.troubleshooters, "modules missing"
+    print(f"SELF-TEST OK: fonts={len(fams)} tools={len(reg.tools)} "
+          f"lessons={len(reg.lessons)} troubleshooters={len(reg.troubleshooters)}")
+    print(f"  sample build: {plan.bash_preview_string}")
+    return 0
+
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return _self_test()
     app = QApplication(sys.argv)
     app.setApplicationName("W1CK3D'S KALI ASSIST")
+    load_fonts()
     app.setStyleSheet(build_qss())
 
     # 1. Login + disclaimer gate.

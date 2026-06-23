@@ -66,8 +66,28 @@ KNOWN: fonts (Black Ops One/Orbitron/JetBrains Mono…) are not bundled yet, so 
 box with none installed glyphs fall back to boxes. Bundling the Google Fonts is the
 remaining theme task (Milestone 4 / outstanding items).
 
-## Next — Milestone 1c (packaging), pending review
-- One PyInstaller build that runs offline on Kali; bundle fonts + logo + modules/.
+## Milestone 1c — Packaging (COMPLETE on Windows; Kali build pending on Linux)
+
+- `wizard_desktop/fonts.py` — loads the 5 bundled brand fonts (OFL) via QFontDatabase;
+  glyphs now render (stencil wordmark, Orbitron, JetBrains Mono). Fonts + `OFL.txt` +
+  `ATTRIBUTION.md` live in `assets/fonts/`.
+- `wizard_desktop/resources.py` — resolves `assets/` + `modules/` in both source and
+  PyInstaller (`sys._MEIPASS`) layouts.
+- `packaging/w1ck3d-kali-assist.spec` — one-file build, bundles fonts/logo/modules.
+- `packaging/README.md` — build + verify + Kali/AppImage instructions.
+- `app.py --self-test` — headless check that the bundle finds its packaged resources.
+
+Proof: built `dist/w1ck3d-kali-assist.exe` (~54 MB, one file); `--self-test` reports
+`fonts=5 tools=1 lessons=1 troubleshooters=1` and builds a command — fully offline.
+
+TODO to finish Milestone 1: produce the **Kali/Linux** binary by running the same
+`pyinstaller` command on Kali (PyInstaller can't cross-compile), then run the BUILD-BRIEF
+acceptance pass on a clean Kali VM. Optionally wrap as an AppImage for distribution.
+
+## Phase Two — remaining (Milestones 2–4)
+- M2: convert the rest of the CLI Top 10 (sqlmap…nikto) to runtime tool modules.
+- M3: convert troubleshooters T02–T05 + Module-00 setup/securing lesson.
+- M4: theme polish, onboarding checklist, settings (output base dir); finalize AppImage.
 
 ## Distribution guard (do not forget)
 This repo is **PRIVATE / closed source** — source + `docs/specs` blueprints never ship.

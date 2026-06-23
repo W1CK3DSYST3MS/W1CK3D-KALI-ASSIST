@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -22,7 +20,9 @@ from PySide6.QtWidgets import (
 from wizard_core.auth import LoginPolicy
 from wizard_core.auth.login_policy import DISCLAIMER_TEXT
 
-_ASSETS = Path(__file__).resolve().parents[2] / "assets"
+from ..resources import assets_dir
+
+_ASSETS = assets_dir()
 
 
 class LoginWindow(QDialog):
