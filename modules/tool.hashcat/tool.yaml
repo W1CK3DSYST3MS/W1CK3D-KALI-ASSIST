@@ -1,0 +1,182 @@
+tool_id: hashcat
+display_name: "hashcat"
+binary_candidates: [hashcat]
+categories: [password]
+os_profile: kali
+one_liner: "Cracks password hashes very fast using your GPU, by wordlist or mask."
+authorization_gate: true
+authorization_text: >
+  Crack only hashes you own or are explicitly authorized to test (your systems, a lab, or a
+  CTF). Cracking others' hashes — including Wi-Fi handshakes from networks you don't own — is
+  illegal. Offline + heavy: mind hardware heat/power on long runs. Continue?
+flows:
+  - flow_id: identify_mode
+    title: "Identify the hash type (-m) — do this first"
+    goal: "Find the exact hash-mode number."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc1
+        title: "Identify -m"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [hash_mode]
+        explanation:
+          what: "`hashcat --identify hashes.txt` (newer builds), or match --example-hashes, or reason from length/prefix."
+          why: "Wrong -m = it never cracks. This is the #1 mistake. ($2b$=bcrypt 3200, 32-hex=MD5 0, NTLM 1000, $6$=sha512crypt 1800, WPA 22000)."
+          where: "ACTION_OPTIONS."
+        try_this: "hashcat --identify hashes.txt"
+        success_criteria: "You have the right -m number for the next flow."
+        alternatives:
+          - trigger: "ambiguous"
+            cause: "Multiple modes match."
+            fix: "Try the most likely; a wrong -m fails fast, so test."
+            check: "Compare candidates against --example-hashes."
+  - flow_id: wordlist
+    title: "Wordlist (straight) attack — -a 0"
+    goal: "Dictionary attack."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc2
+        title: "Run -a 0 with a wordlist"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [attack_mode]
+        explanation:
+          what: "`-a 0` straight/dictionary, `-m <type>`, then `<hashfile> <wordlist>`."
+          why: "Start here for human passwords; rockyou is gzipped on Kali (gunzip first)."
+          where: "hashfile then wordlist are POSITIONAL (last, in that order)."
+        try_this: "hashcat -m 0 -a 0 hashes.txt /usr/share/wordlists/rockyou.txt"
+        success_criteria: "Cracked lines appear; verify with --show."
+        alternatives:
+          - trigger: "No hashes loaded / Separator unmatched"
+            cause: "Wrong -m, file is user:hash, or stray blank lines."
+            fix: "Fix -m, add --username for user:hash, remove blank lines."
+            check: "Re-check the hash type and file."
+          - trigger: "device/driver error"
+            cause: "GPU/OpenCL drivers missing."
+            fix: "See the performance flow (workload/--force/CPU)."
+            check: "Run hashcat -I to list devices."
+  - flow_id: rules
+    title: "Add rules — -r"
+    goal: "Multiply each word with mangling rules."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, EXTRA_FILES, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc3
+        title: "Apply a rule file"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [rule]
+        explanation:
+          what: "`-r <rulefile>` mangles each word; bundled rules in /usr/share/hashcat/rules/ (best64.rule, dive.rule)."
+          why: "Big win for little cost; stack multiple -r for more transforms (more time)."
+          where: "ACTION_OPTIONS (-r)."
+        try_this: "hashcat -m 0 -a 0 hashes.txt rockyou.txt -r /usr/share/hashcat/rules/best64.rule"
+        success_criteria: "More hashes crack than the plain wordlist."
+        alternatives:
+          - trigger: "much slower"
+            cause: "Rules multiply candidate count."
+            fix: "Use fewer/smaller rule files, or a faster workload."
+            check: "Compare runtime."
+  - flow_id: mask
+    title: "Mask / brute force — -a 3"
+    goal: "Brute a known password shape."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc4
+        title: "Build a mask"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [mask, charset, increment]
+        explanation:
+          what: "`-a 3` builds candidates from a mask: ?l ?u ?d ?s ?a ?b. Custom: -1 ?l?d then ?1. --increment grows length."
+          why: "When you know the format (e.g. Ulll lll + 3 digits)."
+          where: "mask is POSITIONAL (after the hashfile)."
+        try_this: "hashcat -m 0 -a 3 hashes.txt ?u?l?l?l?l?d?d?d"
+        success_criteria: "Candidates match the shape; hits appear."
+        alternatives:
+          - trigger: "too slow / keyspace huge"
+            cause: "Mask too broad."
+            fix: "Shorten the mask, use --increment ranges, or go back to wordlist+rules; -O speeds up but caps length."
+            check: "Estimate keyspace before running."
+  - flow_id: hybrid
+    title: "Hybrid attacks — -a 6 / -a 7"
+    goal: "Combine a wordlist with a mask."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc5
+        title: "Word + mask (or mask + word)"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-a 6` = word+mask (word2024), `-a 7` = mask+word."
+          why: "Great for 'dictionary word plus a few digits/symbols'."
+          where: "ACTION_OPTIONS (-a); wordlist+mask are POSITIONAL."
+        try_this: "hashcat -m 0 -a 6 hashes.txt rockyou.txt ?d?d?d?d"
+        success_criteria: "Word+suffix combinations crack."
+        alternatives:
+          - trigger: "nothing found"
+            cause: "Wrong combination order or shape."
+            fix: "Try -a 7 (mask+word), or adjust the mask."
+            check: "Reason about where digits/symbols go."
+  - flow_id: show_output
+    title: "Show results, output & user:hash files"
+    goal: "Read cracked results; handle the potfile."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc6
+        title: "Use --show and -o"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [potfile]
+        explanation:
+          what: "`--show` prints cracked from the potfile; `-o cracked.txt` writes results; `--username` for user:hash; `--potfile-disable` re-cracks."
+          why: "Results cache in the potfile, so a second run may 'do nothing'."
+          where: "ACTION_OPTIONS (--show); -o in OUTPUT_OPTIONS."
+        try_this: "hashcat -m 0 hashes.txt rockyou.txt --show"
+        success_criteria: "Cracked user:password pairs print."
+        alternatives:
+          - trigger: "already cracked / nothing runs"
+            cause: "Results cached in the potfile."
+            fix: "--show to see them, or --potfile-disable to force a re-run."
+            check: "Inspect ~/.hashcat/hashcat.potfile."
+  - flow_id: performance
+    title: "Performance, devices & sessions"
+    goal: "Tune speed; handle GPU/driver reality."
+    command_builder_id: hashcat
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, ENV_INTERFACE, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc7
+        title: "Benchmark, devices, workload, sessions"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [workload, optimized_kernel, gpu_opencl]
+        explanation:
+          what: "`-b` benchmark; `-I`/`-d <id>` devices; `-w 1..4` workload; `-O` optimized (caps length); `--session=<n>` + `--restore`."
+          why: "hashcat wants a supported GPU + OpenCL/CUDA. No devices -> install drivers or run CPU (-D 1). --force is risky."
+          where: "GLOBAL_OPTIONS (workload/session); device in ENV_INTERFACE."
+        try_this: "hashcat -b   # or: hashcat -m 1800 -a 0 --session=crackA hashes.txt rockyou.txt"
+        success_criteria: "Benchmark prints, or the named session runs."
+        alternatives:
+          - trigger: "No devices found"
+            cause: "Missing GPU/OpenCL drivers (common in VMs)."
+            fix: "Install drivers, or run CPU with -D 1 (slow). Avoid --force (wrong results)."
+            check: "hashcat -I lists devices."
+  - flow_id: wpa
+    title: "Cracking Wi-Fi captures (-m 22000)"
+    goal: "Crack a converted WPA capture."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc8
+        title: "Crack an .hc22000 capture"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "Modern WPA = mode 22000. Convert a capture (hcxpcapngtool -> .hc22000), then crack like any hash."
+          why: "Capturing the handshake/PMKID is aircrack-ng / hcxdumptool territory (authorized networks only)."
+          where: "ACTION_OPTIONS (-m 22000); capture file is POSITIONAL."
+        try_this: "hashcat -m 22000 -a 0 capture.hc22000 /usr/share/wordlists/rockyou.txt"
+        success_criteria: "The Wi-Fi passphrase cracks (on your own network)."
+        alternatives:
+          - trigger: "no handshake in file"
+            cause: "Capture lacks a valid handshake/PMKID."
+            fix: "Capture a valid handshake first (aircrack-ng, authorized networks only)."
+            check: "Validate the capture before cracking."

@@ -1,0 +1,18 @@
+module_id: tool.hashcat
+name: "hashcat — GPU Hash Cracking"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: hashcat
+  flows: [identify_mode, wordlist, rules, mask, hybrid, show_output, performance, wpa]
+  glossary_terms: [hash_mode, attack_mode, mask, charset, rule, potfile, workload, optimized_kernel, increment, gpu_opencl]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against hashcat --help / hashcat.net wiki"
+license: "project-proprietary lesson text; hashcat is MIT (referenced, not bundled)"
+checksum: ""

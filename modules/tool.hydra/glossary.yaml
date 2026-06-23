@@ -1,0 +1,21 @@
+terms:
+  - term: online_vs_offline
+    definition: "hydra guesses against a LIVE service; cracking captured hashes offline is john/hashcat."
+  - term: service_module
+    definition: "The protocol hydra speaks (ssh, ftp, http-post-form, smb…)."
+  - term: login
+    definition: "-l single username, -L a username list."
+  - term: password_list
+    definition: "-P a password list (-p is a single password)."
+  - term: combo_list
+    definition: "-C a file of user:pass pairs, one per line."
+  - term: tasks
+    definition: "-t parallel attempts; lower = gentler/stealthier, higher = faster/noisier."
+  - term: lockout
+    definition: "Accounts disabled after too many failures; brute force can trigger it."
+  - term: rockyou
+    definition: "The classic password wordlist (gzipped on Kali; gunzip first)."
+  - term: http_post_form
+    definition: "Module format path:body(^USER^/^PASS^):failure-or-success marker."
+  - term: null_login
+    definition: "-e n also tries an empty password (s=same as login, r=reversed)."

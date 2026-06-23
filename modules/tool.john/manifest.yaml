@@ -1,0 +1,18 @@
+module_id: tool.john
+name: "John the Ripper — Offline Hash Cracking"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: john
+  flows: [prepare, quickstart, wordlist_rules, single, incremental, formats, sessions]
+  glossary_terms: [hash, offline_cracking, pot_file, unshadow, twojohn, wordlist_mode, single_mode, incremental_mode, rules, format]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against john --help / Openwall docs (John the Ripper jumbo)"
+license: "project-proprietary lesson text; john is GPL (referenced, not bundled)"
+checksum: ""

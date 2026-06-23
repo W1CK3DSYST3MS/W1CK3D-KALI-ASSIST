@@ -1,0 +1,162 @@
+tool_id: john
+display_name: "John the Ripper (jumbo)"
+binary_candidates: [john]
+categories: [password]
+os_profile: kali
+one_liner: "Cracks password hashes offline using wordlists, rules, and brute force."
+authorization_gate: true
+authorization_text: >
+  Crack only hashes you own or are explicitly authorized to test (your systems, a lab, or a
+  CTF). Cracking others' password hashes is illegal. This is offline + heavy — the risk is
+  legal/ethical, not detection. Continue?
+flows:
+  - flow_id: prepare
+    title: "Prepare the hashes"
+    goal: "Get hashes into a crackable file."
+    command_builder_id: john
+    slots: [PROGRAM, EXTRA_FILES]
+    steps:
+      - step_id: jp1
+        title: "Extract a crackable hash"
+        slot_target: EXTRA_FILES
+        glossary_refs: [hash, unshadow, twojohn]
+        explanation:
+          what: "Linux accounts: `unshadow /etc/passwd /etc/shadow > hashes.txt`. Files: `zip2john`, `ssh2john`, `rar2john`, `pdf2john`…"
+          why: "You can't crack what you can't read; the *2john helpers produce a .hash."
+          where: "Prep step (not a john run yet)."
+        try_this: "zip2john secret.zip > zip.hash"
+        success_criteria: "A hash line is written to the output file."
+        alternatives:
+          - trigger: "which type is this hash?"
+            cause: "Unknown hash format."
+            fix: "Identify it before cracking (see the formats flow)."
+            check: "Inspect length/prefix."
+  - flow_id: quickstart
+    title: "Quick start (auto) + show results"
+    goal: "Crack with auto mode, then read results."
+    command_builder_id: john
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: jq1
+        title: "Run auto, then --show"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [pot_file, offline_cracking]
+        explanation:
+          what: "`john <hashfile>` auto-tries single -> wordlist -> incremental; `john --show <hashfile>` prints cracked creds."
+          why: "Fastest way to begin; cracked results persist in the pot file."
+          where: "hashfile is POSITIONAL (last)."
+        try_this: "john hashes.txt   # then: john --show hashes.txt"
+        success_criteria: "john reports cracked passwords; --show lists user:password."
+        alternatives:
+          - trigger: "No password hashes loaded"
+            cause: "Wrong/garbled file or undetected type."
+            fix: "Set --format= (see the formats flow)."
+            check: "Verify the file format."
+          - trigger: "runs but cracks nothing"
+            cause: "Auto mode exhausted without a hit."
+            fix: "Use a real wordlist + rules."
+            check: "Switch to the wordlist flow."
+  - flow_id: wordlist_rules
+    title: "Wordlist mode + rules (the workhorse)"
+    goal: "Dictionary attack with mangling."
+    command_builder_id: john
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: jw1
+        title: "Wordlist with --rules"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [wordlist_mode, rules]
+        explanation:
+          what: "`--wordlist=<file>` runs a dictionary; `--rules` mangles each word (case/digits/leet)."
+          why: "Best bang-for-buck for human passwords; rockyou is gzipped on Kali (gunzip first)."
+          where: "ACTION_OPTIONS (before the positional hashfile)."
+        try_this: "john --wordlist=/usr/share/wordlists/rockyou.txt --rules hashes.txt"
+        success_criteria: "More hashes crack than with a plain wordlist."
+        alternatives:
+          - trigger: "still nothing"
+            cause: "List/ruleset too small, or wrong format."
+            fix: "Try a bigger list or --rules=Jumbo; confirm --format."
+            check: "Re-check the hash type."
+  - flow_id: single
+    title: "Single crack mode (fast, context-aware)"
+    goal: "Use username/GECOS info for quick wins."
+    command_builder_id: john
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: js1
+        title: "Run --single first"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [single_mode]
+        explanation:
+          what: "`--single` derives guesses from the username/GECOS fields in the file."
+          why: "Cheap and often a quick win — run it first."
+          where: "ACTION_OPTIONS."
+        try_this: "john --single hashes.txt"
+        success_criteria: "Name-based passwords (if any) crack quickly."
+        alternatives:
+          - trigger: "no GECOS info in file"
+            cause: "The file lacks username context."
+            fix: "Move to wordlist + rules."
+            check: "Inspect the file format."
+  - flow_id: incremental
+    title: "Incremental / brute force (last resort)"
+    goal: "Exhaustive character combinations."
+    command_builder_id: john
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ji1
+        title: "Brute force with --incremental"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [incremental_mode]
+        explanation:
+          what: "`--incremental` tries char combos exhaustively (e.g. --incremental=Digits)."
+          why: "Slow — only for short passwords or fast hashes; otherwise prefer wordlist+rules or hashcat GPU."
+          where: "ACTION_OPTIONS."
+        try_this: "john --incremental hashes.txt"
+        success_criteria: "Short passwords eventually crack."
+        alternatives:
+          - trigger: "too slow"
+            cause: "Large keyspace on a slow hash."
+            fix: "Prefer wordlist+rules, or switch to hashcat + GPU."
+            check: "Estimate keyspace vs time."
+  - flow_id: formats
+    title: "Format selection (avoid mis-detection)"
+    goal: "Set the hash type explicitly."
+    command_builder_id: john
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: jf1
+        title: "Set --format"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [format]
+        explanation:
+          what: "`--format=<name>` (raw-md5, sha512crypt, bcrypt, NT…); list with `john --list=formats`."
+          why: "Auto-detect can pick wrong; explicit format avoids it."
+          where: "GLOBAL_OPTIONS."
+        try_this: "john --format=raw-md5 --wordlist=rockyou.txt hashes.txt"
+        success_criteria: "Hashes load and cracking proceeds."
+        alternatives:
+          - trigger: "No password hashes loaded (see FAQ)"
+            cause: "Wrong --format or malformed file."
+            fix: "Identify the hash type and set the matching --format."
+            check: "Compare prefix/length to known formats."
+  - flow_id: sessions
+    title: "Sessions, status, and going faster"
+    goal: "Name, resume, and parallelize runs."
+    command_builder_id: john
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: jss1
+        title: "Name a session; resume with --restore"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`--session=<name>` names a run; `--restore[=name]` resumes; `--fork=<n>` splits across cores."
+          why: "Pause/resume long runs and use all CPU cores."
+          where: "GLOBAL_OPTIONS."
+        try_this: "john --session=crackA --wordlist=rockyou.txt --rules hashes.txt   # resume: john --restore=crackA"
+        success_criteria: "The session runs and can be resumed."
+        alternatives:
+          - trigger: "too slow on bcrypt"
+            cause: "Slow hash on CPU."
+            fix: "This is where hashcat + GPU wins."
+            check: "Switch engine to hashcat."

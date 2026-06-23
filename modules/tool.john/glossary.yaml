@@ -1,0 +1,21 @@
+terms:
+  - term: hash
+    definition: "A one-way fingerprint of a password; cracking = finding an input that matches."
+  - term: offline_cracking
+    definition: "Working on captured hashes, no live service (vs hydra)."
+  - term: pot_file
+    definition: "~/.john/john.pot; where cracked results are stored (so --show works)."
+  - term: unshadow
+    definition: "Merges /etc/passwd + /etc/shadow into a crackable file."
+  - term: twojohn
+    definition: "Helpers (zip2john, ssh2john, rar2john, pdf2john…) that extract a crackable hash."
+  - term: wordlist_mode
+    definition: "Dictionary attack (--wordlist=)."
+  - term: single_mode
+    definition: "--single derives guesses from username/GECOS info."
+  - term: incremental_mode
+    definition: "--incremental brute-forces character combinations."
+  - term: rules
+    definition: "Transformations that mangle wordlist entries to catch variations."
+  - term: format
+    definition: "The hash type (--format=); listed via john --list=formats."

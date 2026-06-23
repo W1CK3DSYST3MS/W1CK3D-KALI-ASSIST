@@ -1,0 +1,166 @@
+tool_id: hydra
+display_name: "hydra (THC-Hydra)"
+binary_candidates: [hydra]
+categories: [password, exploitation]
+os_profile: kali
+one_liner: "Tries many username/password combos against a live login service."
+authorization_gate: true
+authorization_text: >
+  Brute-forcing logins on systems you do not own or lack explicit written permission to
+  test is illegal. hydra makes REAL login attempts — it can lock out accounts, flood logs,
+  and trigger alerts/IPS. Confirm lockout policy first and pace with low -t + -w. Practice
+  on your own lab VMs, Metasploitable, or DVWA. Continue?
+flows:
+  - flow_id: single_test
+    title: "Target + service + a single credential test"
+    goal: "Verify one credential pair works before any list."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy1
+        title: "Test one login/password"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [service_module, login, online_vs_offline]
+        explanation:
+          what: "`-l <user> -p <pass>` then `<target> <service>`; -V shows attempts, -f stops on success."
+          why: "hydra attacks a LIVE service — every guess is a real login. Cracking captured hashes offline is john/hashcat."
+          where: "creds in ACTION_OPTIONS; target+service are POSITIONAL (last)."
+        try_this: "hydra -l admin -p admin123 -V -f 192.168.1.10 ssh"
+        success_criteria: "hydra prints [ssh] host: ... login: admin password: admin123 on a hit."
+        alternatives:
+          - trigger: "connection refused / wrong port"
+            cause: "Service down or non-standard port."
+            fix: "Confirm the service with nmap; set -s <port> if non-standard."
+            check: "nmap -p <port> the host first."
+          - trigger: "no valid pair"
+            cause: "The single guess was wrong."
+            fix: "Move to username/password lists."
+            check: "Switch to the lists flow."
+  - flow_id: lists
+    title: "Username list × password list"
+    goal: "Try many users against many passwords."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy2
+        title: "Use -L and -P lists"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [password_list]
+        explanation:
+          what: "`-L users.txt -P passwords.txt` tries each combination."
+          why: "Covers more ground; -f stops at the first valid pair."
+          where: "ACTION_OPTIONS (creds come before the positional target)."
+        try_this: "hydra -L users.txt -P passwords.txt -V -f 192.168.1.10 ssh"
+        success_criteria: "Any valid pair(s) reported."
+        alternatives:
+          - trigger: "very slow / many users"
+            cause: "Large lists × high parallelism."
+            fix: "Lower -t and keep lists small first; -u loops users outer for lockout-sensitive targets."
+            check: "Re-run with -t 4."
+  - flow_id: wordlists_tune
+    title: "Real wordlists + tuning tasks"
+    goal: "Use rockyou-style lists; control parallelism."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy3
+        title: "rockyou + -t tuning"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [rockyou, tasks, lockout]
+        explanation:
+          what: "rockyou ships gzipped: `sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz`; -t sets parallel tasks (default 16)."
+          why: "Lower -t for stability and to reduce lockouts/noise; raise only on robust labs."
+          where: "GLOBAL_OPTIONS (-t)."
+        try_this: "hydra -L users.txt -P /usr/share/wordlists/rockyou.txt -t 4 -V 192.168.1.10 ssh"
+        success_criteria: "The run proceeds at a sane rate; hits reported."
+        alternatives:
+          - trigger: "target rate-limits / blocks you"
+            cause: "Too aggressive for the target."
+            fix: "Drop to -t 1 -w 30 (the Careful profile)."
+            check: "Watch for lockouts; slow down."
+  - flow_id: http_form
+    title: "HTTP login form (http-post-form) — the tricky one"
+    goal: "Brute a web login form correctly."
+    command_builder_id: hydra
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy4
+        title: "Build the form string"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [http_post_form]
+        explanation:
+          what: "Form modules need 3 colon parts: \"<path>:<body with ^USER^/^PASS^>:<failure marker>\" (F=fail or S=success)."
+          why: "^USER^/^PASS^ mark injection points; the failure marker tells hydra what 'wrong' looks like."
+          where: "service + form string are POSITIONAL (last)."
+        try_this: "hydra -L users.txt -P passwords.txt 192.168.1.10 http-post-form \"/login.php:user=^USER^&pass=^PASS^:F=Invalid credentials\""
+        success_criteria: "A valid pair is reported."
+        alternatives:
+          - trigger: "every attempt shows wrongly as success/failure"
+            cause: "Failure/success marker is off."
+            fix: "Capture a real failed login (browser/Burp) and copy the exact message."
+            check: "Compare your F= text to the real failure page."
+          - trigger: "CSRF token required"
+            cause: "Per-request tokens aren't handled by a simple form string."
+            fix: "Needs token-tracking tooling; note and consult docs."
+            check: "Inspect the form for a hidden token."
+  - flow_id: extras
+    title: "Extra tries & combo lists"
+    goal: "Cheap wins and user:pass files."
+    command_builder_id: hydra
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy5
+        title: "-e nsr and -C combos"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [null_login, combo_list]
+        explanation:
+          what: "`-e nsr` adds null password, same-as-login, reversed-login; `-C user:pass.txt` uses a combo file."
+          why: "Catches trivial credentials fast; combo files replace -L+-P."
+          where: "ACTION_OPTIONS (-C); -e in GLOBAL_OPTIONS."
+        try_this: "hydra -L users.txt -e nsr 192.168.1.10 ssh"
+        success_criteria: "Trivial credentials (if present) are found."
+        alternatives:
+          - trigger: "no extra hits"
+            cause: "No trivial credentials in use."
+            fix: "Proceed with a real password list."
+            check: "Move to the wordlist flow."
+  - flow_id: output_resume
+    title: "Output, resume & stop-on-success"
+    goal: "Save hits and resume interrupted runs."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy6
+        title: "Save hits; resume with -R"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o found.txt` saves hits (`-b json` format); `-f` stop per host, `-F` global; `-R` resumes."
+          why: "Keep results and continue an aborted session without starting over."
+          where: "OUTPUT_OPTIONS (-o/-b)."
+        try_this: "hydra -L users.txt -P rockyou.txt -o hits.txt -f 192.168.1.10 ssh"
+        success_criteria: "hits.txt holds any found credentials."
+        alternatives:
+          - trigger: "interrupted mid-run"
+            cause: "Session aborted."
+            fix: "Resume with `hydra -R`."
+            check: "Re-run with -R."
+  - flow_id: multi_target
+    title: "Multiple targets"
+    goal: "Run against many hosts at once."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy7
+        title: "Use -M targets file"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-M targets.txt` runs against many hosts; combine with -o for one result file."
+          why: "Pace carefully (low -t) to avoid hammering many hosts."
+          where: "ACTION_OPTIONS (-M replaces the positional target)."
+        try_this: "hydra -L users.txt -P passwords.txt -M targets.txt -o hits.txt ssh"
+        success_criteria: "Consolidated hits across hosts in hits.txt."
+        alternatives:
+          - trigger: "too much load"
+            cause: "Many hosts × high -t."
+            fix: "Lower -t and consider batching the target list."
+            check: "Reduce parallelism."

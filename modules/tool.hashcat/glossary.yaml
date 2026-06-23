@@ -1,0 +1,21 @@
+terms:
+  - term: hash_mode
+    definition: "-m the numeric hash type; must match the hash or nothing cracks."
+  - term: attack_mode
+    definition: "-a 0 wordlist, 1 combinator, 3 mask/brute, 6/7 hybrid."
+  - term: mask
+    definition: "A pattern of ?l ?u ?d ?s ?a building brute-force candidates."
+  - term: charset
+    definition: "The character set a mask placeholder expands to (?l lower, ?d digit…)."
+  - term: rule
+    definition: "-r transformations applied to wordlist words."
+  - term: potfile
+    definition: "~/.hashcat/hashcat.potfile; caches cracked hashes (--show reads it)."
+  - term: workload
+    definition: "-w speed-vs-responsiveness profile (1-4)."
+  - term: optimized_kernel
+    definition: "-O faster kernels that cap maximum password length."
+  - term: increment
+    definition: "--increment tries growing password lengths within a mask."
+  - term: gpu_opencl
+    definition: "hashcat's accelerator; needs proper drivers (else 'no devices')."

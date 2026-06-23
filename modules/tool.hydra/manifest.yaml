@@ -1,0 +1,18 @@
+module_id: tool.hydra
+name: "hydra — Online Login Brute-Forcer"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: hydra
+  flows: [single_test, lists, wordlists_tune, http_form, extras, output_resume, multi_target]
+  glossary_terms: [online_vs_offline, service_module, login, password_list, combo_list, tasks, lockout, rockyou, http_post_form, null_login]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against hydra -h / official docs (THC-Hydra)"
+license: "project-proprietary lesson text; hydra is AGPL/GPL (referenced, not bundled)"
+checksum: ""
