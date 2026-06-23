@@ -45,10 +45,29 @@ python -m venv .venv && .venv/Scripts/python -m pip install -e ".[dev]"
   (safer for a closed build) while keeping content additive. Revisit if third-party tool
   modules ever need to ship their own builders.
 
-## Next — Milestone 1b (GUI), pending review
-- PySide6 app: login + disclaimer screen → themed main window → category tabs → stepper
-  view → command-preview pane. Apply `Design-System-Tokens.md` as QSS.
-- Then Milestone 1c: one PyInstaller build that runs offline on Kali.
+## Milestone 1b — PySide6 GUI (COMPLETE, pending review)
+
+`wizard_desktop/` (imports `wizard_core` only):
+- `theme.py` — QSS generated from the exact `Design-System-Tokens.md` hexes.
+- `ui/login_window.py` — login + disclaimer gate (wired to `LoginPolicy`).
+- `ui/main_window.py` — header + LESSONS / TOOLS / TROUBLESHOOTER tabs (list→detail).
+- `ui/stepper_view.py` — the shared adaptive Yes/No stepper widget (alternatives,
+  destructive warnings, glossary first-use, Issue Log + links on exhaustion).
+- `ui/command_preview.py` — skeleton / filled / slot-breakdown views (mono).
+- `ui/tool_page.py` — profile+inputs → built command; honors the authorization gate.
+- `ui/auth_gate.py` — blocking red authorization dialog.
+- `app.py` — entrypoint: theme → login → load modules → main window; audit to
+  `~/.w1ck3d-kali-assist/activity.audit.jsonl`.
+
+Proof: `tools/gui_smoke.py` (offscreen) builds every screen + drives each section.
+Run the real app: `.venv/Scripts/python -m wizard_desktop.app`.
+
+KNOWN: fonts (Black Ops One/Orbitron/JetBrains Mono…) are not bundled yet, so on a
+box with none installed glyphs fall back to boxes. Bundling the Google Fonts is the
+remaining theme task (Milestone 4 / outstanding items).
+
+## Next — Milestone 1c (packaging), pending review
+- One PyInstaller build that runs offline on Kali; bundle fonts + logo + modules/.
 
 ## Distribution guard (do not forget)
 This repo is **PRIVATE / closed source** — source + `docs/specs` blueprints never ship.
