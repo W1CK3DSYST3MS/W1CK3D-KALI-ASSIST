@@ -2,7 +2,7 @@
 
 A standalone, **offline**, **generate-only** desktop app that teaches the correct use of
 Kali Linux tools and the OS itself — reference, guided learning, and a self-help
-troubleshooter. A **W1CK3D SYSTEMS** project.
+troubleshooter. A **W1CK3D SYST3MS** project.
 
 It never runs security tools for you; it shows and explains the commands (using a consistent
 **slot model**) and walks you through tasks and fixes with an adaptive **"did it work?"**
@@ -21,7 +21,7 @@ Python 3.11+ · PySide6 · Pydantic v2 · YAML content modules · packaged with 
 
 ## Principles
 Generate-only · offline · no AI/telemetry in the free build · Kali-only (extensible) ·
-modular (content = data) · login + on-device audit log · W1CK3D SYSTEMS design system.
+modular (content = data) · login + on-device audit log · W1CK3D SYST3MS design system.
 
 ## Editions
 - **Free Standalone** (this build): no AI, ships as a built tool file via GitHub (source

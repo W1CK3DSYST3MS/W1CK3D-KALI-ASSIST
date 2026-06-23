@@ -53,7 +53,7 @@ class LoginWindow(QDialog):
         word.setObjectName("Wordmark")
         word.setAlignment(Qt.AlignCenter)
         root.addWidget(word)
-        sub = QLabel("A W1CK3D SYSTEMS PROJECT · GENERATE-ONLY")
+        sub = QLabel("A W1CK3D SYST3MS PROJECT · GENERATE-ONLY")
         sub.setObjectName("Subwordmark")
         sub.setAlignment(Qt.AlignCenter)
         root.addWidget(sub)

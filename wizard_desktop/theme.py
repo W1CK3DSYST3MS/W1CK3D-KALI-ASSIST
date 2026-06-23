@@ -1,4 +1,4 @@
-"""W1CK3D SYSTEMS theme — tokens + generated Qt stylesheet (QSS).
+"""W1CK3D SYST3MS theme — tokens + generated Qt stylesheet (QSS).
 
 Values are taken verbatim from ``docs/specs/Design-System-Tokens.md`` (the brand's
 source of truth). Dark cyber/terminal aesthetic: near-black layered surfaces,

@@ -6,7 +6,7 @@
 ## What this project is
 **W1CK3D'S KALI ASSIST** — a standalone **desktop application** that teaches the correct use
 of Kali Linux tools and the OS itself. It is a **reference + learning + self-help
-troubleshooting** tool. A **W1CK3D SYSTEMS** project.
+troubleshooting** tool. A **W1CK3D SYST3MS** project.
 
 ## HARD RULES (do not violate)
 1. **Generate-only. The app NEVER executes target commands.** It displays and explains
@@ -60,7 +60,7 @@ troubleshooting** tool. A **W1CK3D SYSTEMS** project.
   source, license, checksum)
 - `CommandPlan` (program, slot_values, bash_preview_string, array_form)
 
-## Design system (W1CK3D SYSTEMS)
+## Design system (W1CK3D SYST3MS)
 - Tokens are the **source of truth** in `docs/specs/Design-System-Tokens.md` (the `:root` CSS
   variable block). Implement as a QSS/theme file from those exact values. Dark cyber/terminal
   aesthetic; **monospace fonts for all command/slot views**; status colors double as category
