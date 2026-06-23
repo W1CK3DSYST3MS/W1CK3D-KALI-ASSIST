@@ -1,0 +1,41 @@
+# =============================================================================
+#  W1CK3D'S KALI ASSIST — PRIVATE / CLOSED-SOURCE REPOSITORY
+# -----------------------------------------------------------------------------
+#  This repo holds the SOURCE CODE and the internal design BLUEPRINTS
+#  (docs/specs/). It must NEVER be made public.
+#
+#  Distribution model: only the COMPILED tool file (the built wizard) is ever
+#  released — as a GitHub Release asset on a SEPARATE public repo. The source
+#  in this repo and the docs/specs blueprints are NOT shipped, so the future
+#  Enterprise edition stays protected.
+#
+#  NOTE: a .gitignore does NOT hide tracked source. Protection comes from
+#  keeping THIS repo private and never pushing it to a public remote.
+#  (As of init: no remote is configured. Keep it that way unless it's private.)
+# =============================================================================
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# PyInstaller build *intermediates* only.
+# The built binary itself is published via GitHub Releases, not committed here.
+build/
+dist/
+*.spec
+
+# Local runtime state that must never be committed (may contain user data):
+*.audit.jsonl
+audit-logs/
+local_state/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

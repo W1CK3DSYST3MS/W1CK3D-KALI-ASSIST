@@ -1,0 +1,145 @@
+lesson_id: lesson.shell_grammar
+title: "Shell Grammar — How a Linux command is built"
+topic_tags: [fundamentals, shell, cli, slots]
+audience: beginner
+os_profile: agnostic
+goal: >
+  Understand that every command follows the same ordered structure (the SLOTS),
+  and be able to identify the program, options/flags, arguments, and output parts
+  of any command — so you stop guessing at order and syntax.
+intro: >
+  Every Linux command — from `ls` to `nmap` — is built from the same ordered pieces.
+  Learn those pieces once and you can read and build any command. We call those pieces
+  SLOTS. This lesson walks them one at a time. Type each command in your own terminal,
+  then tell the wizard whether it worked.
+completion_criteria: "learner reaches s7 and can map a command into slots"
+next_suggestions:
+  - "Files, paths & permissions"
+  - "Pipes & redirection"
+  - "First tool module — nmap basic scan"
+steps:
+  - step_id: s1
+    title: "The Program (the command itself)"
+    slot_target: PROGRAM
+    glossary_refs: [program]
+    explanation:
+      what: "The first word on the line is the program — the tool you're running."
+      why: "It decides how everything after it is read. Right now, that's all we type."
+      where: "Slot 1 (PROGRAM), always first."
+    try_this: "whoami"
+    success_criteria: "A single line of output appears (your username, e.g. kali)."
+    alternatives:
+      - trigger: "command not found"
+        cause: "The program name is misspelled or not on PATH."
+        fix: "Check spelling. The program name must be exact and lowercase. Retry `whoami`."
+        check: "Re-type carefully; try `type whoami`."
+      - trigger: "nothing happens / cursor hangs"
+        cause: "The shell is waiting for input."
+        fix: "Press Enter; if still stuck, press Ctrl+C to cancel and retype."
+        check: "Look for a returned prompt."
+  - step_id: s2
+    title: "Arguments (the thing the command acts on)"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [argument, target]
+    explanation:
+      what: "An argument is a value you give the program to act on — often the target."
+      why: "It is NOT preceded by a dash. Here, `/etc` tells `ls` which folder to list."
+      where: "Slot 3 (TARGET_PIVOT) / positional."
+    try_this: "ls /etc"
+    success_criteria: "A list of files/folders inside /etc (e.g. passwd, hostname)."
+    alternatives:
+      - trigger: "No such file or directory"
+        cause: "The argument is a path that must exist."
+        fix: "Try `ls /` first to confirm, then `ls /etc`."
+        check: "Confirm the path exists."
+      - trigger: "Permission denied"
+        cause: "You likely typed a different, restricted path."
+        fix: "You can list /etc; re-check the argument you typed."
+        check: "Compare against `ls /etc`."
+  - step_id: s3
+    title: "Flags / options (switches that change behavior)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [flag, option]
+    explanation:
+      what: "A flag (or option) is a dash-prefixed switch that changes how the program behaves."
+      why: "`-l` means 'long format'. Same program; the flag changes the output."
+      where: "Slot 4 (ACTION_OPTIONS) for most per-run switches."
+    try_this: "ls -l /etc"
+    success_criteria: "The same list, one item per line, with permissions like -rw-r--r--."
+    alternatives:
+      - trigger: "output looks unchanged"
+        cause: "You may have typed a one (1) instead of lowercase L."
+        fix: "Make sure it's a lowercase L (`-l`). Retry `ls -l /etc`."
+        check: "Look for permission strings."
+      - trigger: "invalid option"
+        cause: "Flags are case-sensitive and tool-specific."
+        fix: "Confirm the flag with `ls --help`."
+        check: "Read the --help options list."
+  - step_id: s4
+    title: "Combining flags + short vs long form"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [flag, option]
+    explanation:
+      what: "Flags can be combined (`-la` = `-l` + `-a`), and many have a long form (`-a` = `--all`)."
+      why: "`-a` shows hidden files (names starting with `.`). Short = speed; long = readability."
+      where: "Slot 4 (ACTION_OPTIONS)."
+    try_this: "ls -la /etc"
+    success_criteria: "Same long list, now including hidden entries like `.` and `..`."
+    alternatives:
+      - trigger: "no hidden files show"
+        cause: "The `a` was omitted."
+        fix: "Confirm you included `a`; /etc should show at least `.` and `..`."
+        check: "Look for dot-prefixed entries."
+  - step_id: s5
+    title: "Options that take a value"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [option, argument, placeholder]
+    explanation:
+      what: "Some options take a value right after them. In `head -n 5 file`, `-n` is the option and `5` its value."
+      why: "The value controls behavior (how many lines). In examples we write it as a placeholder like {n}."
+      where: "Slot 4 (ACTION_OPTIONS), value follows the flag."
+    try_this: "head -n 5 /etc/passwd"
+    success_criteria: "Exactly the first 5 lines of the file print."
+    alternatives:
+      - trigger: "option requires an argument"
+        cause: "`-n` needs a number right after it."
+        fix: "Retry `head -n 5 /etc/passwd`."
+        check: "Ensure a number follows -n."
+      - trigger: "too many/few lines"
+        cause: "The value after -n controls the count."
+        fix: "Change `5` to test."
+        check: "Count the printed lines."
+  - step_id: s6
+    title: "Putting it together: reading a command as SLOTS"
+    slot_target: null
+    glossary_refs: [slot, global_option, output]
+    explanation:
+      what: "Every command is the same ordered slots."
+      why: "Read `ls -la /etc` by slot: Program `ls` · Options/Flags `-la` · Target `/etc`."
+      where: "That order never changes — the wizard always assembles it for you."
+    try_this: "(No new command.) Look at `ls -la /etc` and name each slot out loud."
+    success_criteria: "You can point to the program, the flags, and the target."
+    alternatives:
+      - trigger: "can't label the parts"
+        cause: "The 3 views haven't clicked yet."
+        fix: "Re-show Skeleton / Filled / Why for `ls -la /etc` and walk each slot again."
+        check: "Match each token to a slot."
+  - step_id: s7
+    title: "The most important skill: getting help"
+    slot_target: null
+    glossary_refs: [program, flag, option]
+    explanation:
+      what: "You never need to memorize every flag. Three commands reveal them."
+      why: "`man <program>`, `<program> --help`, and `tldr <program>` make every tool learnable."
+      where: "Meta-skill — applies to every slot."
+    try_this: "ls --help"
+    success_criteria: "A list of `ls` options with one-line descriptions."
+    alternatives:
+      - trigger: "man opens a full-screen pager and you're stuck"
+        cause: "`man` uses a pager."
+        fix: "Press `q` to quit."
+        check: "You return to the prompt."
+      - trigger: "tldr: command not found"
+        cause: "`tldr` may not be installed."
+        fix: "That's fine — use `ls --help` or `man ls` instead. (Installing tldr can be a later lesson.)"
+        check: "Use the built-in --help."

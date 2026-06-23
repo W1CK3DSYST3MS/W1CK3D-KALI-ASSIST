@@ -1,0 +1,23 @@
+terms:
+  - term: program
+    definition: "The command you run; the first word; decides how the rest of the line is read."
+  - term: flag
+    definition: "A dash-prefixed switch that changes behavior (`-l`, `--all`)."
+  - term: option
+    definition: "Another word for a flag; some options also take a value (`-n 5`)."
+  - term: argument
+    definition: "A value the command acts on, NOT dash-prefixed (often the target)."
+  - term: target
+    definition: "The thing the tool operates on (host, path, URL, file); the scope of the run."
+  - term: global_option
+    definition: "A flag affecting the whole run; read early regardless of target."
+  - term: placeholder
+    definition: "A stand-in in examples (`{n}`, `{targets}`) for a value you provide."
+  - term: slot
+    definition: "One ordered position a command is built from (Program -> Options -> Target -> Output)."
+  - term: output
+    definition: "Where results go; the output slot sets format and destination."
+  - term: pipe
+    definition: "Sending one command's output into another with `|` (previewed here, taught later)."
+  - term: redirection
+    definition: "Sending output into a file with `>` (previewed here, taught later)."

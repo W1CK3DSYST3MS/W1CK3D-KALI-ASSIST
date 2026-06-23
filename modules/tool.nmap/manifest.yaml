@@ -1,0 +1,18 @@
+module_id: tool.nmap
+name: "nmap — Network Mapper"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: nmap
+  flows: [discovery, portscan, service_version, os_detect, udp, nse, timing_stealth, output, full]
+  glossary_terms: [host_discovery, port_state, syn_scan, connect_scan, udp_scan, service_detection, os_detection, nse, timing_template, privileged_scan]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against nmap man page + official docs (nmap.org)"
+license: "project-proprietary lesson text; nmap is GPL (referenced, not bundled)"
+checksum: ""

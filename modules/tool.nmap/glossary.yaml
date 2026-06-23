@@ -1,0 +1,21 @@
+terms:
+  - term: host_discovery
+    definition: "Finding which hosts are online before scanning ports."
+  - term: port_state
+    definition: "nmap's verdict per port: open (listening), closed (reachable, nothing listening), filtered (a firewall blocked the probe); open|filtered is common in UDP."
+  - term: syn_scan
+    definition: "`-sS`: fast half-open TCP scan; needs privileges; default when root."
+  - term: connect_scan
+    definition: "`-sT`: full TCP handshake; no privileges needed; noisier."
+  - term: udp_scan
+    definition: "`-sU`: scans UDP services; slow by nature."
+  - term: service_detection
+    definition: "`-sV`: probes open ports to name the service + version."
+  - term: os_detection
+    definition: "`-O`: fingerprints the likely operating system."
+  - term: nse
+    definition: "Nmap Scripting Engine; bundled scripts for deeper checks (`--script`)."
+  - term: timing_template
+    definition: "`-T0..5`: preset speed/stealth trade-off (paranoid -> insane)."
+  - term: privileged_scan
+    definition: "Scans (e.g. -sS, -O, -sU) that need root/sudo."

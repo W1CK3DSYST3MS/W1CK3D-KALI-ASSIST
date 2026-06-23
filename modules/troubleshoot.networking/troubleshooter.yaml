@@ -1,0 +1,256 @@
+troubleshooter_id: troubleshoot.networking
+title: "Networking, DNS & Wi-Fi Troubleshooter"
+os_profile: kali
+category_color: info
+triage:
+  - field_id: link_type
+    label: "Wired (Ethernet) or Wi-Fi?"
+    type: choice
+    choices: [wired, wifi]
+    required: true
+  - field_id: changed
+    label: "Did it work before today — what changed (update, reboot, new location)?"
+    type: string
+  - field_id: adapter
+    label: "Built-in adapter or USB?"
+    type: choice
+    choices: [builtin, usb]
+external_resources:
+  - title: "Kali docs"
+    url: "https://www.kali.org/docs/"
+  - title: "Kali forums"
+    url: "https://forums.kali.org/"
+  - title: "Debian wiki — WiFi/network"
+    url: "https://wiki.debian.org/WiFi"
+  - title: "Arch Wiki — Network configuration"
+    url: "https://wiki.archlinux.org/title/Network_configuration"
+  - title: "Unix & Linux Stack Exchange"
+    url: "https://unix.stackexchange.com/"
+  - title: "On-system manuals"
+    note: "man ip · man nmcli · man iw · iw --help"
+symptoms:
+  - symptom_id: no_internet
+    label: "I have no internet at all"
+    aliases: [no internet, offline, cant connect, no connection, dead network, no ip]
+    diagnosis:
+      - step_id: l1
+        title: "Do you have an IP address?"
+        slot_target: null
+        glossary_refs: [ip_address, interface]
+        explanation:
+          what: "`ip a` shows your interfaces and their addresses."
+          why: "An `inet 192.168.x.x` line (not just 127.0.0.1) means link + DHCP worked."
+          where: "Diagnostic — read the inet line."
+        try_this: "ip a"
+        success_criteria: "An inet address on your interface (e.g. eth0/wlan0)."
+        alternatives:
+          - trigger: "only 127.0.0.1 / no inet"
+            cause: "Link down or DHCP didn't assign an address."
+            fix: "Bring the interface up and restart NetworkManager (see Basic fixes)."
+            check: "Re-run `ip a` after the fix."
+      - step_id: l2
+        title: "Is there a default route?"
+        slot_target: null
+        glossary_refs: [gateway]
+        explanation:
+          what: "`ip route` lists routes; look for `default via ...`."
+          why: "Without a default route, traffic can't leave your subnet."
+          where: "Diagnostic."
+        try_this: "ip route"
+        success_criteria: "A line starting `default via ...`."
+        alternatives:
+          - trigger: "no default route"
+            cause: "DHCP didn't provide a gateway."
+            fix: "Reconnect the interface, or (lab only) add a static route."
+            check: "Re-run `ip route`."
+      - step_id: l3
+        title: "Can you reach the internet by number?"
+        slot_target: null
+        explanation:
+          what: "`ping -c3 1.1.1.1` tests raw connectivity, bypassing DNS."
+          why: "If this works but names don't, the problem is DNS, not the link."
+          where: "Diagnostic."
+        try_this: "ping -c3 1.1.1.1"
+        success_criteria: "Replies received."
+        alternatives:
+          - trigger: "replies, but names fail"
+            cause: "It's DNS, not connectivity."
+            fix: "Switch to the 'websites won't load by name' symptom (DNS)."
+            check: "Try `ping -c3 example.com`."
+          - trigger: "no replies"
+            cause: "Link/route still broken."
+            fix: "Work the Basic/Intermediate fixes below."
+            check: "Recheck `ip a` / `ip route`."
+    fixes:
+      - fix_id: nm_restart
+        tier: basic
+        title: "Restart the network stack"
+        command: "sudo systemctl restart NetworkManager"
+        why: "Clears a stuck manager/DHCP."
+        verify: "Re-run `ip a` -> expect an IP within ~10s."
+        destructive: true
+        recovery: "Restarting drops managed connections briefly; they reconnect automatically."
+      - fix_id: iface_up
+        tier: basic
+        title: "Bring the interface up"
+        command: "sudo ip link set <iface> up"
+        why: "The interface may be administratively down."
+        verify: "`ip a` shows `state UP`."
+      - fix_id: rfkill
+        tier: basic
+        title: "Unblock a soft-blocked radio"
+        command: "rfkill list  # if Soft blocked: yes -> sudo rfkill unblock wifi"
+        why: "A soft block disables Wi-Fi entirely."
+        verify: "`rfkill list` shows Soft blocked: no."
+      - fix_id: nm_status
+        tier: intermediate
+        title: "Check NetworkManager is running"
+        command: "systemctl status NetworkManager  # if not: sudo systemctl enable --now NetworkManager"
+        why: "If the manager isn't running, nothing gets configured."
+        verify: "Status shows active (running)."
+      - fix_id: nm_inspect
+        tier: intermediate
+        title: "Inspect/renew connections"
+        command: "nmcli device status; nmcli connection show; sudo nmcli device connect <iface>"
+        why: "Reapply or reconnect to re-trigger DHCP."
+        verify: "Device shows `connected`; `ip a` has an address."
+      - fix_id: journal
+        tier: extensive
+        title: "Read the actual failure"
+        command: "journalctl -u NetworkManager -e; dmesg | grep -iE 'eth|wlan'"
+        why: "Surfaces driver/link errors and the real reason for failure."
+        verify: "Identify the specific error to act on."
+  - symptom_id: dns_fail
+    label: "Some things work but websites won't load by name"
+    aliases: [dns, name resolution, cant resolve, resolv.conf, nameserver, names dont load]
+    diagnosis:
+      - step_id: dns1
+        title: "Confirm it's DNS"
+        slot_target: null
+        glossary_refs: [dns, nameserver]
+        explanation:
+          what: "`ping 1.1.1.1` works AND `ping example.com` fails -> it's DNS."
+          why: "Isolates name resolution from connectivity."
+          where: "Diagnostic."
+        try_this: "ping -c3 1.1.1.1 && ping -c3 example.com"
+        success_criteria: "The IP ping works; the name ping fails."
+        alternatives:
+          - trigger: "both fail"
+            cause: "This is a connectivity problem, not DNS."
+            fix: "Switch to the 'no internet at all' symptom."
+            check: "Recheck `ip a` / `ip route`."
+    fixes:
+      - fix_id: check_resolvers
+        tier: basic
+        title: "Check resolvers"
+        command: "cat /etc/resolv.conf"
+        why: "There must be a working `nameserver` line."
+        verify: "At least one nameserver is present."
+      - fix_id: set_dns
+        tier: basic
+        title: "Set a working resolver via NetworkManager"
+        command: "nmcli connection modify <name> ipv4.dns \"1.1.1.1 9.9.9.9\"; nmcli connection up <name>"
+        why: "Don't hand-edit resolv.conf if NM manages it."
+        verify: "`ping example.com` resolves."
+      - fix_id: resolved
+        tier: intermediate
+        title: "Is systemd-resolved in play?"
+        command: "resolvectl status; systemctl status systemd-resolved"
+        why: "If resolv.conf points to 127.0.0.53, resolved is the stub resolver."
+        verify: "Confirm which component owns DNS."
+      - fix_id: test_resolver
+        tier: intermediate
+        title: "Test a specific resolver directly"
+        command: "dig @1.1.1.1 example.com  # or: nslookup example.com 1.1.1.1"
+        why: "Separates 'DNS server down' from 'local config wrong'."
+        verify: "A direct query resolves."
+  - symptom_id: wifi_connect
+    label: "My Wi-Fi won't connect / I see no networks"
+    aliases: [wifi, wireless, ssid, no networks, wont connect, wlan]
+    fixes:
+      - fix_id: unblock
+        tier: basic
+        title: "Unblock radios"
+        command: "rfkill list; sudo rfkill unblock all"
+        why: "A soft/hard block hides all Wi-Fi."
+        verify: "`rfkill list` shows no blocks."
+      - fix_id: list_connect
+        tier: basic
+        title: "See networks and connect"
+        command: "nmcli device wifi list; nmcli device wifi connect \"<SSID>\" password \"<password>\""
+        why: "Scans and joins a network."
+        verify: "`nmcli device status` shows the Wi-Fi device connected."
+      - fix_id: reauth
+        tier: intermediate
+        title: "Wrong password / auth loop"
+        command: "nmcli connection delete \"<SSID>\"  # then reconnect"
+        why: "A stale saved profile can loop on auth."
+        verify: "Reconnect succeeds with the correct password."
+      - fix_id: regdom
+        tier: extensive
+        title: "Regulatory domain hiding channels"
+        command: "iw reg get; sudo iw reg set <CC>"
+        why: "Wrong country code can hide channels/bands."
+        verify: "Expected networks/channels appear."
+  - symptom_id: adapter_missing
+    label: "My Wi-Fi/network adapter isn't showing up at all"
+    aliases: [adapter, interface missing, no wlan0, driver, firmware, not recognized]
+    fixes:
+      - fix_id: seen
+        tier: basic
+        title: "Is the device seen at all?"
+        command: "lspci -nnk | grep -iA3 net   # USB: lsusb"
+        why: "Confirms the hardware is detected and whether a driver is bound."
+        verify: "Your adapter is listed (with a `Kernel driver in use` for PCIe)."
+      - fix_id: fw_errors
+        tier: basic
+        title: "Firmware load errors?"
+        command: "sudo dmesg | grep -iE 'firmware|wlan|driver'"
+        why: "Surfaces 'failed to load firmware' messages."
+        verify: "Identify any missing-firmware lines."
+      - fix_id: install_fw
+        tier: intermediate
+        title: "Install missing firmware"
+        command: "sudo apt update && sudo apt install firmware-iwlwifi  # or firmware-realtek / firmware-atheros"
+        why: "Fresh Kali often lacks vendor firmware."
+        verify: "`ip a` / `iw dev` now lists the interface."
+  - symptom_id: monitor_mode
+    label: "I can't get monitor mode working (security tooling)"
+    aliases: [monitor mode, airmon, injection, capture, wlan0mon]
+    fixes:
+      - fix_id: supports
+        tier: basic
+        title: "Does the adapter support monitor mode?"
+        command: "iw list | grep -A10 \"Supported interface modes\""
+        why: "Look for `* monitor`; if absent the chipset can't do it."
+        verify: "`* monitor` appears in the supported modes."
+      - fix_id: enable
+        tier: basic
+        title: "Enable monitor mode"
+        command: "sudo airmon-ng start <iface>"
+        why: "Creates a monitor interface (e.g. wlan0mon)."
+        verify: "`iw dev` shows the interface in `type monitor`."
+      - fix_id: killers
+        tier: intermediate
+        title: "Stop interfering processes"
+        command: "sudo airmon-ng check; sudo airmon-ng check kill"
+        why: "NetworkManager/wpa_supplicant grab the adapter."
+        verify: "Interfering processes are stopped."
+        destructive: true
+        recovery: "This stops NetworkManager -> you lose normal Wi-Fi/internet until you run `sudo systemctl start NetworkManager`."
+  - symptom_id: slow_intermittent
+    label: "It connects but is slow or keeps dropping"
+    aliases: [slow, dropping, intermittent, lag, unstable, keeps disconnecting]
+    fixes:
+      - fix_id: signal
+        tier: basic
+        title: "Check signal/quality"
+        command: "nmcli -f IN-USE,SSID,SIGNAL,CHAN device wifi"
+        why: "Low SIGNAL means distance/AP issues."
+        verify: "Compare SIGNAL across networks."
+      - fix_id: powersave
+        tier: intermediate
+        title: "Power saving causing drops"
+        command: "iw dev <iface> get power_save  # disable via NetworkManager wifi.powersave"
+        why: "Aggressive power save can drop the link."
+        verify: "Stability improves with power save off."

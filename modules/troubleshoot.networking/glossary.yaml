@@ -1,0 +1,23 @@
+terms:
+  - term: interface
+    definition: "A network device (e.g. eth0 wired, wlan0 Wi-Fi)."
+  - term: ip_address
+    definition: "The address your machine holds on a network (from `ip a`)."
+  - term: gateway
+    definition: "The router your traffic exits through (the `default via` in `ip route`)."
+  - term: dns
+    definition: "Translates names (example.com) to IPs; set in resolv.conf / NetworkManager."
+  - term: nameserver
+    definition: "A DNS server entry in resolv.conf that answers name lookups."
+  - term: dhcp
+    definition: "Auto-assigns IP/gateway/DNS from the network."
+  - term: rfkill
+    definition: "Soft/hard radio block; can disable Wi-Fi entirely."
+  - term: driver
+    definition: "The kernel module that makes an adapter work."
+  - term: firmware
+    definition: "Chip code an adapter needs, loaded by the driver at init."
+  - term: monitor_mode
+    definition: "A Wi-Fi mode that captures all nearby traffic (for authorized testing)."
+  - term: regulatory_domain
+    definition: "Country setting that governs allowed channels/power."

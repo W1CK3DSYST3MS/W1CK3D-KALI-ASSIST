@@ -1,0 +1,17 @@
+module_id: troubleshoot.networking
+name: "Networking, DNS & Wi-Fi Troubleshooter"
+version: "1.0.0"
+type: troubleshooter
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  symptoms: [no_internet, dns_fail, wifi_connect, adapter_missing, monitor_mode, slow_intermittent]
+  glossary_terms: [interface, ip_address, gateway, dns, dhcp, nameserver, rfkill, driver, firmware, monitor_mode, regulatory_domain]
+content:
+  troubleshooter: troubleshooter.yaml
+  glossary: glossary.yaml
+source: "authored; verified against ip/iw/nmcli/rfkill man pages + Kali docs"
+license: "project-proprietary"
+checksum: ""

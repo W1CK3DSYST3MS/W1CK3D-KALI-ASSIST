@@ -1,0 +1,15 @@
+module_id: troubleshoot.index
+name: "Troubleshooter — Start Here"
+version: "1.0.0"
+type: troubleshooter_router
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+routes_to: [troubleshoot.networking]
+provides:
+  entry: troubleshoot.start
+content: {}
+source: "authored; index auto-built from each module's declared symptoms + aliases"
+license: "project-proprietary"
+checksum: ""

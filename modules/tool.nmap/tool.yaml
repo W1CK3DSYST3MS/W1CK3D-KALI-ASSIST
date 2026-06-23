@@ -1,0 +1,228 @@
+tool_id: nmap
+display_name: "nmap (Network Mapper)"
+binary_candidates: [nmap]
+categories: [reconnaissance]
+os_profile: kali
+one_liner: "Discovers hosts and the services/ports they expose on a network."
+authorization_gate: true
+authorization_text: >
+  Only scan systems you own or have explicit written permission to test.
+  Unauthorized scanning may be illegal. For practice, use nmap's official
+  permission-granted host scanme.nmap.org or your own lab/VMs. Continue?
+flows:
+  - flow_id: discovery
+    title: "Host discovery — who is alive?"
+    goal: "Find live hosts without port scanning."
+    command_builder_id: nmap
+    slots: [PROGRAM, ACTION_OPTIONS, TARGET_PIVOT]
+    steps:
+      - step_id: d1
+        title: "Ping-sweep the subnet"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [host_discovery]
+        explanation:
+          what: "`-sn` does host discovery only (no port scan)."
+          why: "Quickly learns which hosts are up before deeper scanning."
+          where: "ACTION_OPTIONS; targets fill TARGET_PIVOT."
+        try_this: "nmap -sn 192.168.1.0/24"
+        success_criteria: "A list of hosts reported 'up'."
+        alternatives:
+          - trigger: "no hosts found"
+            cause: "The network may block ping, or wrong subnet."
+            fix: "Add `-Pn` to assume hosts are up, or confirm the subnet with `ip a`."
+            check: "Compare your IP/subnet from `ip a`."
+          - trigger: "very slow"
+            cause: "DNS resolution / conservative timing."
+            fix: "Add `-n` to skip DNS, and/or `-T4` to speed timing."
+            check: "Re-run and compare time."
+  - flow_id: portscan
+    title: "Port scan — what is open?"
+    goal: "Find open ports on a target."
+    command_builder_id: nmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: p1
+        title: "Scan specific ports"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [port_state, syn_scan, connect_scan, privileged_scan]
+        explanation:
+          what: "`-sS` is a fast half-open SYN scan (needs privileges); `-sT` is a full connect scan (no root)."
+          why: "Choose the scan type by privilege; `-p` selects ports."
+          where: "ACTION_OPTIONS (scan type + ports)."
+        try_this: "nmap -sS -p 22,80,443 192.168.1.10   # unprivileged: -sT"
+        success_criteria: "A port table with states (open/closed/filtered)."
+        alternatives:
+          - trigger: "requires root privileges / -sS fails"
+            cause: "SYN scan needs privileges."
+            fix: "Use `sudo`, or switch to `-sT` (connect scan) which doesn't."
+            check: "Re-run with sudo or -sT."
+          - trigger: "all ports filtered"
+            cause: "A firewall is likely dropping probes."
+            fix: "Try `-Pn`, fewer ports, or slower timing `-T2`."
+            check: "Compare results with -Pn."
+          - trigger: "host seems down"
+            cause: "Host discovery probes are blocked."
+            fix: "Add `-Pn` to skip host discovery and scan anyway."
+            check: "Re-run with -Pn."
+  - flow_id: service_version
+    title: "Service & version detection — what is running?"
+    goal: "Identify the service + version on open ports."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: sv1
+        title: "Probe versions with -sV"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [service_detection]
+        explanation:
+          what: "`-sV` probes open ports to name the service and version."
+          why: "Turns 'port 80 open' into 'Apache 2.4.x'."
+          where: "ACTION_OPTIONS."
+        try_this: "nmap -sV -p 22,80,443 192.168.1.10"
+        success_criteria: "The port table now shows SERVICE + VERSION columns."
+        alternatives:
+          - trigger: "version shows tcpwrapped / unknown"
+            cause: "The service hid its banner."
+            fix: "Try `--version-all`, or an NSE script (nse flow)."
+            check: "Compare with --version-all."
+  - flow_id: os_detect
+    title: "OS detection — what system is it?"
+    goal: "Fingerprint the operating system."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: os1
+        title: "Fingerprint with -O (needs privileges)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [os_detection, privileged_scan]
+        explanation:
+          what: "`-O` enables OS detection."
+          why: "Guesses the OS family/version from network fingerprints."
+          where: "ACTION_OPTIONS; run privileged."
+        try_this: "sudo nmap -O 192.168.1.10"
+        success_criteria: "An OS guess with an accuracy percentage."
+        alternatives:
+          - trigger: "requires privileges"
+            cause: "OS detection needs raw sockets."
+            fix: "Run with `sudo`."
+            check: "Re-run with sudo."
+          - trigger: "too many fingerprints / no exact match"
+            cause: "Not enough open+closed ports found."
+            fix: "Add `--osscan-guess`; accuracy depends on found ports."
+            check: "Compare with --osscan-guess."
+  - flow_id: udp
+    title: "UDP scan — the other half of the network"
+    goal: "Find open UDP services (DNS, SNMP, DHCP)."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: u1
+        title: "Scan top UDP ports"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [udp_scan, port_state]
+        explanation:
+          what: "`-sU` scans UDP; it is slow by nature."
+          why: "UDP services are missed by TCP scans; limit with `--top-ports`."
+          where: "ACTION_OPTIONS; run privileged."
+        try_this: "sudo nmap -sU --top-ports 20 192.168.1.10"
+        success_criteria: "A UDP port table (many show open|filtered — that's normal)."
+        alternatives:
+          - trigger: "extremely slow"
+            cause: "UDP is slow by design."
+            fix: "Limit with `--top-ports`, raise timing, be patient. This is normal."
+            check: "It is not a failure; let it finish."
+  - flow_id: nse
+    title: "NSE scripting — go deeper"
+    goal: "Run Nmap Scripting Engine checks."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: n1
+        title: "Run default scripts"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [nse]
+        explanation:
+          what: "`--script=default` runs the safe default script set."
+          why: "Adds extra checks (titles, banners) under each port."
+          where: "ACTION_OPTIONS; `--script-args` goes in EXTRA_FILES."
+        try_this: "nmap -sV --script=default -p 80,443 192.168.1.10"
+        success_criteria: "Extra script output appears under the relevant ports."
+        alternatives:
+          - trigger: "script not found"
+            cause: "Wrong script name/category."
+            fix: "List/locate scripts; check the name/category spelling."
+            check: "Try `--script=safe`."
+          - trigger: "vuln category seems intrusive"
+            cause: "Some categories are noisy or intrusive."
+            fix: "Prefer `safe`/`default` for learning; only use intrusive scripts on authorized targets."
+            check: "Confirm authorization before vuln scripts."
+  - flow_id: timing_stealth
+    title: "Timing & stealth — control noise & speed"
+    goal: "Go faster or quieter."
+    command_builder_id: nmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: t1
+        title: "Tune timing and discovery"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [timing_template]
+        explanation:
+          what: "`-T0..-T5` set speed/stealth; `-Pn` skips host discovery; `-n` skips DNS."
+          why: "Lower timing is quieter but slower."
+          where: "GLOBAL_OPTIONS."
+        try_this: "nmap -sS -T2 -Pn -n -p 1-1000 192.168.1.10"
+        success_criteria: "Scan runs slower/quieter; same result table."
+        alternatives:
+          - trigger: "too slow to finish"
+            cause: "`-T2` is deliberately slow."
+            fix: "Raise to `-T4` for labs."
+            check: "Compare time at -T4."
+          - trigger: "still blocked"
+            cause: "A strict firewall, not timing."
+            fix: "Timing won't beat a strict firewall; note it and move on."
+            check: "Expected — record and continue."
+  - flow_id: output
+    title: "Output & reporting — capture results"
+    goal: "Save results properly."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    output_manifest:
+      base_dir: "./out"
+      files: ["scan.nmap", "scan.xml", "scan.gnmap"]
+      note: "`-oA base` writes all three formats at once."
+    steps:
+      - step_id: o1
+        title: "Write all output formats"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-oN`/`-oX`/`-oG` write normal/XML/grepable; `-oA base` writes all three."
+          why: "Saved output is reusable (import into other tools)."
+          where: "OUTPUT_OPTIONS."
+        try_this: "nmap -sV -p 22,80,443 -oA ./out/scan 192.168.1.10"
+        success_criteria: "scan.nmap, scan.xml, scan.gnmap created in ./out/."
+        alternatives:
+          - trigger: "permission denied writing file"
+            cause: "Output directory is not writable."
+            fix: "Pick a writable dir (e.g. your home), or create it: `mkdir -p ./out`."
+            check: "Confirm the dir exists and is writable."
+  - flow_id: full
+    title: "Full / aggressive (combined, advanced)"
+    goal: "Show how flags combine into one capable command."
+    command_builder_id: nmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: f1
+        title: "One switch, many actions: -A"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [service_detection, os_detection, nse]
+        explanation:
+          what: "`-A` = OS detection + version + default scripts + traceroute."
+          why: "Convenient but loud; now that you've learned each piece you can see what it does."
+          where: "ACTION_OPTIONS; run privileged for full effect."
+        try_this: "sudo nmap -A -T4 -p- -oA ./out/full 192.168.1.10"
+        success_criteria: "A rich report combining versions, OS guess, scripts and traceroute."
+        alternatives:
+          - trigger: "a sub-behavior failed"
+            cause: "One of version/OS/NSE failed within -A."
+            fix: "Route to whichever sub-flow failed (service_version / os_detect / nse)."
+            check: "Re-run that single behavior in isolation."

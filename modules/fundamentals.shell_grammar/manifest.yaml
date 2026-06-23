@@ -1,0 +1,17 @@
+module_id: fundamentals.shell_grammar
+name: "Shell Grammar — How a Linux command is built"
+version: "1.0.0"
+type: lesson
+os_profile: agnostic
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  lessons: [lesson.shell_grammar]
+  glossary_terms: [program, flag, option, argument, global_option, placeholder, slot, pipe, redirection]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored (original) + examples seeded from tldr-pages (CC-BY 4.0)"
+license: "project-proprietary lesson text; example commands CC-BY 4.0 attributed"
+checksum: ""
