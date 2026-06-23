@@ -11,6 +11,8 @@ source stays private.
 
 import os
 
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
 # SPECPATH is the directory containing this spec (packaging/), so the project
 # root is its parent.
 PROJECT = os.path.abspath(os.path.join(SPECPATH, ".."))
@@ -20,15 +22,22 @@ datas = [
     (os.path.join(PROJECT, "modules"), "modules"),
 ]
 
-hiddenimports = [
-    # Builders self-register on import; make sure the analyzer keeps them.
-    "wizard_core.builders.nmap_builder",
-]
+# The builder package auto-discovers *_builder.py at runtime (pkgutil). In a
+# frozen app those submodules must be explicitly collected or only the ones
+# imported by name would be bundled — collect them all so every tool registers.
+hiddenimports = collect_submodules("wizard_core.builders")
+
+# Force-collect PySide6 so all Qt modules (QtWidgets/QtCore/QtGui) + plugins are
+# bundled. Without this the frozen app can fail with
+# "No module named 'PySide6.QtWidgets'".
+_qt_datas, _qt_binaries, _qt_hidden = collect_all("PySide6")
+datas += _qt_datas
+hiddenimports += _qt_hidden
 
 a = Analysis(
     [os.path.join(PROJECT, "wizard_desktop", "app.py")],
     pathex=[PROJECT],
-    binaries=[],
+    binaries=_qt_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

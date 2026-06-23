@@ -45,11 +45,19 @@ def _self_test() -> int:
     reg = load_modules(MODULES_DIR)
     from wizard_core.builders import get_builder
 
-    plan = get_builder("nmap")({"profile": "standard", "targets": "scanme.nmap.org"})
     assert len(fams) >= 5, f"expected >=5 fonts, got {fams}"
     assert reg.tools and reg.lessons and reg.troubleshooters, "modules missing"
+
+    # Every tool's builder must resolve + run — this catches builders that were
+    # not bundled (the pkgutil auto-discovery must survive freezing).
+    builder_ids = {f.command_builder_id for t in reg.tools.values() for f in t.flows}
+    for bid in sorted(builder_ids):
+        get_builder(bid)({})  # raises KeyError if the builder wasn't registered
+    plan = get_builder("nmap")({"profile": "standard", "targets": "scanme.nmap.org"})
+
     print(f"SELF-TEST OK: fonts={len(fams)} tools={len(reg.tools)} "
-          f"lessons={len(reg.lessons)} troubleshooters={len(reg.troubleshooters)}")
+          f"lessons={len(reg.lessons)} troubleshooters={len(reg.troubleshooters)} "
+          f"builders={len(builder_ids)}")
     print(f"  sample build: {plan.bash_preview_string}")
     return 0
 
