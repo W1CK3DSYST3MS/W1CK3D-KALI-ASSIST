@@ -1,0 +1,17 @@
+terms:
+  - term: web_vuln_scan
+    definition: "Automated checks for known web-server flaws/misconfigs."
+  - term: tuning
+    definition: "-Tuning chooses which test categories to run (focus + speed)."
+  - term: ssl
+    definition: "-ssl forces a TLS/HTTPS scan."
+  - term: evasion
+    definition: "-evasion mangles requests to study/avoid IDS; nikto stays noisy regardless."
+  - term: plugin
+    definition: "A modular nikto test (-list-plugins, -Plugins)."
+  - term: false_positive
+    definition: "A flagged issue that isn't real; verify before reporting."
+  - term: vhost
+    definition: "-vhost scans a named virtual host on a shared IP."
+  - term: cgidirs
+    definition: "Where nikto looks for CGI scripts (-Cgidirs)."

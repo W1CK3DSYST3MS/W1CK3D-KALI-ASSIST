@@ -1,0 +1,19 @@
+terms:
+  - term: mode
+    definition: "gobuster's first argument: dir, dns, vhost, or fuzz."
+  - term: wordlist
+    definition: "The list of candidates tried (dirb/SecLists on Kali)."
+  - term: extension
+    definition: "-x appends file types to each word (find files, not just dirs)."
+  - term: status_code
+    definition: "The HTTP response code; filter with -b (blacklist) or -s (whitelist), never both."
+  - term: threads
+    definition: "-t concurrent requests; higher = faster/louder."
+  - term: subdomain
+    definition: "A DNS subdomain enumerated in dns mode."
+  - term: vhost
+    definition: "A name-based virtual host served via the Host header on a shared IP."
+  - term: redirect
+    definition: "-r follows 3xx responses instead of just reporting them."
+  - term: seclists
+    definition: "The big wordlist collection (sudo apt install seclists)."

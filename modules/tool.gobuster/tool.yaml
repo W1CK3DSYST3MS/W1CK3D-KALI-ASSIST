@@ -1,0 +1,188 @@
+tool_id: gobuster
+display_name: "gobuster"
+binary_candidates: [gobuster]
+categories: [web_app, reconnaissance]
+os_profile: kali
+one_liner: "Brute-forces hidden web paths/files, subdomains, or virtual hosts from a wordlist."
+authorization_gate: true
+authorization_text: >
+  Brute-forcing web content/subdomains on targets you don't own or aren't authorized
+  to test is illegal and noisy (floods logs, can stress the server). Continue only for
+  authorized targets. Practice on your own apps, DVWA/Juice Shop, HTB/THM. Pace with a
+  sensible -t. Continue?
+flows:
+  - flow_id: first_dir
+    title: "First directory scan (dir mode)"
+    goal: "Find hidden paths on a web target."
+    command_builder_id: gobuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: gd1
+        title: "Run a dir scan with a wordlist"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [mode, wordlist, status_code]
+        explanation:
+          what: "`dir -u <url> -w <wordlist>` brute-forces paths; `-k` skips TLS verify for self-signed HTTPS."
+          why: "Reveals hidden directories/files by status code."
+          where: "mode is the subcommand; -u in TARGET_PIVOT; -w in EXTRA_FILES."
+        try_this: "gobuster dir -u https://10.0.0.20 -w /usr/share/wordlists/dirb/common.txt -k"
+        success_criteria: "Found paths print with status codes (e.g. /admin (Status: 301))."
+        alternatives:
+          - trigger: "connection refused / no web server"
+            cause: "Target port isn't a web service, or wrong scheme/port."
+            fix: "Confirm the web port with nmap first; set -u https://host:8443."
+            check: "Re-run with the correct scheme/port."
+          - trigger: "everything 403/Forbidden"
+            cause: "Server blocks the scanner User-Agent."
+            fix: "Set a normal UA with -a \"<user-agent>\"."
+            check: "Compare results with a browser UA."
+  - flow_id: wordlists_ext
+    title: "Wordlists + extensions"
+    goal: "Find files (not just dirs) using extensions."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: gw1
+        title: "Add file extensions with -x"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [extension, seclists]
+        explanation:
+          what: "`-x php,txt,bak` appends extensions to each word; SecLists/dirb ship on Kali."
+          why: "Catches pages and backups, not just folders."
+          where: "ACTION_OPTIONS (-x); -w in EXTRA_FILES."
+        try_this: "gobuster dir -u https://site -w /usr/share/seclists/Discovery/Web-Content/common.txt -x php,txt"
+        success_criteria: "Discovered files with those extensions appear."
+        alternatives:
+          - trigger: "SecLists missing"
+            cause: "SecLists not installed."
+            fix: "Install it: sudo apt install seclists."
+            check: "Re-run after install."
+  - flow_id: status_filter
+    title: "Status-code filtering (version-aware gotcha)"
+    goal: "Get signal, not noise — pick whitelist OR blacklist."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: gs1
+        title: "Filter status codes"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [status_code]
+        explanation:
+          what: "`-b 404,403` blacklists; `-s 200,301,302` whitelists; `--exclude-length` hides soft-404 sizes."
+          why: "gobuster's default changed between versions — check `gobuster version`. You CANNOT set both -b and -s."
+          where: "ACTION_OPTIONS."
+        try_this: "gobuster dir -u https://site -w common.txt -b 404,403"
+        success_criteria: "Only meaningful responses are shown."
+        alternatives:
+          - trigger: "status-codes and status-codes-blacklist are both set"
+            cause: "Both whitelist and blacklist supplied."
+            fix: "Clear one — pick whitelist OR blacklist."
+            check: "Re-run with only -b or only -s."
+          - trigger: "flood of false 200s"
+            cause: "Soft-404 pages return 200 with a fixed body."
+            fix: "Use --exclude-length on the soft-404 size."
+            check: "Note the common body length and exclude it."
+  - flow_id: perf_tls
+    title: "Threads, TLS & reliability"
+    goal: "Tune speed vs load."
+    command_builder_id: gobuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, EXTRA_FILES]
+    steps:
+      - step_id: gp1
+        title: "Set threads and TLS handling"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [threads]
+        explanation:
+          what: "`-t <n>` threads (default 10); `-k` skip TLS verify; `--timeout`, `--retry` for reliability."
+          why: "High threads are faster but hammer the target — be a good neighbor."
+          where: "GLOBAL_OPTIONS."
+        try_this: "gobuster dir -u https://site -w common.txt -t 50 -k"
+        success_criteria: "Scan completes without flooding errors."
+        alternatives:
+          - trigger: "errors/timeouts under load"
+            cause: "Too many threads or server rate-limiting."
+            fix: "Lower -t and raise --timeout."
+            check: "Re-run at -t 20."
+  - flow_id: auth_headers
+    title: "Auth, headers, cookies, redirects"
+    goal: "Scan authenticated areas."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: ga1
+        title: "Send cookies/headers and follow redirects"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [redirect]
+        explanation:
+          what: "`-c \"session=…\"` cookies; `-H \"Authorization: …\"` headers; `-r` follow 3xx."
+          why: "Without -r a 301 is reported, not followed; auth lets you reach protected paths."
+          where: "ACTION_OPTIONS."
+        try_this: "gobuster dir -u https://site -w common.txt -c \"PHPSESSID=abc\" -r"
+        success_criteria: "Authenticated paths resolve and redirects are followed."
+        alternatives:
+          - trigger: "still unauthorized"
+            cause: "Cookie/header invalid or expired."
+            fix: "Refresh the session value; verify the header format."
+            check: "Test the cookie in a browser."
+  - flow_id: dns_mode
+    title: "DNS mode (subdomain enumeration)"
+    goal: "Enumerate subdomains of a domain."
+    command_builder_id: gobuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: gn1
+        title: "Brute-force subdomains"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [subdomain]
+        explanation:
+          what: "`dns -d <domain> -w <list>`; `-i` shows IPs; `-r <resolver>` uses a specific DNS server."
+          why: "Maps the attack surface beyond the main site."
+          where: "dns subcommand; -d in TARGET_PIVOT."
+        try_this: "gobuster dns -d example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -i"
+        success_criteria: "Discovered subdomains print (with IPs if -i)."
+        alternatives:
+          - trigger: "nothing found / rate-limited"
+            cause: "Resolver limits, small list, or wildcard DNS."
+            fix: "Try a different resolver (-r 1.1.1.1), a bigger list; check for wildcard DNS."
+            check: "If everything resolves, suspect a wildcard."
+  - flow_id: vhost_mode
+    title: "VHost mode (virtual hosts on one server)"
+    goal: "Find name-based virtual hosts sharing an IP."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: gv1
+        title: "Brute-force Host headers"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [vhost]
+        explanation:
+          what: "`vhost -u <url> -w <list> --append-domain` brute-forces hostnames via the Host header."
+          why: "Modern gobuster requires --append-domain to add the base domain to each word."
+          where: "vhost subcommand; --append-domain in ACTION_OPTIONS."
+        try_this: "gobuster vhost -u https://example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain"
+        success_criteria: "Hidden virtual hosts are reported."
+        alternatives:
+          - trigger: "all show same length (false positives)"
+            cause: "The server returns a default page for unknown vhosts."
+            fix: "Filter with --exclude-length on that size."
+            check: "Note the default body length and exclude it."
+  - flow_id: output
+    title: "Output & integration"
+    goal: "Save results to feed the next tool."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, OUTPUT_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: go1
+        title: "Write findings to a file"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o results.txt` saves findings; `-q` gives clean output to pipe."
+          why: "Feed discovered paths/subdomains into nikto or other tools."
+          where: "OUTPUT_OPTIONS."
+        try_this: "gobuster dir -u https://site -w common.txt -o dirs.txt"
+        success_criteria: "dirs.txt contains the discovered paths."
+        alternatives:
+          - trigger: "permission denied writing file"
+            cause: "Output directory not writable."
+            fix: "Pick a writable path (e.g. your home dir)."
+            check: "Confirm the directory is writable."

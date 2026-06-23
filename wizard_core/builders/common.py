@@ -25,17 +25,20 @@ def shell_escape(token: str) -> str:
 
 def assemble(program: str, slot_values: Mapping[Slot, list[str]],
              notes: list[str] | None = None,
-             elevation: str | None = None) -> CommandPlan:
+             elevation: str | None = None,
+             subcommand: list[str] | None = None) -> CommandPlan:
     """Assemble slot tokens into a :class:`CommandPlan` in the fixed slot order.
 
     ``program`` is forced into the PROGRAM slot. ``elevation`` (e.g. ``"sudo"``)
-    is rendered ahead of the program when a flow needs privileges — kept separate
-    from the slots so PROGRAM stays the tool name. Empty slots are skipped. The
-    same ordering drives both the array form and the bash preview string.
+    is rendered ahead of the program when a flow needs privileges. ``subcommand``
+    (e.g. gobuster's ``dir`` mode) is rendered immediately after the program and
+    before any flags — both kept separate from the slots so PROGRAM stays the
+    tool name. Empty slots are skipped. The same ordering drives both the array
+    form and the bash preview string.
     """
     values: dict[Slot, list[str]] = {}
-    # PROGRAM is always slot 1 and always the program name.
-    values[Slot.PROGRAM] = [program]
+    # PROGRAM is always slot 1 and always the program name (+ optional subcommand).
+    values[Slot.PROGRAM] = [program] + list(subcommand or [])
     for slot in SLOT_ORDER:
         if slot is Slot.PROGRAM:
             continue
@@ -53,7 +56,7 @@ def assemble(program: str, slot_values: Mapping[Slot, list[str]],
             continue
         array_form.extend(values[slot])
         if slot is Slot.PROGRAM:
-            skeleton_parts.append(program)
+            skeleton_parts.append(" ".join(values[slot]))
         else:
             skeleton_parts.append("{%s}" % slot.label.lower().replace(" / ", "/").replace(" ", "_"))
 

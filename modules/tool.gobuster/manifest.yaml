@@ -1,0 +1,18 @@
+module_id: tool.gobuster
+name: "gobuster — Content / DNS / VHost Brute-Forcer"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: gobuster
+  flows: [first_dir, wordlists_ext, status_filter, perf_tls, auth_headers, dns_mode, vhost_mode, output]
+  glossary_terms: [mode, wordlist, extension, status_code, threads, vhost, subdomain, redirect, seclists]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against gobuster help (v3) / OJ gobuster docs"
+license: "project-proprietary lesson text; gobuster is Apache-2.0 (referenced, not bundled)"
+checksum: ""

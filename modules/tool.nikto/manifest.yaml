@@ -1,0 +1,18 @@
+module_id: tool.nikto
+name: "nikto — Web Server Vulnerability Scanner"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: nikto
+  flows: [first_scan, port_ssl, tuning, output, auth_proxy_vhost, evasion_pace, update, integration]
+  glossary_terms: [web_vuln_scan, tuning, ssl, evasion, plugin, false_positive, vhost, cgidirs]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against nikto -Help / cirt.net docs"
+license: "project-proprietary lesson text; nikto is GPL (referenced, not bundled)"
+checksum: ""

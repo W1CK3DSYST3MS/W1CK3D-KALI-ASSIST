@@ -1,0 +1,21 @@
+terms:
+  - term: sql_injection
+    definition: "Tricking an app into running attacker-controlled SQL via its inputs."
+  - term: injection_point
+    definition: "The specific input (e.g. ?id=) that is exploitable."
+  - term: parameter
+    definition: "A named input under test; -p targets one parameter."
+  - term: dbms
+    definition: "The database engine (MySQL, PostgreSQL, MSSQL…); sqlmap fingerprints it."
+  - term: level
+    definition: "--level 1-5: how many input places sqlmap tests (higher = cookies/headers too)."
+  - term: risk
+    definition: "--risk 1-3: how aggressive the payloads (higher = potentially disruptive)."
+  - term: technique
+    definition: "--technique BEUSTQ: which injection types to use (Boolean/Error/Union/Stacked/Time/Query)."
+  - term: batch
+    definition: "--batch runs non-interactively using sensible defaults."
+  - term: request_file
+    definition: "A saved HTTP request (-r) carrying target+headers+cookies+body."
+  - term: tamper
+    definition: "Scripts that mutate payloads to evade WAFs (advanced)."
