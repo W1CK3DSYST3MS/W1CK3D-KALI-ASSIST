@@ -1,0 +1,17 @@
+module_id: fundamentals.files_navigation
+name: "Files, Paths & Navigation"
+version: "1.0.0"
+type: lesson
+os_profile: agnostic
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.files_navigation]
+  glossary_terms: [path_absolute, path_relative, home_dir, working_dir, hidden_file, wildcard, symlink, inode]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored (original)"
+license: "project-proprietary lesson text"
+checksum: ""

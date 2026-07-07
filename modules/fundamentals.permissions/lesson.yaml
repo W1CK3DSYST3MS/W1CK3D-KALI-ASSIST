@@ -1,0 +1,298 @@
+lesson_id: lesson.permissions
+title: "Permissions & Ownership"
+topic_tags: [fundamentals, permissions, security, sudo]
+audience: beginner
+os_profile: agnostic
+goal: >
+  Read and change Linux file permissions with confidence: the rwx bits for
+  user/group/other, chmod (symbolic and numeric), ownership with chown, when and
+  why to use sudo, the execute bit for scripts, and the real dangers (chmod 777, SUID).
+intro: >
+  Linux controls every file with permissions and ownership. Getting these right is the
+  difference between "permission denied" frustration and quietly making your system
+  insecure. This lesson teaches you to READ the permission string, CHANGE it safely, and
+  recognise the dangerous patterns. You'll work in a throwaway sandbox. Compare each run
+  to the EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can read a permission string and set permissions safely with chmod"
+next_suggestions:
+  - "Processes & Jobs"
+  - "Package Management on Kali"
+steps:
+  - step_id: p1
+    title: "Set up a sandbox"
+    slot_target: TARGET_PIVOT
+    explanation:
+      what: "Make a throwaway folder and a file to experiment on."
+      why: "We'll change permissions repeatedly — safe to do on files that don't matter."
+      where: "Setup."
+    try_this: "mkdir -p ~/ka-perms && cd ~/ka-perms && echo 'hello' > demo.txt && ls -l"
+    success_criteria: "A demo.txt file listed with a permission string."
+    expected_output: |
+      total 4
+      -rw-r--r-- 1 kali kali 6 Jun 23 10:20 demo.txt
+    alternatives:
+      - trigger: "Permission denied"
+        cause: "Tried to create outside your home."
+        fix: "Use ~: `mkdir -p ~/ka-perms`."
+        check: "You can always write under ~."
+  - step_id: p2
+    title: "Read the permission string"
+    slot_target: null
+    glossary_refs: [permission_bits, owner_group_other]
+    explanation:
+      what: "The 10 characters: [type][user rwx][group rwx][other rwx]. `-rw-r--r--` = file, owner read+write, group read, others read."
+      why: "Reading it is the whole skill — changing it is easy once you can read it."
+      where: "Reading `ls -l`."
+    try_this: "ls -l demo.txt"
+    success_criteria: "You can name each field of -rw-r--r--."
+    expected_output: |
+      -rw-r--r-- 1 kali kali 6 Jun 23 10:20 demo.txt
+      │└┬┘└┬┘└┬┘
+      │ u   g   o     (type=- file; user=rw-; group=r--; other=r--)
+    alternatives:
+      - trigger: "the first char is d"
+        cause: "It's a directory, not a file."
+        fix: "d = directory, - = regular file, l = symlink."
+        check: "demo.txt should start with -."
+      - trigger: "you see an extra . or + at the end"
+        cause: "SELinux/ACL indicators (rare on Kali)."
+        fix: "Ignore for now; the rwx bits are what matter."
+        check: "Focus on the 9 rwx characters."
+  - step_id: p3
+    title: "Who am I, and what groups am I in? (id)"
+    slot_target: null
+    glossary_refs: [owner_group_other, root]
+    explanation:
+      what: "`id` shows your user id, primary group, and all groups you belong to."
+      why: "Permissions are decided by whether you're the file's owner, in its group, or 'other'."
+      where: "Identity."
+    try_this: "id"
+    success_criteria: "Your uid, gid, and group memberships print."
+    expected_output: |
+      uid=1000(kali) gid=1000(kali) groups=1000(kali),27(sudo),...
+    alternatives:
+      - trigger: "uid=0(root)"
+        cause: "You're root — permissions don't restrict you."
+        fix: "Root bypasses permission checks; be extra careful."
+        check: "uid 0 is always root."
+      - trigger: "no sudo group listed"
+        cause: "Your user may not have sudo rights."
+        fix: "On Kali the default user is usually in sudo; note it for later steps."
+        check: "Look for 'sudo' in the groups list."
+  - step_id: p4
+    title: "Make a file executable (chmod symbolic)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [chmod, execute_bit]
+    explanation:
+      what: "`chmod +x file` adds the execute bit. Symbolic form: u/g/o/a + +/-/= + r/w/x."
+      why: "A script won't run until it's executable. This is the most common chmod you'll use."
+      where: "ACTION_OPTIONS (the mode)."
+    try_this: "chmod +x demo.txt; ls -l demo.txt"
+    success_criteria: "The permission string gains x's (e.g. -rwxr-xr-x)."
+    expected_output: |
+      -rwxr-xr-x 1 kali kali 6 Jun 23 10:20 demo.txt
+    alternatives:
+      - trigger: "no x appeared"
+        cause: "Typo, or you targeted the wrong file."
+        fix: "Retype `chmod +x demo.txt`; confirm with `ls -l`."
+        check: "Look for x in the user/group/other triads."
+      - trigger: "you only want the owner to execute"
+        cause: "`+x` adds it for all; you want u only."
+        fix: "Use `chmod u+x demo.txt` (owner only)."
+        check: "Only the first triad gets x."
+  - step_id: p5
+    title: "Numeric (octal) permissions"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [chmod, permission_bits]
+    explanation:
+      what: "Each triad is a number: r=4, w=2, x=1. Sum per triad: 7=rwx, 6=rw-, 5=r-x, 4=r--."
+      why: "`chmod 644` and `chmod 755` are idioms you'll see everywhere — learn to read them."
+      where: "ACTION_OPTIONS."
+    try_this: "chmod 640 demo.txt; ls -l demo.txt"
+    success_criteria: "Permissions become -rw-r----- (owner rw, group r, other none)."
+    expected_output: |
+      -rw-r----- 1 kali kali 6 Jun 23 10:20 demo.txt
+    alternatives:
+      - trigger: "you're unsure which number to use"
+        cause: "Octal takes practice."
+        fix: "644 = rw-r--r-- (files), 755 = rwxr-xr-x (scripts/dirs), 600 = private."
+        check: "Add 4+2+1 per triad: owner/group/other."
+      - trigger: "the result surprised you"
+        cause: "Numeric SETS all three triads at once (unlike +x which adds)."
+        fix: "Use symbolic (u+x) to tweak one bit; numeric to set the whole thing."
+        check: "chmod 640 wiped the execute bit from p4 — as expected."
+  - step_id: p6
+    title: "Directories need x to enter"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [execute_bit, permission_bits]
+    explanation:
+      what: "On a directory, x means 'may enter/traverse', r means 'may list names', w means 'may add/remove files'."
+      why: "A common gotcha: you can't cd into a dir without x, even if you can read it."
+      where: "ACTION_OPTIONS."
+    try_this: "mkdir sub; chmod 600 sub; ls -ld sub; cd sub; echo $?"
+    success_criteria: "cd fails (Permission denied) and $? is non-zero, because sub lacks x."
+    expected_output: |
+      drw------- 2 kali kali 4096 Jun 23 10:25 sub
+      bash: cd: sub: Permission denied
+      1
+    alternatives:
+      - trigger: "cd worked anyway"
+        cause: "You're root (bypasses checks) or the mode didn't apply."
+        fix: "As root this won't demonstrate; try as a normal user, or re-check `ls -ld sub`."
+        check: "Non-root + no x = can't enter."
+      - trigger: "you want to fix it"
+        cause: "The dir needs execute to be usable."
+        fix: "`chmod 700 sub` restores owner rwx; then cd works."
+        check: "Directories almost always want x where they have r."
+  - step_id: p7
+    title: "sudo — run one command as root"
+    slot_target: PROGRAM
+    glossary_refs: [sudo, root]
+    explanation:
+      what: "`sudo <cmd>` runs that single command as root (asks your password). It's how you do admin tasks safely."
+      why: "You avoid living as root; you elevate only for the moment you need it."
+      where: "PROGRAM prefix."
+    try_this: "sudo id"
+    success_criteria: "After your password, it reports uid=0(root)."
+    expected_output: |
+      [sudo] password for kali:
+      uid=0(root) gid=0(root) groups=0(root)
+    alternatives:
+      - trigger: "kali is not in the sudoers file"
+        cause: "Your user lacks sudo rights."
+        fix: "Add via a root shell: `su -` then `usermod -aG sudo kali`, then log out/in."
+        check: "`id` should then list the sudo group."
+      - trigger: "it didn't ask for a password"
+        cause: "You authenticated recently (sudo caches for a few minutes) or NOPASSWD is set."
+        fix: "That's normal; `sudo -k` clears the cache to force a prompt."
+        check: "Re-run after `sudo -k`."
+      - trigger: "wrong password 3 times"
+        cause: "Mistyped password (it's your USER password, not root's)."
+        fix: "Retype carefully; nothing shows as you type — that's intended."
+        check: "It's your login password."
+  - step_id: p8
+    title: "Change ownership (chown, needs root)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [chown, sudo]
+    explanation:
+      what: "`sudo chown user:group file` changes who owns a file. Only root can give files away."
+      why: "Ownership decides which permission triad applies to whom."
+      where: "ACTION_OPTIONS (user:group)."
+    try_this: "sudo chown root:root demo.txt; ls -l demo.txt"
+    success_criteria: "Owner and group become root."
+    expected_output: |
+      -rw-r----- 1 root root 6 Jun 23 10:20 demo.txt
+    alternatives:
+      - trigger: "Operation not permitted"
+        cause: "You ran chown without sudo."
+        fix: "Prefix with sudo: `sudo chown root:root demo.txt`."
+        check: "Only root can change ownership."
+      - trigger: "now you can't edit demo.txt"
+        cause: "You gave it to root; as 'other' you only have the group/other bits."
+        fix: "Give it back: `sudo chown kali:kali demo.txt`."
+        check: "Ownership controls your access — hand it back when done."
+  - step_id: p9
+    title: "The danger: chmod 777"
+    slot_target: ACTION_OPTIONS
+    destructive: true
+    recovery: "777 makes a file world-writable — anyone can modify it. Never use it to 'fix' permission errors. Set the least access that works (e.g. 640/750) and use ownership instead."
+    glossary_refs: [permission_bits]
+    explanation:
+      what: "`chmod 777` grants rwx to everyone. It's the classic bad fix that creates security holes."
+      why: "You'll see it suggested online constantly — understand why it's almost always wrong."
+      where: "ACTION_OPTIONS."
+    try_this: "sudo chown kali:kali demo.txt; chmod 777 demo.txt; ls -l demo.txt"
+    success_criteria: "Permissions read -rwxrwxrwx — and you understand why that's dangerous."
+    expected_output: |
+      -rwxrwxrwx 1 kali kali 6 Jun 23 10:20 demo.txt
+    alternatives:
+      - trigger: "you used this to fix a real permission error"
+        cause: "777 'works' by removing all protection — masking the real problem."
+        fix: "Instead fix OWNERSHIP (chown) or grant the minimal bit needed (u+x, g+r)."
+        check: "Ask: who actually needs access, and only that much?"
+      - trigger: "restore a sane mode"
+        cause: "Leaving 777 around is unsafe."
+        fix: "`chmod 644 demo.txt` for a normal file."
+        check: "644 is the standard non-executable file mode."
+  - step_id: p10
+    title: "SUID — programs that run as their owner"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [suid, root]
+    explanation:
+      what: "A SUID bit (shown as s in the owner's x slot) makes a program run with the OWNER's privileges, not yours."
+      why: "It's how `passwd` edits root-owned files as you — and a prime target in privilege-escalation."
+      where: "Reading permissions; finding SUID binaries."
+    try_this: "ls -l /usr/bin/passwd; find /usr/bin -perm -4000 -type f 2>/dev/null | head"
+    success_criteria: "passwd shows an s (e.g. -rwsr-xr-x), and find lists SUID binaries."
+    expected_output: |
+      -rwsr-xr-x 1 root root 59976 ... /usr/bin/passwd
+      /usr/bin/passwd
+      /usr/bin/sudo
+      /usr/bin/mount
+    alternatives:
+      - trigger: "find printed nothing"
+        cause: "Wrong path or perm expression."
+        fix: "Use `find /usr/bin -perm -4000 -type f`; the -4000 means SUID."
+        check: "The leading 4 in 4000 is the SUID bit."
+      - trigger: "you see an S (capital)"
+        cause: "SUID set but the execute bit is off (unusual)."
+        fix: "Lowercase s = SUID + executable; capital S = SUID without x."
+        check: "Capital = misconfigured/inert."
+  - step_id: p11
+    title: "umask — the default for new files"
+    slot_target: null
+    glossary_refs: [umask, permission_bits]
+    explanation:
+      what: "`umask` shows the bits REMOVED from new files by default (typically 022 → new files 644, dirs 755)."
+      why: "Explains why your new files aren't executable and aren't group-writable by default."
+      where: "Defaults."
+    try_this: "umask; touch fresh.txt; ls -l fresh.txt"
+    success_criteria: "umask prints (e.g. 0022) and fresh.txt is -rw-r--r--."
+    expected_output: |
+      0022
+      -rw-r--r-- 1 kali kali 0 Jun 23 10:30 fresh.txt
+    alternatives:
+      - trigger: "umask shows 0002"
+        cause: "A group-writable default (common on some setups)."
+        fix: "That's fine — new files then allow group write. It's a policy choice."
+        check: "022 vs 002 just changes the group-write default."
+  - step_id: p12
+    title: "Why /etc/shadow is locked down"
+    slot_target: null
+    glossary_refs: [owner_group_other, permission_bits]
+    explanation:
+      what: "Compare /etc/passwd (world-readable) with /etc/shadow (root/shadow only). Shadow holds password hashes."
+      why: "It's a real-world lesson in least privilege — and why you need root/john to read hashes."
+      where: "Reading real system permissions."
+    try_this: "ls -l /etc/passwd /etc/shadow"
+    success_criteria: "passwd is -rw-r--r-- (all can read); shadow is -rw-r----- root:shadow."
+    expected_output: |
+      -rw-r--r-- 1 root root   2841 Jun 18 22:01 /etc/passwd
+      -rw-r----- 1 root shadow  1670 Jun 18 22:01 /etc/shadow
+    alternatives:
+      - trigger: "cat /etc/shadow said Permission denied"
+        cause: "You're not root and not in the shadow group — by design."
+        fix: "Read it with `sudo cat /etc/shadow` if you need to (authorised systems only)."
+        check: "This protection is exactly the point of the lesson."
+  - step_id: p13
+    title: "Clean up"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "Removes the throwaway ~/ka-perms folder. Confirm the path before running."
+    explanation:
+      what: "Remove the sandbox now that you're done."
+      why: "Tidy up, and one more deliberate rm -r on a safe target."
+      where: "POSITIONAL_ARGS."
+    try_this: "cd ~; rm -r ~/ka-perms; ls -d ~/ka-perms"
+    success_criteria: "The folder is gone (final ls reports it doesn't exist)."
+    expected_output: |
+      ls: cannot access '/home/kali/ka-perms': No such file or directory
+    alternatives:
+      - trigger: "Directory not empty"
+        cause: "rm without -r."
+        fix: "Use `rm -r ~/ka-perms`."
+        check: "Recursive removal for non-empty dirs."
+      - trigger: "Permission denied on demo.txt"
+        cause: "You left it owned by root from the chown step."
+        fix: "`sudo rm -r ~/ka-perms` to remove root-owned leftovers."
+        check: "Ownership can block your own cleanup — chown back next time."

@@ -151,16 +151,31 @@ class ModuleLoader:
         manifests = sorted(root.glob("*/manifest.yaml"))
         if not manifests:
             raise ModuleError(f"No module manifests found under {root}")
-        # Load non-router modules first so the router can aggregate them.
-        deferred: list[Path] = []
-        for mpath in manifests:
-            manifest = self._parse_manifest(mpath)
-            if manifest.type == "troubleshooter_router":
-                deferred.append(mpath)
-            else:
-                self._load_module(mpath, manifest)
-        for mpath in deferred:
-            self._load_module(mpath, self._parse_manifest(mpath))
+
+        parsed = [(mp, self._parse_manifest(mp)) for mp in manifests]
+        # Routers aggregate everything else, so they load last.
+        content_mods = [(mp, m) for mp, m in parsed if m.type != "troubleshooter_router"]
+        routers = [(mp, m) for mp, m in parsed if m.type == "troubleshooter_router"]
+
+        # Dependency-ordered load: repeatedly load modules whose requires.modules
+        # are already present, so declaration order in the folder doesn't matter.
+        pending = list(content_mods)
+        while pending:
+            progressed = [
+                (mp, m) for mp, m in pending
+                if all(dep in self.registry.modules for dep in m.requires.modules)
+            ]
+            if not progressed:
+                stuck = ", ".join(
+                    f"{m.module_id} -> needs {m.requires.modules}" for _, m in pending
+                )
+                raise ModuleError(f"Unsatisfiable module dependencies: {stuck}")
+            for mp, m in progressed:
+                self._load_module(mp, m)
+            pending = [pm for pm in pending if pm not in progressed]
+
+        for mp, m in routers:
+            self._load_module(mp, m)
         return self.registry
 
     # -- internals --------------------------------------------------------- #

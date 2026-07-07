@@ -1,0 +1,334 @@
+lesson_id: lesson.files_navigation
+title: "Files, Paths & Navigation"
+topic_tags: [fundamentals, filesystem, navigation, paths]
+audience: beginner
+os_profile: agnostic
+goal: >
+  Move around the Linux filesystem with confidence: absolute vs relative paths,
+  navigating with cd, creating/copying/moving/removing files safely, and finding
+  things with find and wildcards.
+intro: >
+  The Linux filesystem is one big tree that starts at / (root). Everything is a file
+  somewhere in that tree. This lesson teaches you to move around it and manage files
+  without getting lost or deleting the wrong thing. You'll build a throwaway practice
+  folder, work inside it, and clean it up at the end. Type each command, compare to the
+  EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can navigate with absolute/relative paths and manage files safely"
+next_suggestions:
+  - "Permissions & Ownership"
+  - "Pipes, Redirection & Chaining"
+steps:
+  - step_id: n1
+    title: "Where am I? (the working directory)"
+    slot_target: null
+    glossary_refs: [working_dir, home_dir]
+    explanation:
+      what: "`pwd` prints your current location — the 'working directory' every relative path is measured from."
+      why: "Half of all beginner mistakes come from not knowing where you are."
+      where: "Orientation."
+    try_this: "pwd"
+    success_criteria: "An absolute path, usually your home directory."
+    expected_output: |
+      /home/kali
+    alternatives:
+      - trigger: "it shows /root"
+        cause: "You're logged in as root."
+        fix: "That's fine — /root is root's home. Continue."
+        check: "Root's home is /root, not /home/root."
+      - trigger: "it shows something like /home/kali/Downloads"
+        cause: "You've already cd'd somewhere."
+        fix: "Run `cd` alone to return home, then `pwd` again."
+        check: "`cd` with no argument always goes home."
+  - step_id: n2
+    title: "The filesystem tree starts at /"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [path_absolute]
+    explanation:
+      what: "`ls /` lists the top of the tree. Every absolute path begins at this single root `/`."
+      why: "There are no drive letters in Linux — one tree, mounted from /."
+      where: "TARGET_PIVOT (the path /)."
+    try_this: "ls /"
+    success_criteria: "The top-level directories: bin, etc, home, root, usr, var, ..."
+    expected_output: |
+      bin   dev  home  lib    media  opt   root  sbin  sys  usr
+      boot  etc  lib64 mnt    proc   run   srv   tmp   var
+    alternatives:
+      - trigger: "you're not sure what these are"
+        cause: "The layout is standardised (the FHS)."
+        fix: "Key ones: /etc config, /home users, /usr programs, /var logs/data, /tmp scratch."
+        check: "You'll revisit these throughout Kali."
+  - step_id: n3
+    title: "Change directory (cd) with an absolute path"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [path_absolute, working_dir]
+    explanation:
+      what: "`cd /etc` moves you into /etc. An absolute path (leading /) works from anywhere."
+      why: "Navigation is how you get to where the work is."
+      where: "TARGET_PIVOT."
+    try_this: "cd /etc; pwd"
+    success_criteria: "pwd now reports /etc."
+    expected_output: |
+      /etc
+    alternatives:
+      - trigger: "No such file or directory"
+        cause: "Typo in the path, or it isn't a directory."
+        fix: "Check it exists: `ls -d /etc`. Retype `cd /etc`."
+        check: "cd only works on directories, not files."
+      - trigger: "cd: not a directory"
+        cause: "You tried to cd into a file."
+        fix: "Pick a directory (blue in `ls --color`)."
+        check: "`ls -l` shows directories with a leading d."
+  - step_id: n4
+    title: "Relative paths and .. (go up)"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [path_relative]
+    explanation:
+      what: "A relative path is measured from where you are. `.` is here, `..` is the parent."
+      why: "`cd ..` goes up one level — no need to type the whole path."
+      where: "TARGET_PIVOT (relative)."
+    try_this: "cd /etc/apt; pwd; cd ..; pwd"
+    success_criteria: "First /etc/apt, then /etc after going up."
+    expected_output: |
+      /etc/apt
+      /etc
+    alternatives:
+      - trigger: "you went further up than expected"
+        cause: "Each `..` climbs one level; stacking them (`../..`) climbs more."
+        fix: "One `..` per level; check with `pwd` after each."
+        check: "`cd ../..` from /etc/apt lands in /."
+      - trigger: "you want to get home fast"
+        cause: "Long climbs are tedious."
+        fix: "`cd` alone or `cd ~` jumps straight home."
+        check: "~ is shorthand for your home directory."
+  - step_id: n5
+    title: "Home shortcuts: ~ and cd -"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [home_dir]
+    explanation:
+      what: "`~` is your home dir; `cd -` jumps back to the PREVIOUS directory you were in."
+      why: "Two of the most-used navigation shortcuts."
+      where: "TARGET_PIVOT."
+    try_this: "cd /var/log; cd ~; pwd; cd -"
+    success_criteria: "Goes to /var/log, then home, prints home, then back to /var/log."
+    expected_output: |
+      /home/kali
+      /var/log
+    alternatives:
+      - trigger: "cd - printed the path then moved"
+        cause: "`cd -` echoes the directory it switched to — that's normal."
+        fix: "Nothing to fix; that's the feature."
+        check: "It toggles between your last two locations."
+  - step_id: n6
+    title: "Build a practice sandbox (mkdir)"
+    slot_target: TARGET_PIVOT
+    glossary_refs: [working_dir]
+    explanation:
+      what: "`mkdir` makes a directory; `-p` makes parents as needed and doesn't error if it exists."
+      why: "We'll do the create/copy/delete steps safely inside a throwaway folder."
+      where: "TARGET_PIVOT (the new dir)."
+    try_this: "mkdir -p ~/ka-practice && cd ~/ka-practice && pwd"
+    success_criteria: "You're now inside ~/ka-practice."
+    expected_output: |
+      /home/kali/ka-practice
+    alternatives:
+      - trigger: "mkdir: cannot create directory ... Permission denied"
+        cause: "You tried to create it somewhere you can't write."
+        fix: "Use your home: `mkdir -p ~/ka-practice`."
+        check: "You can always write under ~ (your home)."
+      - trigger: "File exists"
+        cause: "It already exists from a previous run."
+        fix: "`-p` avoids this error; you can just `cd ~/ka-practice`."
+        check: "mkdir -p is safe to re-run."
+  - step_id: n7
+    title: "Create files (touch) and list them"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [hidden_file]
+    explanation:
+      what: "`touch` creates empty files (or updates a timestamp). You can create several at once."
+      why: "You need files to practise copying/moving/removing."
+      where: "POSITIONAL_ARGS (the filenames)."
+    try_this: "touch alpha.txt beta.txt notes.md .secret; ls -la"
+    success_criteria: "Four new files, including the hidden .secret (shown by -a)."
+    expected_output: |
+      total 8
+      drwxr-xr-x 2 kali kali 4096 Jun 23 10:02 .
+      drwxr-xr-x 18 kali kali 4096 Jun 23 10:02 ..
+      -rw-r--r-- 1 kali kali    0 Jun 23 10:02 .secret
+      -rw-r--r-- 1 kali kali    0 Jun 23 10:02 alpha.txt
+      -rw-r--r-- 1 kali kali    0 Jun 23 10:02 beta.txt
+      -rw-r--r-- 1 kali kali    0 Jun 23 10:02 notes.md
+    alternatives:
+      - trigger: ".secret didn't show"
+        cause: "You ran `ls` without -a; dot-files are hidden."
+        fix: "Use `ls -la` to include hidden files."
+        check: "Any name starting with . is hidden by default."
+      - trigger: "sizes aren't 0"
+        cause: "A file already existed with content; touch only updated its time."
+        fix: "That's fine — touch doesn't erase existing files."
+        check: "New files start at 0 bytes."
+  - step_id: n8
+    title: "Copy files (cp)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [wildcard]
+    explanation:
+      what: "`cp <src> <dest>` copies. `cp -r` copies directories. Wildcards like `*.txt` match many files."
+      why: "Copying before editing is a cheap safety net."
+      where: "POSITIONAL_ARGS (source then destination)."
+    try_this: "cp alpha.txt alpha.bak; mkdir backups; cp *.txt backups/; ls backups"
+    success_criteria: "alpha.bak exists, and the .txt files are copied into backups/."
+    expected_output: |
+      alpha.txt  beta.txt
+    alternatives:
+      - trigger: "omitting directory 'backups/'"
+        cause: "You copied multiple files but the destination wasn't a directory."
+        fix: "When copying many files the destination must be an existing directory: `mkdir backups` first."
+        check: "`ls -ld backups` shows a d (directory)."
+      - trigger: "cp: -r not specified; omitting directory"
+        cause: "You tried to copy a directory without -r."
+        fix: "Use `cp -r <dir> <dest>` for directories."
+        check: "-r = recursive (include contents)."
+      - trigger: "nothing matched *.txt"
+        cause: "No .txt files in the current directory."
+        fix: "Confirm with `ls *.txt`; make sure you're in ~/ka-practice."
+        check: "`pwd` should end in /ka-practice."
+  - step_id: n9
+    title: "Move / rename (mv)"
+    slot_target: POSITIONAL_ARGS
+    explanation:
+      what: "`mv` both moves and renames — there is no separate rename command."
+      why: "`mv old new` renames; `mv file dir/` moves it into a directory."
+      where: "POSITIONAL_ARGS (source then destination)."
+    try_this: "mv notes.md README.md; mv README.md backups/; ls; ls backups"
+    success_criteria: "notes.md becomes README.md, then moves into backups/."
+    expected_output: |
+      alpha.bak  alpha.txt  backups  beta.txt
+      README.md  alpha.txt  beta.txt
+    alternatives:
+      - trigger: "mv: cannot stat 'notes.md'"
+        cause: "The file doesn't exist (wrong name or already moved)."
+        fix: "List first with `ls`; use the exact name."
+        check: "Names are case-sensitive."
+      - trigger: "it overwrote a file silently"
+        cause: "mv replaces the destination without asking by default."
+        fix: "Use `mv -i` to be prompted before overwriting."
+        check: "-i = interactive (confirm)."
+  - step_id: n10
+    title: "Remove files (rm) — carefully"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "There is no recycle bin. rm is permanent. Double-check the name/path before pressing Enter, and never rm -rf a path you didn't mean."
+    explanation:
+      what: "`rm` deletes files; `rm -r` deletes directories and everything in them."
+      why: "It's permanent — no trash. This is where real damage happens if you're careless."
+      where: "POSITIONAL_ARGS (the target)."
+    try_this: "rm alpha.bak; ls"
+    success_criteria: "alpha.bak is gone; the other files remain."
+    expected_output: |
+      alpha.txt  backups  beta.txt
+    alternatives:
+      - trigger: "rm: cannot remove ...: Is a directory"
+        cause: "You tried to rm a directory without -r."
+        fix: "Use `rm -r <dir>` — but read the name TWICE first."
+        check: "Directories need -r; that's your cue to slow down."
+      - trigger: "you deleted the wrong file"
+        cause: "rm is permanent — there's no undo."
+        fix: "Recreate it if it was a practice file; in real work, restore from a backup."
+        check: "This is why `cp` before editing matters."
+      - trigger: "you were about to run rm -rf /"
+        cause: "A stray space or variable can turn a safe rm into a system-wiper."
+        fix: "STOP. Never rm -rf absolute roots. Use -i, or ls the target first."
+        check: "If in doubt, `ls` the exact path before rm."
+  - step_id: n11
+    title: "Find files (find)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [wildcard]
+    explanation:
+      what: "`find <where> -name '<pattern>'` searches a tree by name. Quote patterns so the shell doesn't expand them."
+      why: "When you don't know where something is, find locates it."
+      where: "ACTION_OPTIONS (-name, -type)."
+    try_this: "find ~/ka-practice -name '*.txt'"
+    success_criteria: "The full paths of your .txt files print."
+    expected_output: |
+      /home/kali/ka-practice/alpha.txt
+      /home/kali/ka-practice/beta.txt
+      /home/kali/ka-practice/backups/alpha.txt
+      /home/kali/ka-practice/backups/beta.txt
+    alternatives:
+      - trigger: "find: paths must precede expression"
+        cause: "The pattern wasn't quoted and the shell expanded it first."
+        fix: "Quote it: `-name '*.txt'`."
+        check: "Single quotes stop the shell touching the *."
+      - trigger: "Permission denied lines when searching /"
+        cause: "Searching system-wide hits directories you can't read."
+        fix: "That's normal; silence them with `2>/dev/null`, or search a subtree you own."
+        check: "Errors go to stderr; results still print."
+      - trigger: "it found nothing"
+        cause: "Wrong start path or pattern."
+        fix: "Confirm the start dir exists and the pattern matches (try `-name 'alpha*'`)."
+        check: "`ls ~/ka-practice` shows what's there."
+  - step_id: n12
+    title: "What kind of file is this? (file)"
+    slot_target: POSITIONAL_ARGS
+    explanation:
+      what: "`file <path>` inspects contents and tells you the real type — not just the extension."
+      why: "Extensions lie; `file` reads the actual bytes. Vital in forensics/CTF."
+      where: "POSITIONAL_ARGS."
+    try_this: "file /bin/ls /etc/hostname ~/ka-practice"
+    success_criteria: "Each is identified: an ELF binary, ASCII text, and a directory."
+    expected_output: |
+      /bin/ls:            ELF 64-bit LSB pie executable, x86-64, dynamically linked
+      /etc/hostname:      ASCII text
+      /home/kali/ka-practice: directory
+    alternatives:
+      - trigger: "file: command not found"
+        cause: "Rare; install with apt on Kali."
+        fix: "`sudo apt install file` (usually already present)."
+        check: "It's part of a base install."
+      - trigger: "it says 'empty'"
+        cause: "The file has 0 bytes (like your touch'd files)."
+        fix: "That's correct — empty files report as empty."
+        check: "Add content and re-check to see the type change."
+  - step_id: n13
+    title: "Disk usage (du / df)"
+    slot_target: ACTION_OPTIONS
+    explanation:
+      what: "`du -sh <dir>` shows a directory's total size; `df -h` shows free space per filesystem."
+      why: "Captures fill up; knowing what's using space saves you when things break."
+      where: "ACTION_OPTIONS (-s summary, -h human-readable)."
+    try_this: "du -sh ~/ka-practice; df -h /"
+    success_criteria: "A small size for the practice dir, then free space on /."
+    expected_output: |
+      16K   /home/kali/ka-practice
+      Filesystem      Size  Used Avail Use% Mounted on
+      /dev/sda1        79G   12G   63G  17% /
+    alternatives:
+      - trigger: "du printed a line per file"
+        cause: "You omitted -s (summary)."
+        fix: "Add -s for a single total: `du -sh <dir>`."
+        check: "-s = summarise."
+      - trigger: "the numbers look huge/raw"
+        cause: "Without -h you get raw blocks/bytes."
+        fix: "Add -h for human-readable units (K/M/G)."
+        check: "-h formats sizes."
+  - step_id: n14
+    title: "Clean up the sandbox"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "This removes the whole practice folder. It's throwaway, so that's intended — but confirm the path is exactly ~/ka-practice before running."
+    explanation:
+      what: "Remove the practice tree now that you're done: `rm -r ~/ka-practice`."
+      why: "Good hygiene — and a last, deliberate practice of the dangerous command on a safe target."
+      where: "POSITIONAL_ARGS."
+    try_this: "cd ~; rm -r ~/ka-practice; ls -d ~/ka-practice"
+    success_criteria: "The folder is gone; the final ls reports it no longer exists."
+    expected_output: |
+      ls: cannot access '/home/kali/ka-practice': No such file or directory
+    alternatives:
+      - trigger: "rm: cannot remove ... Directory not empty"
+        cause: "You used rm without -r on a non-empty directory."
+        fix: "Use `rm -r ~/ka-practice` (recursive)."
+        check: "Directories with contents need -r."
+      - trigger: "you cd'd out first — good"
+        cause: "You can't remove a directory you're standing in cleanly."
+        fix: "Always `cd ~` (or elsewhere) before removing the folder you were in."
+        check: "pwd should NOT be inside the folder you're deleting."

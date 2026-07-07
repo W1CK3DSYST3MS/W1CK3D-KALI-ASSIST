@@ -5,17 +5,17 @@ audience: beginner
 os_profile: agnostic
 goal: >
   Understand that every command follows the same ordered structure (the SLOTS),
-  and be able to identify the program, options/flags, arguments, and output parts
-  of any command — so you stop guessing at order and syntax.
+  and be able to read and build any command — program, options/flags, arguments,
+  values, quoting, redirection — so you stop guessing at order and syntax.
 intro: >
   Every Linux command — from `ls` to `nmap` — is built from the same ordered pieces.
   Learn those pieces once and you can read and build any command. We call those pieces
   SLOTS. This lesson walks them one at a time. Type each command in your own terminal,
-  then tell the wizard whether it worked.
-completion_criteria: "learner reaches s7 and can map a command into slots"
+  compare what you see to the EXPECTED block, then tell the wizard whether it worked.
+completion_criteria: "learner reaches the synthesis step and can map a command into slots"
 next_suggestions:
-  - "Files, paths & permissions"
-  - "Pipes & redirection"
+  - "Files, Paths & Navigation"
+  - "Permissions & Ownership"
   - "First tool module — nmap basic scan"
 steps:
   - step_id: s1
@@ -27,119 +27,361 @@ steps:
       why: "It decides how everything after it is read. Right now, that's all we type."
       where: "Slot 1 (PROGRAM), always first."
     try_this: "whoami"
-    success_criteria: "A single line of output appears (your username, e.g. kali)."
+    success_criteria: "A single line prints your username."
+    expected_output: |
+      kali
     alternatives:
       - trigger: "command not found"
         cause: "The program name is misspelled or not on PATH."
-        fix: "Check spelling. The program name must be exact and lowercase. Retry `whoami`."
-        check: "Re-type carefully; try `type whoami`."
-      - trigger: "nothing happens / cursor hangs"
-        cause: "The shell is waiting for input."
-        fix: "Press Enter; if still stuck, press Ctrl+C to cancel and retype."
-        check: "Look for a returned prompt."
+        fix: "Check spelling — it must be exact and lowercase. Retry `whoami`."
+        check: "Run `type whoami` — it should print a path like /usr/bin/whoami."
+      - trigger: "nothing happens / cursor just sits there"
+        cause: "The shell is waiting (you may have opened a quote or a line-continuation)."
+        fix: "Press Ctrl+C to cancel and get a clean prompt, then retype `whoami`."
+        check: "You should see your normal prompt return."
+      - trigger: "it prints 'root'"
+        cause: "You're in a root shell (or used sudo -i)."
+        fix: "That's fine — it just means the current user is root. Continue."
+        check: "Note whether your prompt ends in # (root) or $ (normal user)."
   - step_id: s2
+    title: "No arguments — a program acting on 'here'"
+    slot_target: PROGRAM
+    glossary_refs: [program, argument]
+    explanation:
+      what: "Some programs need no arguments — they act on a default, like your current location."
+      why: "`pwd` (print working directory) shows where you are in the filesystem right now."
+      where: "Slot 1 only; no target supplied."
+    try_this: "pwd"
+    success_criteria: "It prints the absolute path of your current directory."
+    expected_output: |
+      /home/kali
+    alternatives:
+      - trigger: "path is different (e.g. /root or /home/hntr)"
+        cause: "You're a different user or in a different folder."
+        fix: "That's expected — it just reflects where YOU are. Continue."
+        check: "The path should start with a / (absolute path)."
+      - trigger: "command not found"
+        cause: "Typo."
+        fix: "Retype exactly: `pwd`."
+        check: "Three letters, lowercase."
+  - step_id: s3
+    title: "A program that produces a list"
+    slot_target: PROGRAM
+    glossary_refs: [program]
+    explanation:
+      what: "`ls` lists the contents of your current directory when given no argument."
+      why: "It shows what files/folders are 'here' — the thing you'll most often want to see."
+      where: "Slot 1; the target defaults to the current directory."
+    try_this: "ls"
+    success_criteria: "Names of files/folders in your home directory print."
+    expected_output: |
+      Desktop    Documents  Downloads  Music
+      Pictures   Public     Templates  Videos
+    alternatives:
+      - trigger: "nothing prints"
+        cause: "The directory is empty."
+        fix: "That's valid — an empty home shows nothing. Try `ls /etc` to see a populated folder."
+        check: "`ls /etc` should print many names."
+      - trigger: "names are all one colour / hard to read"
+        cause: "Colour output depends on the terminal."
+        fix: "Try `ls --color=auto`; on Kali this is usually the default via an alias."
+        check: "Folders typically show in a different colour to files."
+  - step_id: s4
     title: "Arguments (the thing the command acts on)"
     slot_target: TARGET_PIVOT
     glossary_refs: [argument, target]
     explanation:
       what: "An argument is a value you give the program to act on — often the target."
-      why: "It is NOT preceded by a dash. Here, `/etc` tells `ls` which folder to list."
+      why: "It is NOT preceded by a dash. Here `/etc` tells `ls` which folder to list."
       where: "Slot 3 (TARGET_PIVOT) / positional."
     try_this: "ls /etc"
-    success_criteria: "A list of files/folders inside /etc (e.g. passwd, hostname)."
+    success_criteria: "A list of files/folders inside /etc (e.g. passwd, hostname, hosts)."
+    expected_output: |
+      apt            hostname   passwd     ssh
+      hosts          resolv.conf  shadow   sudoers
+      ... (many more entries) ...
     alternatives:
       - trigger: "No such file or directory"
         cause: "The argument is a path that must exist."
-        fix: "Try `ls /` first to confirm, then `ls /etc`."
-        check: "Confirm the path exists."
+        fix: "Confirm the root first with `ls /`, then `ls /etc`."
+        check: "`ls /` should list bin, etc, home, usr, var, ..."
       - trigger: "Permission denied"
-        cause: "You likely typed a different, restricted path."
-        fix: "You can list /etc; re-check the argument you typed."
-        check: "Compare against `ls /etc`."
-  - step_id: s3
-    title: "Flags / options (switches that change behavior)"
+        cause: "You typed a restricted path, not /etc."
+        fix: "You CAN list /etc; re-check exactly what you typed."
+        check: "Compare your command to `ls /etc` character by character."
+      - trigger: "it listed your home again, not /etc"
+        cause: "You typed `ls etc` (relative) instead of `ls /etc` (absolute)."
+        fix: "Add the leading slash: `ls /etc`."
+        check: "A leading / means 'from the root of the filesystem'."
+  - step_id: s5
+    title: "Flags / options (switches that change behaviour)"
     slot_target: ACTION_OPTIONS
     glossary_refs: [flag, option]
     explanation:
-      what: "A flag (or option) is a dash-prefixed switch that changes how the program behaves."
-      why: "`-l` means 'long format'. Same program; the flag changes the output."
+      what: "A flag (or option) is a dash-prefixed switch that changes HOW the program behaves."
+      why: "`-l` means 'long format'. Same program, same target; the flag changes the output shape."
       where: "Slot 4 (ACTION_OPTIONS) for most per-run switches."
     try_this: "ls -l /etc"
-    success_criteria: "The same list, one item per line, with permissions like -rw-r--r--."
+    success_criteria: "One item per line, each with permissions, owner, size and date."
+    expected_output: |
+      total 1240
+      drwxr-xr-x  7 root root  4096 Jun 20 09:14 apt
+      -rw-r--r--  1 root root   641 Apr 11 12:02 hostname
+      -rw-r--r--  1 root root  1258 Apr 11 12:02 hosts
+      -rw-r-----  1 root shadow 812 Apr 11 12:02 shadow
     alternatives:
-      - trigger: "output looks unchanged"
-        cause: "You may have typed a one (1) instead of lowercase L."
-        fix: "Make sure it's a lowercase L (`-l`). Retry `ls -l /etc`."
-        check: "Look for permission strings."
-      - trigger: "invalid option"
+      - trigger: "output looks unchanged (still columns of names)"
+        cause: "You typed a one (1) instead of a lowercase L."
+        fix: "Use lowercase L: `ls -l /etc`."
+        check: "Look for permission strings like -rw-r--r-- at the start of each line."
+      - trigger: "invalid option -- '...'"
         cause: "Flags are case-sensitive and tool-specific."
-        fix: "Confirm the flag with `ls --help`."
-        check: "Read the --help options list."
-  - step_id: s4
+        fix: "Confirm the flag exists with `ls --help | head`."
+        check: "-l should be listed as 'use a long listing format'."
+      - trigger: "you see '?' where owners should be"
+        cause: "ls can't resolve some user/group ids (rare in a container)."
+        fix: "It's cosmetic — the permissions/size are still correct. Continue."
+        check: "The permission column still reads correctly."
+  - step_id: s6
     title: "Combining flags + short vs long form"
     slot_target: ACTION_OPTIONS
     glossary_refs: [flag, option]
     explanation:
       what: "Flags can be combined (`-la` = `-l` + `-a`), and many have a long form (`-a` = `--all`)."
-      why: "`-a` shows hidden files (names starting with `.`). Short = speed; long = readability."
+      why: "`-a` shows hidden files (names starting with `.`). Short forms are fast; long forms read clearly."
       where: "Slot 4 (ACTION_OPTIONS)."
     try_this: "ls -la /etc"
     success_criteria: "Same long list, now including hidden entries like `.` and `..`."
+    expected_output: |
+      total 1264
+      drwxr-xr-x  85 root root  4096 Jun 20 09:14 .
+      drwxr-xr-x  19 root root  4096 Jun 18 22:01 ..
+      -rw-r--r--   1 root root   641 Apr 11 12:02 hostname
+      drwxr-xr-x   7 root root  4096 Jun 20 09:14 apt
     alternatives:
-      - trigger: "no hidden files show"
-        cause: "The `a` was omitted."
-        fix: "Confirm you included `a`; /etc should show at least `.` and `..`."
-        check: "Look for dot-prefixed entries."
-  - step_id: s5
+      - trigger: "no hidden entries show"
+        cause: "The `a` was omitted or mistyped."
+        fix: "Confirm you included a: `ls -la /etc`."
+        check: "The first two lines should be `.` (this dir) and `..` (parent)."
+      - trigger: "you tried `ls -l -a /etc` and it worked too"
+        cause: "Nothing wrong — separate and combined flags are equivalent."
+        fix: "Both forms are valid; combining just saves typing."
+        check: "`ls -la` and `ls -l -a` give the same result."
+  - step_id: s7
     title: "Options that take a value"
     slot_target: ACTION_OPTIONS
     glossary_refs: [option, argument, placeholder]
     explanation:
       what: "Some options take a value right after them. In `head -n 5 file`, `-n` is the option and `5` its value."
-      why: "The value controls behavior (how many lines). In examples we write it as a placeholder like {n}."
-      where: "Slot 4 (ACTION_OPTIONS), value follows the flag."
+      why: "The value controls behaviour (how many lines). In examples we write it as a placeholder like {n}."
+      where: "Slot 4 (ACTION_OPTIONS); the value follows the flag."
     try_this: "head -n 5 /etc/passwd"
     success_criteria: "Exactly the first 5 lines of the file print."
+    expected_output: |
+      root:x:0:0:root:/root:/bin/bash
+      daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+      bin:x:2:2:bin:/bin:/usr/sbin/nologin
+      sys:x:3:3:sys:/dev:/usr/sbin/nologin
+      sync:x:4:65534:sync:/bin:/bin/sync
     alternatives:
-      - trigger: "option requires an argument"
+      - trigger: "option requires an argument -- 'n'"
         cause: "`-n` needs a number right after it."
-        fix: "Retry `head -n 5 /etc/passwd`."
-        check: "Ensure a number follows -n."
-      - trigger: "too many/few lines"
+        fix: "Put a number after -n: `head -n 5 /etc/passwd`."
+        check: "There must be a space and a number after -n."
+      - trigger: "too many or too few lines"
         cause: "The value after -n controls the count."
-        fix: "Change `5` to test."
-        check: "Count the printed lines."
-  - step_id: s6
-    title: "Putting it together: reading a command as SLOTS"
+        fix: "Change the number, e.g. `head -n 3 /etc/passwd`."
+        check: "Count the printed lines — they should equal your number."
+      - trigger: "head: cannot open '/etc/passwd'"
+        cause: "Typo in the path."
+        fix: "Retype the path exactly: /etc/passwd."
+        check: "`ls -l /etc/passwd` should show the file exists."
+  - step_id: s8
+    title: "Quoting — when a value contains spaces"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [argument, quoting]
+    explanation:
+      what: "The shell splits the line on spaces. To keep spaces INSIDE one value, wrap it in quotes."
+      why: "Without quotes the shell sees multiple arguments; with quotes it's one. This matters constantly for paths and passwords."
+      where: "Applies to any slot's value."
+    try_this: 'echo one   two three'
+    success_criteria: "Unquoted: the extra spaces collapse to single spaces."
+    expected_output: |
+      one two three
+    alternatives:
+      - trigger: "you want to keep the spacing"
+        cause: "The shell collapses unquoted whitespace."
+        fix: "Quote it: `echo \"one   two three\"` keeps the exact spacing."
+        check: "The quoted version preserves the multiple spaces."
+      - trigger: "you got an 'unexpected EOF' / a > prompt"
+        cause: "An unmatched quote — the shell is waiting for the closing quote."
+        fix: "Type the closing quote and Enter, or press Ctrl+C and retry."
+        check: "A > prompt means 'still inside a quote'."
+  - step_id: s9
+    title: "Tab completion — let the shell type for you"
+    slot_target: null
+    glossary_refs: [program, argument, tab_completion]
+    explanation:
+      what: "Press Tab to auto-complete a command or path. Press it twice to list the options."
+      why: "It prevents typos and reveals what exists — the single biggest speed/accuracy win in the shell."
+      where: "Meta-skill; works on the program and on paths."
+    try_this: "ls /et    (now press the Tab key instead of typing 'c')"
+    success_criteria: "The shell completes it to `ls /etc/`."
+    expected_output: |
+      ls /etc/
+      (the 'c' and trailing slash were filled in automatically)
+    alternatives:
+      - trigger: "nothing completes / it beeps"
+        cause: "The prefix is ambiguous (several matches) or nothing matches."
+        fix: "Press Tab TWICE to list candidates, then type another letter to disambiguate."
+        check: "`/et` + Tab-Tab near root usually shows only etc/."
+      - trigger: "it completed something unexpected"
+        cause: "There were multiple matches and it filled the common part."
+        fix: "Add a letter and Tab again to narrow it."
+        check: "Completion only fills the shared prefix of all matches."
+  - step_id: s10
+    title: "History — reuse what you already ran"
+    slot_target: null
+    glossary_refs: [program, history]
+    explanation:
+      what: "The shell remembers past commands. The Up arrow recalls them; `history` lists them."
+      why: "You rarely retype — recall, edit, re-run. Essential once commands get long."
+      where: "Meta-skill."
+    try_this: "history | tail -n 5"
+    success_criteria: "Your last few commands print, each with a number."
+    expected_output: |
+        497  ls -la /etc
+        498  head -n 5 /etc/passwd
+        499  echo one   two three
+        500  ls /etc/
+        501  history | tail -n 5
+    alternatives:
+      - trigger: "history: command not found"
+        cause: "You're in a non-bash shell (e.g. sh)."
+        fix: "Start bash with `bash`, or use the Up arrow which still works."
+        check: "`echo $0` shows which shell you're in."
+      - trigger: "it's empty"
+        cause: "Fresh shell with no saved history yet."
+        fix: "Run a couple of commands first, then retry."
+        check: "History fills as you use the shell."
+  - step_id: s11
+    title: "Exit status — did the last command succeed?"
+    slot_target: null
+    glossary_refs: [program, exit_status]
+    explanation:
+      what: "Every command returns a number: 0 means success, non-zero means an error. `$?` holds the last one."
+      why: "It's how you (and scripts) know whether a step actually worked — the machine version of 'did it work?'."
+      where: "Meta-skill; underpins the whole Yes/No model."
+    try_this: "ls /nonexistent-dir; echo $?"
+    success_criteria: "An error line, then a non-zero number (e.g. 2)."
+    expected_output: |
+      ls: cannot access '/nonexistent-dir': No such file or directory
+      2
+    alternatives:
+      - trigger: "it printed 0"
+        cause: "The command actually succeeded, or you checked $? after a different command."
+        fix: "Run the failing command and `echo $?` on the SAME line (separated by ;)."
+        check: "A successful `ls /etc; echo $?` prints 0."
+      - trigger: "you want success to compare"
+        cause: "Learning the contrast helps."
+        fix: "Run `ls /etc > /dev/null; echo $?` — it should print 0."
+        check: "0 = success, non-zero = failure."
+  - step_id: s12
+    title: "Pipes — send one command's output into another"
+    slot_target: null
+    glossary_refs: [program, pipe]
+    explanation:
+      what: "`|` takes the output of the left command and feeds it as input to the right command."
+      why: "It lets you compose small tools into powerful chains — the heart of the Unix philosophy."
+      where: "Previewed here; taught fully in the Pipes & Redirection lesson."
+    try_this: "ls /etc | wc -l"
+    success_criteria: "A single number — how many entries `ls` produced."
+    expected_output: |
+      85
+    alternatives:
+      - trigger: "wc: command not found"
+        cause: "Unlikely on Kali; possible typo."
+        fix: "Retype `ls /etc | wc -l` (that's a lowercase L after wc -)."
+        check: "`wc` is part of coreutils, always present."
+      - trigger: "the number seems off by one"
+        cause: "`ls -1`/`ls` count entries; hidden files aren't counted without -a."
+        fix: "Try `ls -a /etc | wc -l` to include hidden entries."
+        check: "Counts differ by the number of dot-entries."
+  - step_id: s13
+    title: "Redirection — send output into a file"
+    slot_target: OUTPUT_OPTIONS
+    glossary_refs: [output, redirection]
+    explanation:
+      what: "`>` writes a command's output to a file (overwriting); `>>` appends. `<` reads input from a file."
+      why: "This is how you save results — the shell's own 'output slot', before a tool even has an -o flag."
+      where: "Slot 5 (OUTPUT_OPTIONS), conceptually."
+    try_this: "ls /etc > /tmp/etc-list.txt; wc -l /tmp/etc-list.txt"
+    success_criteria: "No list on screen (it went to the file); then a count of the saved file."
+    expected_output: |
+      85 /tmp/etc-list.txt
+    alternatives:
+      - trigger: "permission denied"
+        cause: "You redirected into a directory you can't write."
+        fix: "Write somewhere writable like /tmp or your home: `> /tmp/etc-list.txt`."
+        check: "`touch /tmp/x` should succeed."
+      - trigger: "you wanted to keep the old contents"
+        cause: "`>` overwrites; you needed `>>`."
+        fix: "Use `>>` to append instead of overwrite."
+        check: "`>>` adds to the end; `>` replaces."
+      - trigger: "the file is empty"
+        cause: "The command produced no output, or an error (errors go to stderr, not >)."
+        fix: "Errors need `2>`; for now confirm the command works on its own first."
+        check: "`ls /etc` alone should show entries."
+  - step_id: s14
+    title: "Getting help — the skill that unlocks every tool"
+    slot_target: null
+    glossary_refs: [program, flag, option, man_page]
+    explanation:
+      what: "Three commands reveal any tool: `man <prog>` (full manual), `<prog> --help` (quick list), `tldr <prog>` (plain examples)."
+      why: "You never memorise every flag — you learn to read these. This is the master skill."
+      where: "Meta-skill; applies to every slot."
+    try_this: "ls --help | head -n 15"
+    success_criteria: "A usage line and the first several options with descriptions."
+    expected_output: |
+      Usage: ls [OPTION]... [FILE]...
+      List information about the FILEs (the current directory by default).
+      ...
+        -a, --all      do not ignore entries starting with .
+        -l             use a long listing format
+    alternatives:
+      - trigger: "man opens a full-screen pager and you're stuck"
+        cause: "`man` uses a scrolling pager."
+        fix: "Press q to quit; use arrows/Space to scroll, /word to search."
+        check: "q returns you to the prompt."
+      - trigger: "tldr: command not found"
+        cause: "tldr isn't installed (that's fine)."
+        fix: "Use `ls --help` or `man ls` instead; install tldr later with apt if you want it."
+        check: "--help is built into almost every tool."
+      - trigger: "--help printed hundreds of lines"
+        cause: "Some tools have long help."
+        fix: "Pipe it to a pager or head: `ls --help | less` (q to quit)."
+        check: "`| head -n 15` shows just the top."
+  - step_id: s15
+    title: "Putting it together — read a command as SLOTS"
     slot_target: null
     glossary_refs: [slot, global_option, output]
     explanation:
-      what: "Every command is the same ordered slots."
-      why: "Read `ls -la /etc` by slot: Program `ls` · Options/Flags `-la` · Target `/etc`."
-      where: "That order never changes — the wizard always assembles it for you."
-    try_this: "(No new command.) Look at `ls -la /etc` and name each slot out loud."
-    success_criteria: "You can point to the program, the flags, and the target."
+      what: "Every command is the same ordered slots. Read one by slot instead of guessing."
+      why: "`ls -la /etc > out.txt` → Program `ls` · Options `-la` · Target `/etc` · Output `> out.txt`."
+      where: "Synthesis of everything above — the order never changes in your head again."
+    try_this: "(No new command.) Say each slot of: ls -la /etc > /tmp/etc-list.txt"
+    success_criteria: "You can point to the program, the flags, the target, and the output."
+    expected_output: |
+      Program : ls
+      Options : -la
+      Target  : /etc
+      Output  : > /tmp/etc-list.txt
     alternatives:
-      - trigger: "can't label the parts"
-        cause: "The 3 views haven't clicked yet."
-        fix: "Re-show Skeleton / Filled / Why for `ls -la /etc` and walk each slot again."
-        check: "Match each token to a slot."
-  - step_id: s7
-    title: "The most important skill: getting help"
-    slot_target: null
-    glossary_refs: [program, flag, option]
-    explanation:
-      what: "You never need to memorize every flag. Three commands reveal them."
-      why: "`man <program>`, `<program> --help`, and `tldr <program>` make every tool learnable."
-      where: "Meta-skill — applies to every slot."
-    try_this: "ls --help"
-    success_criteria: "A list of `ls` options with one-line descriptions."
-    alternatives:
-      - trigger: "man opens a full-screen pager and you're stuck"
-        cause: "`man` uses a pager."
-        fix: "Press `q` to quit."
-        check: "You return to the prompt."
-      - trigger: "tldr: command not found"
-        cause: "`tldr` may not be installed."
-        fix: "That's fine — use `ls --help` or `man ls` instead. (Installing tldr can be a later lesson.)"
-        check: "Use the built-in --help."
+      - trigger: "can't confidently label the parts"
+        cause: "The pattern hasn't clicked yet."
+        fix: "Re-read steps 1, 4, 5 and 13, then try labelling `head -n 5 /etc/passwd`."
+        check: "Program=head, Option=-n with value 5, Target=/etc/passwd."
+      - trigger: "you're ready for more"
+        cause: "You've got the grammar."
+        fix: "Move on to Files, Paths & Navigation, or a tool module like nmap."
+        check: "You can read any command by slot now."

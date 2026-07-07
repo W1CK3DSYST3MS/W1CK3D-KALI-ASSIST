@@ -1,0 +1,19 @@
+terms:
+  - term: permission_bits
+    definition: "The rwx flags on a file: read=4, write=2, execute=1, per user/group/other triad."
+  - term: owner_group_other
+    definition: "The three who-classes a file's permissions apply to: its owner, its group, everyone else."
+  - term: chmod
+    definition: "Change a file's permission bits — symbolic (u+x) or numeric (644)."
+  - term: chown
+    definition: "Change a file's owner/group (needs root): sudo chown user:group file."
+  - term: sudo
+    definition: "Run a single command as root after entering your password."
+  - term: suid
+    definition: "A bit (s) that makes a program run with its OWNER's privileges; key in privilege escalation."
+  - term: execute_bit
+    definition: "x — lets a file be run as a program, or a directory be entered/traversed."
+  - term: umask
+    definition: "The permission bits removed from newly created files by default (often 022)."
+  - term: root
+    definition: "The superuser (uid 0); bypasses permission checks — use with care."

@@ -20,4 +20,14 @@ terms:
   - term: pipe
     definition: "Sending one command's output into another with `|` (previewed here, taught later)."
   - term: redirection
-    definition: "Sending output into a file with `>` (previewed here, taught later)."
+    definition: "Sending output into a file with `>`/`>>`, or input from a file with `<`."
+  - term: quoting
+    definition: "Wrapping a value in quotes so spaces inside it stay part of one argument."
+  - term: tab_completion
+    definition: "Pressing Tab to auto-complete a command/path; Tab twice lists the options."
+  - term: history
+    definition: "The shell's record of past commands; recall with the Up arrow or `history`."
+  - term: exit_status
+    definition: "The number a command returns: 0 = success, non-zero = error; held in `$?`."
+  - term: man_page
+    definition: "The built-in manual for a program, opened with `man <program>` (press q to quit)."

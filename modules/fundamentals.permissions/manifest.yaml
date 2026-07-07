@@ -1,0 +1,17 @@
+module_id: fundamentals.permissions
+name: "Permissions & Ownership"
+version: "1.0.0"
+type: lesson
+os_profile: agnostic
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.files_navigation]
+provides:
+  lessons: [lesson.permissions]
+  glossary_terms: [permission_bits, owner_group_other, chmod, chown, sudo, suid, execute_bit, umask, root]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored (original)"
+license: "project-proprietary lesson text"
+checksum: ""

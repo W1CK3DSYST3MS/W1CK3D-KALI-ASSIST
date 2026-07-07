@@ -1,0 +1,17 @@
+terms:
+  - term: path_absolute
+    definition: "A path from the root of the tree, starting with / (e.g. /etc/hosts); works from anywhere."
+  - term: path_relative
+    definition: "A path measured from the current directory (e.g. ../logs); . is here, .. is the parent."
+  - term: home_dir
+    definition: "Your personal directory (~), e.g. /home/kali; `cd` alone returns here."
+  - term: working_dir
+    definition: "The directory you are currently in (shown by pwd); relative paths start from it."
+  - term: hidden_file
+    definition: "A file whose name starts with a dot (.); hidden from ls unless you pass -a."
+  - term: wildcard
+    definition: "A shell pattern like * or ? that matches many filenames (globbing)."
+  - term: symlink
+    definition: "A symbolic link — a file that points at another path (ls -l shows it with ->)."
+  - term: inode
+    definition: "The filesystem's internal record for a file (its metadata + data location)."
