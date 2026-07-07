@@ -1,0 +1,17 @@
+module_id: troubleshoot.packages
+name: "Packages, Keys & Certificates Troubleshooter"
+version: "1.0.0"
+type: troubleshooter
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  symptoms: [update_errors, pubkey_signature, broken_deps, dpkg_lock, install_add_repo, cert_tls, git_install]
+  glossary_terms: [repository, package, apt_vs_dpkg, gpg_key, keyring, signed_by, signature, ca_certificate, certificate_authority, held_package, pep668]
+content:
+  troubleshooter: troubleshooter.yaml
+  glossary: glossary.yaml
+source: "authored; verified against apt/dpkg/gpg/update-ca-certificates man pages + Kali/Debian docs"
+license: "project-proprietary"
+checksum: ""

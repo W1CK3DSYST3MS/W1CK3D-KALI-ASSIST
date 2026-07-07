@@ -1,0 +1,276 @@
+troubleshooter_id: troubleshoot.packages
+title: "Packages, Keys & Certificates Troubleshooter"
+os_profile: kali
+category_color: warning
+triage:
+  - field_id: error_line
+    label: "What is the EXACT error line? (copy it — apt errors point straight at the cause)"
+    type: string
+    required: true
+  - field_id: when
+    label: "Did it start after an update, adding a repo, or on a fresh install?"
+    type: string
+  - field_id: source_kind
+    label: "Is the repo/tool official Kali or third-party?"
+    type: choice
+    choices: [official_kali, third_party, unsure]
+external_resources:
+  - title: "Kali docs — sources.list / repositories"
+    url: "https://www.kali.org/docs/general-use/kali-linux-sources-list-repositories/"
+  - title: "Debian wiki — Apt / SecureApt"
+    url: "https://wiki.debian.org/SecureApt"
+  - title: "Kali forums"
+    url: "https://forums.kali.org/"
+  - title: "Unix & Linux Stack Exchange"
+    url: "https://unix.stackexchange.com/"
+  - title: "On-system manuals"
+    note: "man apt · man apt-secure · man dpkg · man update-ca-certificates"
+symptoms:
+  - symptom_id: update_errors
+    label: "apt update / upgrade throws errors"
+    aliases: [apt update, apt upgrade, failed to fetch, could not resolve, releaseinfo, apt error]
+    diagnosis:
+      - step_id: pk_read
+        title: "Read the failing line first"
+        slot_target: null
+        explanation:
+          what: "Re-run `sudo apt update` and note WHICH line fails (network? signature? release-info?)."
+          why: "apt's errors are precise — the exact line dictates the fix."
+          where: "Diagnostic."
+        try_this: "sudo apt update"
+        success_criteria: "You can name the failing line's category."
+        expected_output: |
+          Err:1 http://http.kali.org/kali kali-rolling InRelease
+            The following signatures couldn't be verified: NO_PUBKEY ...
+          E: Failed to fetch ...  (or a network/releaseinfo error)
+        alternatives:
+          - trigger: "Could not resolve / Failed to fetch"
+            cause: "Network/DNS problem, not apt."
+            fix: "Fix connectivity first (Networking troubleshooter); then retry apt."
+            check: "ping the mirror; check DNS."
+          - trigger: "signature / NO_PUBKEY"
+            cause: "Repo key issue."
+            fix: "Switch to the 'NO_PUBKEY / signature' symptom."
+            check: "The error names a key id."
+    fixes:
+      - fix_id: correct_sequence
+        tier: basic
+        title: "Use the correct Kali update sequence"
+        command: "sudo apt update && sudo apt full-upgrade"
+        why: "full-upgrade handles the dependency changes a rolling distro constantly makes."
+        verify: "The upgrade completes without held-back packages."
+      - fix_id: releaseinfo
+        tier: intermediate
+        title: "Repository changed Codename/Suite prompt"
+        command: "sudo apt update --allow-releaseinfo-change"
+        why: "Kali rolling occasionally changes release metadata; this accepts the expected change."
+        verify: "update completes cleanly."
+      - fix_id: half_upgrade
+        tier: extensive
+        title: "Repair a half-finished upgrade"
+        command: "sudo dpkg --configure -a && sudo apt --fix-broken install && sudo apt full-upgrade"
+        why: "Finishes interrupted configures and resolves broken deps from a partial upgrade."
+        verify: "apt full-upgrade runs to completion."
+      - fix_id: disk_full
+        tier: extensive
+        title: "Disk full breaking apt"
+        command: "df -h; sudo apt clean"
+        why: "No space stops apt writing; clean frees the cache."
+        verify: "df shows free space; apt proceeds."
+  - symptom_id: pubkey_signature
+    label: "NO_PUBKEY / signature / 'not signed' errors"
+    aliases: [no_pubkey, signature, not signed, gpg, key, repository is not signed, keyring]
+    fixes:
+      - fix_id: kali_keyring
+        tier: basic
+        title: "Refresh Kali's keyring (official repo)"
+        command: "sudo apt install kali-archive-keyring && sudo apt update"
+        why: "The canonical fix for NO_PUBKEY on the Kali repo."
+        verify: "update completes with no signature error."
+      - fix_id: thirdparty_key
+        tier: intermediate
+        title: "Add a third-party repo key the modern way (signed-by)"
+        command: "sudo install -m 0755 -d /etc/apt/keyrings; curl -fsSL <repo>/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/<name>.gpg"
+        why: "Keys live in /etc/apt/keyrings and each source declares signed-by=; apt-key is deprecated."
+        verify: "The source line uses [signed-by=/etc/apt/keyrings/<name>.gpg]; apt update verifies."
+      - fix_id: not_signed
+        tier: intermediate
+        title: "'repository is not signed'"
+        command: "# ensure: deb [signed-by=/etc/apt/keyrings/<name>.gpg] <url> <suite> <component>"
+        why: "You omitted signed-by= or the keyring path is wrong."
+        verify: "apt update no longer complains the repo is unsigned."
+      - fix_id: legacy_keys
+        tier: extensive
+        title: "Migrate legacy trusted.gpg.d keys"
+        command: "# move keys to /etc/apt/keyrings and add signed-by= per source"
+        why: "Global trusted keys warn and over-trust; per-repo signed-by is safer."
+        verify: "Deprecation warnings stop."
+        destructive: true
+        recovery: "A repo key means you trust everything that repo ships, as root. Only add keys from sources you trust over HTTPS from the official origin."
+  - symptom_id: broken_deps
+    label: "broken / unmet / held-back dependencies"
+    aliases: [broken, unmet dependencies, held back, dependency, kept back, apt-mark]
+    fixes:
+      - fix_id: fix_broken
+        tier: basic
+        title: "Auto-repair broken packages"
+        command: "sudo apt --fix-broken install; sudo dpkg --configure -a; sudo apt full-upgrade"
+        why: "Repairs broken deps, finishes interrupted configures, then completes the upgrade."
+        verify: "The failing install/upgrade now completes."
+      - fix_id: read_removals
+        tier: intermediate
+        title: "Read what apt proposes to remove"
+        command: "sudo apt full-upgrade   # review the remove list before confirming"
+        why: "A big removal list usually means a partial-upgrade state that full-upgrade fixes."
+        verify: "The remove list is expected; upgrade proceeds."
+      - fix_id: held
+        tier: intermediate
+        title: "Held packages"
+        command: "apt-mark showhold; sudo apt-mark unhold <pkg>"
+        why: "A held package won't upgrade until unheld."
+        verify: "showhold no longer lists the package you need."
+      - fix_id: force_remove
+        tier: extensive
+        title: "Truly stuck dpkg state (last resort)"
+        command: "sudo dpkg --remove --force-remove-reinstreq <pkg>"
+        why: "Forcibly clears a wedged package when nothing else works."
+        verify: "apt is usable again."
+        destructive: true
+        recovery: "Forcing dpkg can leave the package DB inconsistent. Only after fix-broken/configure -a fail; know exactly which package you're removing."
+  - symptom_id: dpkg_lock
+    label: "Could not get lock / dpkg was interrupted"
+    aliases: [could not get lock, dpkg lock, lock-frontend, dpkg interrupted, another process]
+    diagnosis:
+      - step_id: pk_lock
+        title: "Find what holds the lock"
+        slot_target: null
+        explanation:
+          what: "Check whether an apt/dpkg process is genuinely running before touching the lock."
+          why: "Removing a lock while apt runs can corrupt the package database."
+          where: "Diagnostic."
+        try_this: "sudo lsof /var/lib/dpkg/lock-frontend; ps aux | grep -i apt"
+        success_criteria: "You can see whether any apt/dpkg is running."
+        expected_output: |
+          COMMAND   PID USER   ... NAME
+          apt      4711 root   ... /var/lib/dpkg/lock-frontend
+          (or: no output -> no process holds it)
+        alternatives:
+          - trigger: "a process is listed"
+            cause: "Another apt/updater is running."
+            fix: "Wait for it to finish; do NOT remove the lock."
+            check: "Re-run once it's gone."
+          - trigger: "no process at all"
+            cause: "Stale lock from a hard crash."
+            fix: "Only now is it safe to remove the lock (extensive fix)."
+            check: "Confirm truly nothing is running first."
+    fixes:
+      - fix_id: wait
+        tier: basic
+        title: "Something else is using apt — wait"
+        command: "# unattended-upgrades or another terminal; let it finish"
+        why: "The lock releases when the other apt/dpkg completes."
+        verify: "Retry the command; the lock is gone."
+      - fix_id: configure_a
+        tier: intermediate
+        title: "A previous apt crashed mid-run"
+        command: "sudo dpkg --configure -a"
+        why: "Finishes the interrupted transaction so apt is usable again."
+        verify: "apt commands run normally."
+      - fix_id: remove_lock
+        tier: extensive
+        title: "Remove a STALE lock (only if no apt is running)"
+        command: "sudo rm /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock && sudo dpkg --configure -a"
+        why: "Clears a leftover lock after a hard crash."
+        verify: "apt update works again."
+        destructive: true
+        recovery: "NEVER remove locks while apt is genuinely running — it can corrupt the package DB. Confirm with lsof/ps first (see the diagnosis above)."
+  - symptom_id: install_add_repo
+    label: "Install a tool that isn't there / add a repo safely"
+    aliases: [install tool, not installed, add repo, kali-linux-large, pipx, deb file]
+    fixes:
+      - fix_id: search_install
+        tier: basic
+        title: "Is it already packaged?"
+        command: "apt search <name>; sudo apt install <pkg>"
+        why: "Many Kali tools just aren't in your current metapackage yet."
+        verify: "The tool installs from the official repo."
+      - fix_id: metapackage
+        tier: basic
+        title: "Pull more official Kali tools"
+        command: "sudo apt install kali-linux-large"
+        why: "A bigger official toolset — still all Kali, no third-party risk."
+        verify: "The tools you wanted are now present."
+      - fix_id: pipx_venv
+        tier: extensive
+        title: "Prefer isolation over base-system repos"
+        command: "pipx install <tool>   # or a venv / container for one-off tools"
+        why: "Avoids polluting the rolling base; pipx puts the app on PATH, isolated."
+        verify: "The tool runs without touching system packages."
+      - fix_id: local_deb
+        tier: extensive
+        title: "Install a vendor .deb correctly"
+        command: "sudo apt install ./file.deb"
+        why: "apt resolves the .deb's dependencies; raw dpkg -i does not."
+        verify: "The package and its deps install cleanly."
+        destructive: true
+        recovery: "Adding a repo/.deb = trusting it as root. On Kali, weigh whether you need it in the base system at all."
+  - symptom_id: cert_tls
+    label: "Certificate / TLS 'verify failed' errors"
+    aliases: [certificate, tls, ssl, verify failed, self-signed, unknown issuer, ca]
+    fixes:
+      - fix_id: ca_bundle
+        tier: basic
+        title: "Ensure the CA bundle is present/updated"
+        command: "sudo apt install ca-certificates && sudo update-ca-certificates"
+        why: "A missing/outdated CA store breaks HTTPS for apt/git/curl."
+        verify: "The HTTPS action works."
+      - fix_id: clock
+        tier: basic
+        title: "Check the clock (a wrong date breaks TLS instantly)"
+        command: "timedatectl; sudo timedatectl set-ntp true"
+        why: "Certificates are time-bound; a skewed clock fails validation."
+        verify: "timedatectl shows a correct, synced time; TLS works."
+      - fix_id: custom_ca
+        tier: intermediate
+        title: "Trust a custom CA"
+        command: "sudo cp your-ca.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates"
+        why: "Links a custom CA into the system trust store (file must end .crt)."
+        verify: "curl -v https://<host> no longer reports unknown issuer."
+      - fix_id: git_verify
+        tier: extensive
+        title: "git-specific TLS"
+        command: "git config --global http.sslCAInfo <path>   # NOT http.sslVerify false"
+        why: "Point git at a custom bundle rather than disabling verification."
+        verify: "git over HTTPS succeeds with verification on."
+        destructive: true
+        recovery: "Trusting an unknown CA lets it impersonate any site to you. Never use http.sslVerify false — it disables security entirely."
+  - symptom_id: git_install
+    label: "Install a tool from a git repo (clone + build)"
+    aliases: [git clone, build from source, make, pip, pep668, externally-managed, go build]
+    fixes:
+      - fix_id: clone_read
+        tier: basic
+        title: "Clone and read the README first"
+        command: "git clone <url>; cd <dir>; less README*   # then install listed deps"
+        why: "Every project differs — the README/INSTALL lists the real steps and deps."
+        verify: "You know the project's build/install method."
+      - fix_id: python_pep668
+        tier: intermediate
+        title: "Python project (PEP 668 blocks system pip)"
+        command: "pipx install .    # app/tool; or: python3 -m venv .venv && source .venv/bin/activate && pip install ."
+        why: "Modern Kali blocks system-wide pip; pipx (apps) or a venv (libs) is correct."
+        verify: "The tool runs from pipx/venv without touching system Python."
+      - fix_id: c_build
+        tier: intermediate
+        title: "C/C++ project"
+        command: "sudo apt install build-essential && make   # sudo make install if intended"
+        why: "Compiles the project; make install places it outside apt's tracking."
+        verify: "make completes; the binary runs."
+      - fix_id: break_system
+        tier: extensive
+        title: "Last-resort system pip"
+        command: "pip install --break-system-packages <pkg>"
+        why: "Overrides PEP 668 when nothing else fits."
+        verify: "The package imports."
+        destructive: true
+        recovery: "--break-system-packages can break the system Python that Kali tools rely on. Prefer pipx/venv; use this only if you fully understand the risk."

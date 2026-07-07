@@ -1,0 +1,25 @@
+terms:
+  - term: permissions_rwx
+    definition: "Read/write/execute, set separately for owner, group, and others."
+  - term: owner_group
+    definition: "The user and group a file belongs to (the ls -l columns)."
+  - term: chmod
+    definition: "Change a file's permission bits (symbolic u+w or numeric 644)."
+  - term: chown
+    definition: "Change a file's owner and group (needs root)."
+  - term: umask
+    definition: "The default permissions mask applied to newly created files."
+  - term: sudo
+    definition: "Run a command as root when your account is permitted (sudo group)."
+  - term: group_membership
+    definition: "Which groups your user is in (id); grants group-level access."
+  - term: mount
+    definition: "Attach a filesystem to a directory so you can access its files."
+  - term: fstab
+    definition: "/etc/fstab defines automatic mounts at boot; a bad line can block booting."
+  - term: suid_sgid_sticky
+    definition: "Special bits: SUID run-as-owner, SGID run-as-group, sticky restrict-deletion (/tmp)."
+  - term: immutable
+    definition: "A file locked from change until `chattr -i` clears the bit."
+  - term: acl
+    definition: "Access Control List — fine-grained per-user/group permissions beyond classic rwx."

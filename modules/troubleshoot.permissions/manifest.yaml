@@ -1,0 +1,17 @@
+module_id: troubleshoot.permissions
+name: "Permissions, sudo & Filesystem Troubleshooter"
+version: "1.0.0"
+type: troubleshooter
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  symptoms: [permission_denied, sudo_issue, ownership, mount_drive, find_file, wont_execute, special_bits, readonly_fs]
+  glossary_terms: [permissions_rwx, owner_group, chmod, chown, umask, sudo, group_membership, mount, fstab, suid_sgid_sticky, immutable, acl]
+content:
+  troubleshooter: troubleshooter.yaml
+  glossary: glossary.yaml
+source: "authored; verified against ls/chmod/chown/mount/find man pages + Debian/Arch docs"
+license: "project-proprietary"
+checksum: ""

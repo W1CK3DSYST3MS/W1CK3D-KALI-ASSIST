@@ -1,0 +1,25 @@
+terms:
+  - term: grub
+    definition: "The bootloader that loads the kernel; its menu lets you pick kernels/options."
+  - term: recovery_mode
+    definition: "A minimal boot to a root maintenance shell for repairs."
+  - term: chroot
+    definition: "Run commands 'inside' your installed system from live media (for repairs)."
+  - term: display_manager
+    definition: "The graphical login (gdm3/lightdm) that starts your desktop."
+  - term: tty
+    definition: "A text console (Ctrl+Alt+F2…) usable when the GUI is broken."
+  - term: nomodeset
+    definition: "A boot option that skips early GPU mode-setting (fixes many black screens)."
+  - term: xrandr
+    definition: "Tool to query/set screen resolution and outputs."
+  - term: journald_vacuum
+    definition: "Trimming systemd logs to reclaim disk (journalctl --vacuum-size/--vacuum-time)."
+  - term: inode
+    definition: "Filesystem slots for files; can run out even with free space."
+  - term: persistence
+    definition: "The Kali live feature that saves changes across reboots (needs a labeled partition + persistence.conf)."
+  - term: rtc_utc
+    definition: "The hardware clock; a dual-boot localtime-vs-UTC mismatch causes time skew."
+  - term: path
+    definition: "Where the shell looks for commands; missing dirs cause 'command not found'."

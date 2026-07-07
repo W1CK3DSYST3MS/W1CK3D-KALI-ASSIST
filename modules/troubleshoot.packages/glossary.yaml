@@ -1,0 +1,23 @@
+terms:
+  - term: repository
+    definition: "An online source apt installs from (Kali's are curated)."
+  - term: package
+    definition: "An installable software bundle (.deb); managed by apt/dpkg."
+  - term: apt_vs_dpkg
+    definition: "apt resolves dependencies + fetches; dpkg installs a single .deb and does NOT resolve deps."
+  - term: gpg_key
+    definition: "The cryptographic key proving a repo's packages are authentic; modern keys live in /etc/apt/keyrings/."
+  - term: keyring
+    definition: "A file of trusted signing keys apt checks packages against."
+  - term: signed_by
+    definition: "The per-source setting binding a repo to its key (replaces the deprecated apt-key)."
+  - term: signature
+    definition: "The cryptographic proof apt verifies before trusting packages."
+  - term: ca_certificate
+    definition: "A trust anchor validating HTTPS identities; system store updated via update-ca-certificates."
+  - term: certificate_authority
+    definition: "An entity that vouches for a site's identity via a chain of trust; only add CAs you trust."
+  - term: held_package
+    definition: "A package pinned from upgrading (apt-mark hold)."
+  - term: pep668
+    definition: "The rule that blocks system-wide pip ('externally-managed'); use pipx or a venv instead."

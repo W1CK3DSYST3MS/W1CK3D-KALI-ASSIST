@@ -1,0 +1,19 @@
+terms:
+  - term: service
+    definition: "A background program managed as a systemd unit."
+  - term: daemon
+    definition: "A long-running background process (usually a service)."
+  - term: unit
+    definition: "systemd's managed object: .service, .socket, .target, .timer."
+  - term: systemd
+    definition: "The init/service manager that starts and supervises everything; logs via journalctl."
+  - term: enable_vs_start
+    definition: "start runs it now; enable runs it at boot; enable --now does both."
+  - term: journal
+    definition: "systemd's log store, read with journalctl (-u unit, -e end, -b boot, -f follow)."
+  - term: masked_unit
+    definition: "A unit hard-disabled (symlinked to /dev/null) so it can't start until unmasked."
+  - term: target
+    definition: "A group of units representing a system state (like a runlevel)."
+  - term: daemon_reload
+    definition: "systemctl daemon-reload — re-reads unit files after you edit them."

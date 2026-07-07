@@ -1,0 +1,270 @@
+troubleshooter_id: troubleshoot.permissions
+title: "Permissions, sudo & Filesystem Troubleshooter"
+os_profile: kali
+category_color: warning
+triage:
+  - field_id: path_error
+    label: "What is the exact path and the exact error?"
+    type: string
+    required: true
+  - field_id: disk_kind
+    label: "System disk or an external/USB drive?"
+    type: choice
+    choices: [system_disk, usb_external]
+  - field_id: ownership
+    label: "Is the file yours, system-owned, or on a Windows-formatted disk?"
+    type: choice
+    choices: [mine, system, windows_fs, unsure]
+external_resources:
+  - title: "Arch Wiki — File permissions and attributes"
+    url: "https://wiki.archlinux.org/title/File_permissions_and_attributes"
+  - title: "Debian wiki — fstab / Mount"
+    url: "https://wiki.debian.org/fstab"
+  - title: "Unix & Linux Stack Exchange"
+    url: "https://unix.stackexchange.com/"
+  - title: "On-system manuals"
+    note: "man chmod · man chown · man mount · man fstab · man find · man chattr"
+symptoms:
+  - symptom_id: permission_denied
+    label: "'Permission denied' reading/writing something"
+    aliases: [permission denied, cannot write, cannot read, access denied, eacces]
+    diagnosis:
+      - step_id: pm_look
+        title: "Who owns it, and who are you?"
+        slot_target: null
+        glossary_refs: [permissions_rwx, owner_group]
+        explanation:
+          what: "`ls -l <path>` (or `ls -ld <dir>`) shows owner/group + rwx; `id` shows your user and groups."
+          why: "If you're not the owner and not in the group, you only get 'others' permissions — often the whole problem."
+          where: "Diagnostic."
+        try_this: "ls -l <path>; id"
+        success_criteria: "You can tell whether you're the owner, in the group, or 'other'."
+        expected_output: |
+          -rw-r----- 1 root shadow 1670 Jun 18 22:01 /etc/shadow
+          uid=1000(kali) gid=1000(kali) groups=1000(kali),27(sudo)
+        alternatives:
+          - trigger: "owner is root and you're not"
+            cause: "It's system-owned — you only have 'others' bits."
+            fix: "If it's a legitimate admin action, prepend sudo; otherwise fix ownership (see ownership symptom)."
+            check: "Compare the owner to your id."
+          - trigger: "you own it but a bit is missing"
+            cause: "Missing the specific rwx bit for you."
+            fix: "Add just that bit: `chmod u+w <path>` (or u+rwx)."
+            check: "ls -l shows the added bit; the action works."
+    fixes:
+      - fix_id: narrow_bit
+        tier: basic
+        title: "Add the specific missing bit"
+        command: "chmod u+w <path>    # or g+rw if group-owned and appropriate"
+        why: "Fix the exact bit that's missing — not a blanket change."
+        verify: "The read/write action now succeeds."
+      - fix_id: parent_x
+        tier: intermediate
+        title: "A parent directory lacks execute (x)"
+        command: "ls -ld <each parent>    # a missing x on a parent denies everything below"
+        why: "You need x on every directory in the path to reach a file."
+        verify: "Each parent has x for you; access works."
+      - fix_id: acl
+        tier: extensive
+        title: "An ACL is overriding classic permissions"
+        command: "getfacl <path>    # adjust with setfacl if appropriate"
+        why: "An ACL can deny even when ls -l looks fine."
+        verify: "getfacl shows the effective rights; adjust as needed."
+      - fix_id: no_777
+        tier: extensive
+        title: "Do NOT chmod -R 777 to 'fix' this"
+        command: "# instead: chown/chmod the SPECIFIC owner/bit that's wrong"
+        why: "777 makes files world-writable (a security hole) and won't fix ownership anyway."
+        verify: "The narrow fix resolves it without opening the file to everyone."
+        destructive: true
+        recovery: "chmod -R 777 on system paths creates security holes and can break things. Always fix the specific owner/bit instead."
+  - symptom_id: sudo_issue
+    label: "sudo won't work / 'not in the sudoers file'"
+    aliases: [sudo, sudoers, not in the sudoers, sudo password, visudo]
+    fixes:
+      - fix_id: check_group
+        tier: basic
+        title: "Confirm your user and sudo membership"
+        command: "whoami; id    # look for the sudo group"
+        why: "On Kali the default user is in sudo; if sudo fails, verify who you are and your groups."
+        verify: "id lists the sudo group."
+      - fix_id: add_sudo
+        tier: basic
+        title: "'<user> is not in the sudoers file'"
+        command: "su -    # as root: usermod -aG sudo <user>   # then log out and back in"
+        why: "The user lacks sudo rights; only root can grant them; group change needs a re-login."
+        verify: "After re-login, `sudo whoami` -> root."
+      - fix_id: visudo
+        tier: extensive
+        title: "Edit sudo config SAFELY"
+        command: "sudo visudo    # never edit /etc/sudoers with a plain editor"
+        why: "visudo syntax-checks before saving."
+        verify: "sudo still works after saving."
+        destructive: true
+        recovery: "A broken /etc/sudoers can lock out ALL admin access. Only edit via visudo; if locked out, fix from recovery mode."
+  - symptom_id: ownership
+    label: "Can't edit a file I think is mine (ownership)"
+    aliases: [ownership, owned by root, chown, cant edit my file, sudo created file]
+    fixes:
+      - fix_id: whose
+        tier: basic
+        title: "Is the owner actually you?"
+        command: "ls -l <path>"
+        why: "Files created via sudo are owned by root — the usual surprise."
+        verify: "You can see the real owner."
+      - fix_id: chown_mine
+        tier: basic
+        title: "Reassign a file that should be yours"
+        command: "sudo chown <you>:<you> <path>"
+        why: "Gives you back ownership so you can edit it."
+        verify: "ls -l shows your name; editing works."
+      - fix_id: setgid_shared
+        tier: intermediate
+        title: "Shared-group directory"
+        command: "sudo chgrp <group> <dir> && chmod g+ws <dir>"
+        why: "setgid (g+s) makes new files inherit the directory's group for collaboration."
+        verify: "New files in the dir get the shared group."
+      - fix_id: chown_r_danger
+        tier: extensive
+        title: "chown -R only on the precise directory"
+        command: "sudo chown -R <you>:<you> /home/<you>/project    # NEVER / or /usr"
+        why: "Recursive ownership changes must target exactly the intended tree."
+        verify: "Only the intended files changed owner."
+        destructive: true
+        recovery: "sudo chown -R on / or /usr or your whole home-as-root can break logins and the system. Target the precise path only."
+  - symptom_id: mount_drive
+    label: "USB/drive won't mount or I can't access it"
+    aliases: [mount, usb, drive, ntfs, exfat, wont mount, fstab, lsblk]
+    diagnosis:
+      - step_id: pm_lsblk
+        title: "Is the drive seen?"
+        slot_target: null
+        glossary_refs: [mount]
+        explanation:
+          what: "`lsblk -f` lists disks/partitions with filesystem type and mountpoint."
+          why: "You need the real device name (e.g. /dev/sdb1) and its filesystem before mounting."
+          where: "Diagnostic."
+        try_this: "lsblk -f"
+        success_criteria: "Your drive/partition appears with a filesystem type."
+        expected_output: |
+          NAME   FSTYPE LABEL   UUID                                 MOUNTPOINT
+          sda
+          └─sda1 ext4           1b2c...                              /
+          sdb
+          └─sdb1 exfat  USB16   1234-ABCD
+        alternatives:
+          - trigger: "the drive isn't listed at all"
+            cause: "Not detected — cable/port/power."
+            fix: "Check `dmesg | tail` right after plugging in; try another port/cable."
+            check: "dmesg should log the device on insert."
+    fixes:
+      - fix_id: mount_basic
+        tier: basic
+        title: "Mount it"
+        command: "sudo mkdir -p /mnt/usb && sudo mount /dev/sdX1 /mnt/usb && ls /mnt/usb"
+        why: "Attaches the partition so you can access its files (use the real name from lsblk)."
+        verify: "ls /mnt/usb shows files."
+      - fix_id: windows_fs
+        tier: intermediate
+        title: "Windows-formatted (NTFS/exFAT) write perms"
+        command: "sudo apt install ntfs-3g exfat-fuse; sudo mount -o uid=$(id -u),gid=$(id -g) /dev/sdX1 /mnt/usb"
+        why: "FAT/NTFS have no Unix perms; mapping uid/gid lets you write."
+        verify: "You can write to /mnt/usb."
+      - fix_id: fstab
+        tier: extensive
+        title: "Permanent auto-mount via /etc/fstab"
+        command: "# add a UUID= line, then TEST: sudo mount -a   (before rebooting)"
+        why: "Auto-mounts at boot; UUID is stable across reboots."
+        verify: "mount -a succeeds with no error."
+        destructive: true
+        recovery: "A bad /etc/fstab line can stop the system booting. ALWAYS `sudo mount -a` to test first; if boot fails, fix fstab from recovery/TTY."
+  - symptom_id: find_file
+    label: "Where did my file go / how do I find it?"
+    aliases: [find file, where is, locate, missing file, search file]
+    fixes:
+      - fix_id: find_name
+        tier: basic
+        title: "Search by name"
+        command: "find / -iname 'part-of-name*' 2>/dev/null    # narrow with find ~ for speed"
+        why: "2>/dev/null hides permission-denied noise; -iname is case-insensitive."
+        verify: "The file's path prints."
+      - fix_id: locate
+        tier: intermediate
+        title: "Fast index search"
+        command: "sudo updatedb; locate <name>"
+        why: "locate uses a prebuilt index (update it first if stale)."
+        verify: "locate returns the path quickly."
+      - fix_id: which
+        tier: intermediate
+        title: "Where is a command?"
+        command: "which <cmd>; type <cmd>; command -v <cmd>"
+        why: "Finds the executable that runs for a command name."
+        verify: "A path prints."
+  - symptom_id: wont_execute
+    label: "My script/binary won't run"
+    aliases: [wont run, permission denied script, command not found, bad interpreter, crlf, exec]
+    fixes:
+      - fix_id: chmod_x
+        tier: basic
+        title: "Make it executable and run by path"
+        command: "chmod +x <file>; ./<file>"
+        why: "A script needs the execute bit; ./ runs it from the current dir."
+        verify: "It runs."
+      - fix_id: interpreter
+        tier: intermediate
+        title: "Wrong/missing interpreter or CRLF line endings"
+        command: "head -1 <file>; file <file>    # if CRLF: sudo apt install dos2unix && dos2unix <file>"
+        why: "A bad shebang or Windows line endings break execution."
+        verify: "file no longer says CRLF; it runs."
+      - fix_id: noexec
+        tier: extensive
+        title: "Mounted noexec (e.g. some /tmp or USB)"
+        command: "mount | grep -E 'noexec'    # move the file elsewhere, or remount without noexec"
+        why: "You cannot execute from a noexec mount."
+        verify: "Running from a normal location works."
+  - symptom_id: special_bits
+    label: "Weird permission bits (SUID/sticky) / can't change a file"
+    aliases: [suid, sgid, sticky, immutable, chattr, operation not permitted]
+    fixes:
+      - fix_id: read_bits
+        tier: basic
+        title: "Read the special bits"
+        command: "ls -l <path>    # s in exec slot = SUID/SGID; t on others = sticky"
+        why: "Explains unusual permission strings (e.g. /tmp's sticky t)."
+        verify: "You can identify the special bit."
+      - fix_id: immutable
+        tier: basic
+        title: "'Operation not permitted' even as root -> immutable"
+        command: "lsattr <file>    # if it shows i: sudo chattr -i <file>"
+        why: "The immutable bit blocks changes until cleared."
+        verify: "After chattr -i, you can modify the file."
+      - fix_id: audit_suid
+        tier: extensive
+        title: "Audit SUID binaries (authorized review)"
+        command: "find / -perm -4000 -type f 2>/dev/null"
+        why: "SUID binaries run as their owner — a privilege-escalation surface worth knowing."
+        verify: "You have the list to review."
+  - symptom_id: readonly_fs
+    label: "'Read-only filesystem' errors"
+    aliases: [read-only filesystem, readonly, remount, cannot write ro, fsck]
+    fixes:
+      - fix_id: why_ro
+        tier: basic
+        title: "Find out why first"
+        command: "dmesg | tail    # look for I/O or filesystem errors"
+        why: "Read-only is often a safety remount after an error — diagnose before forcing."
+        verify: "You can see whether it's an error or a config."
+      - fix_id: remount_rw
+        tier: basic
+        title: "Temporary remount read-write"
+        command: "sudo mount -o remount,rw /    # or the affected mountpoint"
+        why: "Restores write access if it was a transient remount."
+        verify: "You can write again."
+      - fix_id: fsck
+        tier: extensive
+        title: "Recurring read-only = filesystem check needed"
+        command: "# fsck must run on an UNMOUNTED target; for root, use recovery/live media"
+        why: "A recurring RO usually means filesystem/disk corruption."
+        verify: "fsck (from recovery) reports a clean filesystem."
+        destructive: true
+        recovery: "Running fsck on a mounted/in-use filesystem can destroy data. For the root fs, do it from recovery/live media — see the rare/hard-case boot module."

@@ -1,0 +1,17 @@
+module_id: troubleshoot.services
+name: "Services & systemd Troubleshooter"
+version: "1.0.0"
+type: troubleshooter
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  symptoms: [wont_start, not_enabled, read_logs, port_conflict, masked_dep, unit_changed, service_specific]
+  glossary_terms: [service, daemon, unit, systemd, enable_vs_start, journal, masked_unit, target, daemon_reload]
+content:
+  troubleshooter: troubleshooter.yaml
+  glossary: glossary.yaml
+source: "authored; verified against systemctl/journalctl man pages + Kali/Debian docs"
+license: "project-proprietary"
+checksum: ""

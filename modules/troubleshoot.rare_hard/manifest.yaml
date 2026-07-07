@@ -1,0 +1,17 @@
+module_id: troubleshoot.rare_hard
+name: "Rare & Hard Cases Troubleshooter"
+version: "1.0.0"
+type: troubleshooter
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  symptoms: [wont_boot, no_gui, gpu_display, disk_full, persistence, clock_skew, locale_path]
+  glossary_terms: [grub, recovery_mode, chroot, display_manager, tty, nomodeset, xrandr, journald_vacuum, inode, persistence, rtc_utc, path]
+content:
+  troubleshooter: troubleshooter.yaml
+  glossary: glossary.yaml
+source: "authored; verified against grub/systemd/xrandr/timedatectl docs + Kali/Arch wikis"
+license: "project-proprietary"
+checksum: ""

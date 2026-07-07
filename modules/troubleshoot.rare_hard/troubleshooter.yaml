@@ -1,0 +1,214 @@
+troubleshooter_id: troubleshoot.rare_hard
+title: "Rare & Hard Cases Troubleshooter"
+os_profile: kali
+category_color: critical
+triage:
+  - field_id: reachable
+    label: "Can you reach any screen — a GRUB menu, a text login (TTY), or nothing?"
+    type: choice
+    choices: [grub_menu, text_tty, desktop, nothing]
+    required: true
+  - field_id: install_kind
+    label: "Installed to disk or running from a live USB?"
+    type: choice
+    choices: [installed, live_usb]
+  - field_id: changed
+    label: "Did it start after an update, a config/driver change, or a power loss?"
+    type: string
+external_resources:
+  - title: "Kali docs — persistence / NVIDIA / recovery"
+    url: "https://www.kali.org/docs/"
+  - title: "Arch Wiki — GRUB / NVIDIA / Xorg / System time"
+    url: "https://wiki.archlinux.org/title/GRUB"
+  - title: "Debian wiki — GRUB / recovery / fstab"
+    url: "https://wiki.debian.org/GrubEFIReinstall"
+  - title: "Unix & Linux Stack Exchange"
+    url: "https://unix.stackexchange.com/"
+  - title: "On-system manuals"
+    note: "man grub-install · man timedatectl · man xrandr · man journalctl"
+symptoms:
+  - symptom_id: wont_boot
+    label: "Won't boot / GRUB prompt / boot hangs"
+    aliases: [wont boot, grub, boot hangs, emergency mode, unbootable, kernel panic]
+    fixes:
+      - fix_id: older_kernel
+        tier: basic
+        title: "Boot an older kernel / recovery mode"
+        command: "# At power-on hold Shift (BIOS) or tap Esc (UEFI) -> Advanced options -> older kernel / recovery"
+        why: "A bad kernel update is a common cause; an older kernel or recovery shell gets you in."
+        verify: "You reach a desktop or a root maintenance shell."
+      - fix_id: nomodeset
+        tier: basic
+        title: "GPU black screen at boot"
+        command: "# At GRUB press e, add 'nomodeset' to the linux line, Ctrl+X to boot once"
+        why: "Skips early GPU mode-setting that black-screens many machines."
+        verify: "It boots; then fix the driver (GPU/display symptom)."
+      - fix_id: emergency_fstab
+        tier: intermediate
+        title: "Emergency mode = usually bad /etc/fstab"
+        command: "journalctl -xb    # find the failing mount; comment/fix the line; sudo mount -a; reboot"
+        why: "A bad fstab entry drops boot to emergency mode."
+        verify: "mount -a succeeds; the system boots normally."
+      - fix_id: grub_reinstall
+        tier: extensive
+        title: "Reinstall GRUB from live media (last resort)"
+        command: "# live USB -> lsblk -f (find root part) -> mount + bind /dev /proc /sys -> chroot /mnt -> grub-install /dev/sdX -> update-grub"
+        why: "Rebuilds a broken bootloader; grub-install targets the DISK, not the partition."
+        verify: "The machine boots from disk again."
+        destructive: true
+        recovery: "grub-install writes the bootloader — the WRONG disk can wipe a bootloader you need. Confirm the device with lsblk FIRST, and back up anything important before partition/boot work."
+  - symptom_id: no_gui
+    label: "Boots but no desktop / login loop / black screen"
+    aliases: [no desktop, login loop, black screen, gdm, lightdm, xauthority, gui broken]
+    fixes:
+      - fix_id: tty
+        tier: basic
+        title: "Switch to a text console"
+        command: "# Press Ctrl+Alt+F2 (try F3/F4), log in there"
+        why: "Proves the system is up and lets you fix the GUI from text."
+        verify: "You get a working text login."
+      - fix_id: disk_full_gui
+        tier: basic
+        title: "Disk full silently breaks the GUI"
+        command: "df -h    # if / is 100%, reclaim space first (see the disk-full symptom)"
+        why: "A full / is a very common login-loop cause."
+        verify: "/ has free space; the GUI can start."
+      - fix_id: xauthority
+        tier: intermediate
+        title: "Login loop from a root-owned ~/.Xauthority"
+        command: "ls -l ~/.Xauthority    # if root-owned: sudo chown $USER:$USER ~/.Xauthority (or rm it)"
+        why: "Running a GUI app with sudo can leave .Xauthority root-owned, looping login."
+        verify: "You can log into the desktop."
+      - fix_id: dm_restart
+        tier: intermediate
+        title: "Restart / reconfigure the display manager"
+        command: "systemctl status gdm3; sudo systemctl restart gdm3    # or lightdm; dpkg-reconfigure if needed"
+        why: "The display manager starts your desktop; restarting clears a stuck state."
+        verify: "The graphical login returns."
+  - symptom_id: gpu_display
+    label: "Display / GPU (resolution, external monitor, NVIDIA)"
+    aliases: [gpu, nvidia, resolution, external monitor, xrandr, display, nomodeset]
+    fixes:
+      - fix_id: xrandr
+        tier: basic
+        title: "Wrong resolution / add an external monitor"
+        command: "xrandr; xrandr --output <NAME> --auto    # or --mode 1920x1080"
+        why: "xrandr lists outputs/modes and sets them."
+        verify: "The display shows the right resolution/monitor."
+      - fix_id: nvidia
+        tier: intermediate
+        title: "NVIDIA on Kali"
+        command: "nvidia-detect; sudo apt install nvidia-driver linux-headers-$(uname -r)    # then reboot"
+        why: "Installs the packaged driver + matching headers per Kali docs."
+        verify: "The GPU works after reboot."
+      - fix_id: nvidia_kernel
+        tier: extensive
+        title: "GPU broke after a kernel update"
+        command: "sudo apt install linux-headers-$(uname -r)    # reinstall/dkms the driver; reboot"
+        why: "The driver module must rebuild against the new kernel."
+        verify: "Graphics work again after reboot."
+  - symptom_id: disk_full
+    label: "Disk full / 'No space left on device'"
+    aliases: [disk full, no space left, out of space, df, inode, cleanup]
+    diagnosis:
+      - step_id: rh_df
+        title: "Find what's full (space AND inodes)"
+        slot_target: null
+        glossary_refs: [inode]
+        explanation:
+          what: "`df -h` shows space per mount; `df -i` shows inodes (can be full even with free space)."
+          why: "You must know whether it's bytes or inodes, and which mount."
+          where: "Diagnostic."
+        try_this: "df -h; df -i"
+        success_criteria: "You can see which filesystem is at/near 100%."
+        expected_output: |
+          Filesystem  Size Used Avail Use% Mounted on
+          /dev/sda1    79G  79G     0 100% /
+          Filesystem  Inodes IUsed IFree IUse% Mounted on
+          /dev/sda1     5.0M  1.2M  3.8M   24% /
+        alternatives:
+          - trigger: "space is free but writes still fail"
+            cause: "Inodes are exhausted (many tiny files)."
+            fix: "Find the directory with the most entries and clear it (safe targets only)."
+            check: "df -i shows IUse% at 100%."
+    fixes:
+      - fix_id: safe_reclaim
+        tier: basic
+        title: "Safe reclaim (most space, least risk)"
+        command: "sudo apt clean; sudo apt autoremove --purge; sudo journalctl --vacuum-size=200M"
+        why: "Clears the apt cache, old kernels/deps, and trims systemd logs."
+        verify: "df -h shows freed space."
+      - fix_id: big_files
+        tier: intermediate
+        title: "Find the biggest offenders"
+        command: "sudo du -xh / 2>/dev/null | sort -h | tail -20; find / -xdev -type f -size +500M 2>/dev/null"
+        why: "Locates the directories/files eating the disk (-x stays on one filesystem)."
+        verify: "You identify what to remove."
+        destructive: true
+        recovery: "Delete caches/logs/your-own files only. Never blindly delete from /var, /usr, /etc — removing system files can break the OS."
+  - symptom_id: persistence
+    label: "Live-USB persistence isn't saving my changes"
+    aliases: [persistence, live usb, not saving, amnesiac, persistence.conf]
+    fixes:
+      - fix_id: boot_entry
+        tier: basic
+        title: "Did you boot the persistence entry?"
+        command: "# At the Kali boot menu choose 'Live system (persistence)', not plain 'Live'"
+        why: "A plain live session is amnesiac by design."
+        verify: "Changes survive a reboot."
+      - fix_id: persistence_part
+        tier: basic
+        title: "Is there a persistence partition?"
+        command: "lsblk -f    # look for a partition labeled 'persistence'"
+        why: "Persistence needs a dedicated labeled partition."
+        verify: "A persistence-labeled partition exists."
+      - fix_id: persistence_conf
+        tier: intermediate
+        title: "persistence.conf must contain '/ union'"
+        command: "# on the persistence partition, ensure a file persistence.conf with exactly: / union"
+        why: "Without the correct conf, changes won't persist."
+        verify: "Changes persist across reboots."
+  - symptom_id: clock_skew
+    label: "Weird errors after a date/time change (apt/cert/sudo)"
+    aliases: [clock, time, ntp, timedatectl, not valid yet, cert verify, dual boot time]
+    fixes:
+      - fix_id: set_ntp
+        tier: basic
+        title: "Check and sync the clock"
+        command: "timedatectl; sudo timedatectl set-ntp true"
+        why: "A wrong clock breaks package signatures, TLS certs, and sudo timestamps."
+        verify: "timedatectl shows synchronized; the failing apt/cert/git action works."
+      - fix_id: rtc_utc
+        tier: intermediate
+        title: "Dual-boot clock jumps (RTC localtime vs UTC)"
+        command: "sudo timedatectl set-local-rtc 0    # keep RTC in UTC (recommended)"
+        why: "Windows/Linux disagree on the hardware clock; pick one convention."
+        verify: "The time is correct after switching OSes."
+      - fix_id: manual_time
+        tier: extensive
+        title: "No network for NTP"
+        command: "sudo timedatectl set-time \"YYYY-MM-DD HH:MM:SS\"    # then fix NTP once online"
+        why: "Set a correct time manually to get past cert/signature checks."
+        verify: "cert/signature errors clear."
+  - symptom_id: locale_path
+    label: "Locale/keyboard wrong, or installed tool 'not found' (PATH/shell)"
+    aliases: [locale, keyboard, path, command not found, zshrc, bashrc, pipx path, zsh]
+    fixes:
+      - fix_id: locale
+        tier: basic
+        title: "Fix locale / keyboard"
+        command: "sudo dpkg-reconfigure locales    # keyboard: sudo dpkg-reconfigure keyboard-configuration"
+        why: "Regenerates the selected locale/keymap; re-login to apply."
+        verify: "The LC_* warnings stop; keyboard is correct."
+      - fix_id: path_zsh
+        tier: intermediate
+        title: "'Installed it but command not found' (PATH; Kali uses zsh!)"
+        command: "echo $PATH; echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc; source ~/.zshrc"
+        why: "pipx (~/.local/bin) and Go (~/go/bin) install off the default PATH; Kali's shell is zsh, not bash."
+        verify: "which <tool> now finds it. (pipx ensurepath does this for you.)"
+      - fix_id: shell_shebang
+        tier: extensive
+        title: "Script works in bash but not your shell"
+        command: "bash script.sh    # or fix the shebang; chsh -s /bin/bash to change default shell"
+        why: "Kali defaults to zsh; edits belong in ~/.zshrc, not ~/.bashrc."
+        verify: "The script runs; your PATH edits take effect in the right rc file."

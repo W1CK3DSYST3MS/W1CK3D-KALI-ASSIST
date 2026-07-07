@@ -33,3 +33,31 @@ def test_fundamentals_curriculum_present():
 def test_glossary_terms_are_rich():
     reg = load_modules(MODULES)
     assert len(reg.glossary) >= 150
+
+
+def test_troubleshooter_areas_complete():
+    reg = load_modules(MODULES)
+    expected = {
+        "troubleshoot.networking", "troubleshoot.packages", "troubleshoot.services",
+        "troubleshoot.permissions", "troubleshoot.rare_hard",
+    }
+    assert expected <= set(reg.troubleshooters)
+    # Every symptom must offer at least one fix (no dead ends before the Issue Log).
+    for ts in reg.troubleshooters.values():
+        assert ts.symptoms, f"{ts.troubleshooter_id} has no symptoms"
+        for sym in ts.symptoms:
+            assert sym.fixes, f"{ts.troubleshooter_id}:{sym.symptom_id} has no fixes"
+
+
+def test_router_routes_across_all_areas():
+    reg = load_modules(MODULES)
+    cases = {
+        "NO_PUBKEY signature": "pubkey_signature",
+        "service failed to start": "wont_start",
+        "usb drive wont mount": "mount_drive",
+        "disk full no space left": "disk_full",
+        "wifi wont connect": "wifi_connect",
+    }
+    for query, expect in cases.items():
+        matches = reg.search_symptoms(query)
+        assert matches and matches[0].symptom_id == expect, f"{query!r} -> {matches[:1]}"

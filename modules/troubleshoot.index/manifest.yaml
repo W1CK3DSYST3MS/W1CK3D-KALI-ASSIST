@@ -6,7 +6,7 @@ os_profile: kali
 requires:
   base_api: ">=1.0"
   modules: []
-routes_to: [troubleshoot.networking]
+routes_to: [troubleshoot.networking, troubleshoot.packages, troubleshoot.services, troubleshoot.permissions, troubleshoot.rare_hard]
 provides:
   entry: troubleshoot.start
 content: {}

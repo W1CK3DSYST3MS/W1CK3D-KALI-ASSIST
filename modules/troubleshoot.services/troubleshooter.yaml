@@ -1,0 +1,247 @@
+troubleshooter_id: troubleshoot.services
+title: "Services & systemd Troubleshooter"
+os_profile: kali
+category_color: info
+triage:
+  - field_id: service_name
+    label: "What is the exact service name? (e.g. ssh, postgresql, gvmd)"
+    type: string
+    required: true
+  - field_id: failure_kind
+    label: "Won't start at all, starts then dies, or not running after reboot?"
+    type: choice
+    choices: [wont_start, starts_then_dies, not_after_reboot]
+  - field_id: changed
+    label: "Did it work before — what changed (update, config edit, new install)?"
+    type: string
+external_resources:
+  - title: "Arch Wiki — systemd (excellent general reference)"
+    url: "https://wiki.archlinux.org/title/Systemd"
+  - title: "Debian wiki — systemd"
+    url: "https://wiki.debian.org/systemd"
+  - title: "Greenbone docs (GVM)"
+    url: "https://greenbone.github.io/docs/"
+  - title: "Kali forums"
+    url: "https://forums.kali.org/"
+  - title: "On-system manuals"
+    note: "man systemctl · man journalctl · man systemd.unit · man systemd.service"
+symptoms:
+  - symptom_id: wont_start
+    label: "A service won't start / says failed"
+    aliases: [failed, wont start, service failed, activating, exited, not running]
+    diagnosis:
+      - step_id: sv_status
+        title: "Read status + recent logs (the core skill)"
+        slot_target: null
+        glossary_refs: [service, journal]
+        explanation:
+          what: "`systemctl status <svc>` shows the Active/Loaded state AND the last few log lines that usually name the cause."
+          why: "Almost every fix starts from the exact error this reveals."
+          where: "Diagnostic."
+        try_this: "systemctl status <svc> --no-pager"
+        success_criteria: "You can read the Active: line and the last error line."
+        expected_output: |
+          ● myservice.service - Example daemon
+               Loaded: loaded (/lib/systemd/system/myservice.service; enabled)
+               Active: failed (Result: exit-code) since ...
+             Process: 4120 ExecStart=/usr/bin/myservice (code=exited, status=1/FAILURE)
+             ... myservice[4120]: config error at /etc/myservice.conf line 12
+        alternatives:
+          - trigger: "Loaded: ... masked"
+            cause: "The unit is hard-disabled."
+            fix: "Switch to the 'masked / dependency failed' symptom."
+            check: "masked units can't start until unmasked."
+          - trigger: "you need the full log"
+            cause: "status truncates."
+            fix: "`journalctl -u <svc> -e` (end) or `-b` (this boot) for the first ERROR/Failed/fatal."
+            check: "The first error is usually the real cause."
+    fixes:
+      - fix_id: clean_restart
+        tier: basic
+        title: "Fix the named cause, then clean restart"
+        command: "sudo systemctl restart <svc>; systemctl status <svc> --no-pager"
+        why: "The log names a file+line for config errors; fix it, then restart."
+        verify: "Active: active (running)."
+      - fix_id: reset_failed
+        tier: intermediate
+        title: "Starts then dies / flapping"
+        command: "journalctl -u <svc> -e; sudo systemctl reset-failed <svc>; sudo systemctl start <svc>"
+        why: "Read the exit reason; reset the failure count before retrying."
+        verify: "It stays active after start."
+      - fix_id: check_execstart
+        tier: intermediate
+        title: "See exactly what it runs"
+        command: "systemctl show <svc> -p ExecStart"
+        why: "Confirms the command/path the unit executes (missing binary/file/permission)."
+        verify: "The ExecStart path exists and is correct."
+      - fix_id: deps_order
+        tier: extensive
+        title: "Ordering/dependency race"
+        command: "systemctl list-dependencies <svc>; coredumpctl list"
+        why: "After=/Requires= races or crashes (core dumps) explain intermittent failures."
+        verify: "Dependencies are satisfied; no repeated crash."
+  - symptom_id: read_logs
+    label: "How do I see WHY it failed? (logs)"
+    aliases: [logs, journalctl, why failed, view logs, journal]
+    diagnosis:
+      - step_id: sv_journal
+        title: "Read the unit's journal"
+        slot_target: null
+        glossary_refs: [journal]
+        explanation:
+          what: "`journalctl -u <svc> -e` shows the end of that unit's log; `-b` limits to this boot; `-f` follows live."
+          why: "The first ERROR/Failed/fatal line is almost always the cause."
+          where: "Diagnostic."
+        try_this: "journalctl -u <svc> -e --no-pager | tail -n 15"
+        success_criteria: "You can see the most recent log lines for the service."
+        expected_output: |
+          Jun 23 10:40:01 kali myservice[4120]: starting up
+          Jun 23 10:40:01 kali myservice[4120]: config error at /etc/myservice.conf line 12
+          Jun 23 10:40:01 kali systemd[1]: myservice.service: Failed with result 'exit-code'.
+        alternatives:
+          - trigger: "No journal files / permission"
+            cause: "Your user may not read the full journal."
+            fix: "Use sudo: `sudo journalctl -u <svc> -e`, or join the systemd-journal group."
+            check: "sudo always works."
+          - trigger: "nothing for that unit"
+            cause: "The service never ran."
+            fix: "Try to start it once, then re-read the journal."
+            check: "Logs appear after it runs."
+    fixes:
+      - fix_id: status_first
+        tier: basic
+        title: "status gives logs + state together"
+        command: "systemctl status <svc> --no-pager"
+        why: "Fastest single view of state plus the last log lines."
+        verify: "You can read the cause."
+  - symptom_id: not_enabled
+    label: "Works now but not after reboot (enable vs start)"
+    aliases: [not after reboot, enable, boot, autostart, is-enabled]
+    fixes:
+      - fix_id: enable_now
+        tier: basic
+        title: "Enable AND start (both)"
+        command: "sudo systemctl enable --now <svc>; systemctl is-enabled <svc>; systemctl is-active <svc>"
+        why: "start runs it now; enable makes it start at boot — you usually want both."
+        verify: "is-enabled -> enabled, is-active -> active."
+      - fix_id: boot_failed
+        tier: intermediate
+        title: "Enabled but not up after boot"
+        command: "journalctl -u <svc> -b"
+        why: "It may have failed at boot; the boot journal shows why."
+        verify: "No failure in the boot log; check its WantedBy/target."
+      - fix_id: disable
+        tier: intermediate
+        title: "Should NOT auto-start"
+        command: "sudo systemctl disable --now <svc>"
+        why: "Stops it now and prevents boot start (start manually when needed)."
+        verify: "is-enabled -> disabled."
+        destructive: true
+        recovery: "Disabling a service others rely on (e.g. remote ssh) can lock you out. Be sure before disabling."
+  - symptom_id: port_conflict
+    label: "Port already in use / address already in use"
+    aliases: [port in use, address already in use, bind, eaddrinuse, port conflict]
+    diagnosis:
+      - step_id: sv_port
+        title: "Find what holds the port"
+        slot_target: null
+        explanation:
+          what: "`ss -tulpn | grep :<port>` shows the PID and program bound to the port."
+          why: "You need to know if it's a duplicate of this service or a different program."
+          where: "Diagnostic."
+        try_this: "sudo ss -tulpn | grep :5432"
+        success_criteria: "The owning process of the port is shown."
+        expected_output: |
+          tcp LISTEN 127.0.0.1:5432 0.0.0.0:* users:(("postgres",pid=901,fd=5))
+        alternatives:
+          - trigger: "nothing on that port"
+            cause: "The conflict is elsewhere, or the service binds a different port."
+            fix: "Check the service's configured port; re-run with the right number."
+            check: "Confirm the port from the error message."
+    fixes:
+      - fix_id: stop_dup
+        tier: intermediate
+        title: "Duplicate instance"
+        command: "sudo systemctl stop <svc>   # stop the stray one, then start the intended"
+        why: "Two instances can't share the port."
+        verify: "Only the intended service is listening."
+      - fix_id: change_port
+        tier: intermediate
+        title: "Different program owns the port"
+        command: "# edit the service's config to a free port; daemon-reload if you edited the unit; restart"
+        why: "Move one side off the contested port."
+        verify: "Both services bind without conflict."
+      - fix_id: socket_unit
+        tier: extensive
+        title: "Socket-activated unit holds the port"
+        command: "sudo systemctl stop <svc>.socket"
+        why: "A .socket unit can hold the port independently of the .service."
+        verify: "The port frees once the .socket is stopped."
+  - symptom_id: masked_dep
+    label: "It's masked / a dependency failed"
+    aliases: [masked, unmask, dependency failed, failed unit, systemctl --failed]
+    fixes:
+      - fix_id: unmask
+        tier: basic
+        title: "Unmask a masked unit"
+        command: "sudo systemctl unmask <svc>; sudo systemctl enable --now <svc>"
+        why: "A masked unit is symlinked to /dev/null and can't start until unmasked."
+        verify: "status no longer shows masked; it starts."
+      - fix_id: failed_dep
+        tier: intermediate
+        title: "A required dependency failed"
+        command: "systemctl --failed; # fix the failing upstream unit first, then start this one"
+        why: "'Dependency failed for ...' means an upstream unit must be fixed first."
+        verify: "The upstream unit is active, then the dependent starts."
+      - fix_id: dep_tree
+        tier: extensive
+        title: "Trace the dependency tree"
+        command: "systemctl list-dependencies --all <svc>"
+        why: "Whole-target failures or ordering cycles show up here."
+        verify: "No broken/failed nodes in the tree."
+  - symptom_id: unit_changed
+    label: "I edited a unit and nothing changed"
+    aliases: [edited unit, daemon-reload, no change, override, drop-in, systemctl edit]
+    fixes:
+      - fix_id: daemon_reload
+        tier: basic
+        title: "Reload systemd after editing a unit"
+        command: "sudo systemctl daemon-reload && sudo systemctl restart <svc>"
+        why: "systemd caches unit files; it must re-read them after an edit."
+        verify: "systemctl cat <svc> shows your edited content."
+      - fix_id: dropin
+        tier: intermediate
+        title: "Use a drop-in, don't edit vendor units"
+        command: "sudo systemctl edit <svc>   # creates override.conf; then daemon-reload + restart"
+        why: "Drop-ins survive package updates; in-place edits get overwritten."
+        verify: "systemctl cat <svc> shows the override."
+      - fix_id: verify_unit
+        tier: extensive
+        title: "Shadowed/invalid unit files"
+        command: "systemctl cat <svc>; systemd-analyze verify <unit>"
+        why: "/etc/systemd overrides /lib/systemd; verify catches syntax errors."
+        verify: "The active file is the one you edited and has no syntax errors."
+  - symptom_id: service_specific
+    label: "PostgreSQL / GVM / SSH specifically"
+    aliases: [postgresql, postgres, gvm, openvas, greenbone, ssh, msfdb, metasploit db]
+    fixes:
+      - fix_id: postgres
+        tier: basic
+        title: "PostgreSQL (Metasploit/GVM depend on it)"
+        command: "sudo systemctl enable --now postgresql; sudo ss -tulpn | grep 5432; sudo msfdb init"
+        why: "msf/GVM need PostgreSQL running; msfdb init wires up the Metasploit DB."
+        verify: "postgresql active on 5432; in msfconsole db_status shows connected."
+      - fix_id: ssh_keys
+        tier: intermediate
+        title: "SSH won't start on a fresh install"
+        command: "sudo ssh-keygen -A; sudo systemctl enable --now ssh"
+        why: "Missing host keys stop sshd; ssh-keygen -A generates them."
+        verify: "ssh active; you can connect."
+        destructive: true
+        recovery: "Opening SSH (and `ufw allow 22/tcp`) widens your attack surface. Only enable remote SSH when you need it."
+      - fix_id: gvm
+        tier: extensive
+        title: "GVM / OpenVAS is a stack (gvmd, ospd-openvas, gsad)"
+        command: "sudo gvm-check-setup; sudo gvm-setup; sudo gvm-start; systemctl status gvmd ospd-openvas gsad"
+        why: "gvm-check-setup diagnoses what's wrong and suggests the next command; setup syncs feeds (slow)."
+        verify: "All three units active; web UI reachable on its local port."
