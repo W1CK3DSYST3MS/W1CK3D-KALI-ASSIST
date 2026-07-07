@@ -1,0 +1,263 @@
+lesson_id: lesson.packages
+title: "Package Management on Kali (apt)"
+topic_tags: [fundamentals, kali, apt, packages]
+audience: beginner
+os_profile: kali
+goal: >
+  Install, update, search, and remove software on Kali with apt and dpkg; understand
+  repositories, the Kali rolling model, metapackages, and how to query what's installed.
+intro: >
+  Kali is Debian-based, so software comes from APT repositories as .deb packages. This
+  lesson teaches the everyday package commands — update, install, remove, search, query —
+  plus Kali's rolling-release quirks and metapackages. Most commands here CHANGE your
+  system, so they need sudo; read each before running. Compare to the EXPECTED block, then
+  answer Yes/No.
+completion_criteria: "learner can update, search, install, query, and remove packages safely"
+next_suggestions:
+  - "Networking Basics"
+  - "Services & systemd troubleshooting"
+steps:
+  - step_id: k1
+    title: "Refresh the package index (apt update)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [apt, repository]
+    explanation:
+      what: "`sudo apt update` downloads the latest list of available packages from the repositories. It does NOT upgrade anything."
+      why: "Always update first, so apt knows what versions exist before you install/upgrade."
+      where: "ACTION_OPTIONS (update)."
+    try_this: "sudo apt update"
+    success_criteria: "It fetches repo metadata and reports how many packages can be upgraded."
+    expected_output: |
+      Get:1 http://http.kali.org/kali kali-rolling InRelease [41.5 kB]
+      ...
+      Reading package lists... Done
+      All packages are up to date.   (or: N packages can be upgraded. Run 'apt list --upgradable')
+    alternatives:
+      - trigger: "Could not resolve 'http.kali.org' / network errors"
+        cause: "No internet or DNS problem."
+        fix: "Fix connectivity first (see the Networking lesson/troubleshooter)."
+        check: "`ping -c1 http.kali.org` should reply."
+      - trigger: "NO_PUBKEY / signature errors"
+        cause: "The Kali signing key is missing/outdated."
+        fix: "Install the keyring: `sudo apt install kali-archive-keyring` (see the Packages/keys troubleshooter)."
+        check: "Update should then verify cleanly."
+      - trigger: "Could not get lock /var/lib/dpkg/lock"
+        cause: "Another apt/dpkg is running (or crashed)."
+        fix: "Wait for it to finish; if none, see the dpkg-lock troubleshooter before forcing."
+        check: "`ps aux | grep -i apt` shows any running apt."
+  - step_id: k2
+    title: "Apply updates (apt full-upgrade)"
+    slot_target: ACTION_OPTIONS
+    destructive: true
+    recovery: "On rolling Kali, upgrades can pull large changes. Do `apt update` first, read the summary of what will change, and avoid upgrading right before important work."
+    glossary_refs: [apt, dependency]
+    explanation:
+      what: "`sudo apt full-upgrade` installs newer versions, adding/removing dependencies as needed. Kali recommends full-upgrade over plain upgrade."
+      why: "Keeps the rolling system current; full-upgrade handles dependency changes that plain upgrade won't."
+      where: "ACTION_OPTIONS."
+    try_this: "sudo apt update && sudo apt full-upgrade"
+    success_criteria: "It lists what will change and (after you confirm) upgrades them."
+    expected_output: |
+      The following packages will be upgraded:
+        nmap libpcap0.8 ...
+      42 upgraded, 3 newly installed, 0 to remove and 0 not upgraded.
+      Do you want to continue? [Y/n]
+    alternatives:
+      - trigger: "you're not ready to commit"
+        cause: "The change list looks large."
+        fix: "Press n to cancel; nothing changes until you confirm with Y."
+        check: "apt always asks before applying."
+      - trigger: "packages were 'kept back'"
+        cause: "Plain `apt upgrade` won't change dependencies."
+        fix: "Use `full-upgrade` (as shown) to let apt resolve them."
+        check: "full-upgrade can add/remove deps; upgrade cannot."
+  - step_id: k3
+    title: "Search for a package (apt search)"
+    slot_target: ACTION_OPTIONS
+    explanation:
+      what: "`apt search <term>` finds packages by name/description. No sudo needed to search."
+      why: "Discover what's available before installing."
+      where: "ACTION_OPTIONS (search)."
+    try_this: "apt search '^gobuster$'"
+    success_criteria: "The gobuster package appears with a short description."
+    expected_output: |
+      Sorting... Done
+      Full Text Search... Done
+      gobuster/kali-rolling 3.6.0-1 amd64
+        Directory/file & DNS busting tool written in Go
+    alternatives:
+      - trigger: "hundreds of results"
+        cause: "Broad term matches many descriptions."
+        fix: "Anchor the name with regex: `apt search '^name$'`, or pipe to grep."
+        check: "^ and $ pin the exact package name."
+      - trigger: "nothing found"
+        cause: "Not in the repos, or misspelled."
+        fix: "Try a partial term; run `sudo apt update` first if the index is stale."
+        check: "Search reads the local index — update it."
+  - step_id: k4
+    title: "Inspect before installing (apt show)"
+    slot_target: ACTION_OPTIONS
+    explanation:
+      what: "`apt show <pkg>` prints version, size, dependencies, and description."
+      why: "Know what you're pulling in — size and dependencies — before you commit."
+      where: "ACTION_OPTIONS (show)."
+    try_this: "apt show nmap | head -n 12"
+    success_criteria: "nmap's version, maintainer, size and dependency summary print."
+    expected_output: |
+      Package: nmap
+      Version: 7.94+git...-kali1
+      Priority: optional
+      Section: net
+      Installed-Size: 24.6 MB
+      Depends: libc6, liblua5.3-0, ...
+      Description: The Network Mapper
+    alternatives:
+      - trigger: "N: Unable to locate package"
+        cause: "Name wrong or index stale."
+        fix: "`sudo apt update`, then search for the exact name."
+        check: "apt show needs the exact package name."
+  - step_id: k5
+    title: "Install a package (apt install)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [apt, dependency]
+    explanation:
+      what: "`sudo apt install <pkg>` installs a package and its dependencies. Add -y to skip the prompt."
+      why: "The core command for adding tools to Kali."
+      where: "POSITIONAL_ARGS (package name)."
+    try_this: "sudo apt install -y tree && tree --version"
+    success_criteria: "tree installs and prints its version."
+    expected_output: |
+      Setting up tree (2.1.1-2) ...
+      tree v2.1.1 (c) 1996 - 2024 by Steve Baker ...
+    alternatives:
+      - trigger: "Unable to locate package"
+        cause: "Stale index or wrong name."
+        fix: "`sudo apt update` then retry; check spelling with `apt search`."
+        check: "Update fixes most 'locate' errors."
+      - trigger: "held broken packages / unmet dependencies"
+        cause: "A dependency conflict (can happen on rolling)."
+        fix: "Try `sudo apt --fix-broken install`; see the Packages troubleshooter for stubborn cases."
+        check: "Don't force with dpkg unless you understand the risk."
+  - step_id: k6
+    title: "Remove software (remove / purge / autoremove)"
+    slot_target: ACTION_OPTIONS
+    destructive: true
+    recovery: "purge also deletes config files. autoremove deletes 'no longer needed' deps — read the list it prints before confirming, in case something you use is on it."
+    explanation:
+      what: "`apt remove <pkg>` uninstalls; `apt purge <pkg>` also removes its config; `apt autoremove` cleans orphaned dependencies."
+      why: "Keep the system lean and remove what you no longer need."
+      where: "ACTION_OPTIONS."
+    try_this: "sudo apt remove -y tree; which tree; echo gone"
+    success_criteria: "tree is removed; `which tree` finds nothing; 'gone' prints."
+    expected_output: |
+      Removing tree (2.1.1-2) ...
+      gone
+    alternatives:
+      - trigger: "you also want config files gone"
+        cause: "remove leaves configs behind."
+        fix: "Use `sudo apt purge tree`."
+        check: "purge = remove + delete /etc configs."
+      - trigger: "autoremove wants to remove something you use"
+        cause: "It flags packages nothing depends on."
+        fix: "Read the list; cancel with n if unsure, or mark it manual: `sudo apt-mark manual <pkg>`."
+        check: "apt-mark manual protects a package from autoremove."
+  - step_id: k7
+    title: "Query installed packages (dpkg)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [dpkg]
+    explanation:
+      what: "`dpkg -l <pat>` lists installed packages; `dpkg -L <pkg>` lists a package's files; `dpkg -S <file>` says which package owns a file."
+      why: "apt installs; dpkg is the lower-level tool for asking 'what's installed / what owns this file?'."
+      where: "ACTION_OPTIONS."
+    try_this: "dpkg -S $(which nmap)"
+    success_criteria: "It reports that nmap owns /usr/bin/nmap."
+    expected_output: |
+      nmap: /usr/bin/nmap
+    alternatives:
+      - trigger: "no path found for that file"
+        cause: "The file isn't from a package (e.g. built from source, or in /usr/local)."
+        fix: "dpkg only knows package-installed files; check `ls -l` and how it got there."
+        check: "/usr/local is usually NOT package-managed."
+      - trigger: "you want a package's file list"
+        cause: "Different query."
+        fix: "Use `dpkg -L nmap` to list every file it installed."
+        check: "-L lists files, -S finds owner."
+  - step_id: k8
+    title: "Kali metapackages"
+    slot_target: null
+    glossary_refs: [metapackage]
+    explanation:
+      what: "A metapackage installs a whole toolset at once, e.g. `kali-linux-default`, `kali-tools-web`, `kali-tools-wireless`. `kali-linux-large` adds many more."
+      why: "Kali ships minimal by default; metapackages let you pull in exactly the tool categories you want."
+      where: "Concept."
+    try_this: "apt search '^kali-tools-' | grep -A0 '^kali-tools' | head"
+    success_criteria: "A list of kali-tools-* metapackages (web, wireless, crypto, ...)."
+    expected_output: |
+      kali-tools-web/kali-rolling ... Kali Linux web application assessment tools
+      kali-tools-wireless/kali-rolling ... 802.11 wireless tools
+      kali-tools-passwords/kali-rolling ... password attacks tools
+    alternatives:
+      - trigger: "you want everything"
+        cause: "Default install is lean."
+        fix: "`sudo apt install kali-linux-large` (big download) or pick specific kali-tools-* sets."
+        check: "Install only the categories you need to save space."
+      - trigger: "nothing matched"
+        cause: "Stale index."
+        fix: "`sudo apt update` then re-search."
+        check: "Search reads the local index."
+  - step_id: k9
+    title: "Where packages come from (sources.list)"
+    slot_target: null
+    glossary_refs: [sources_list, repository, keyring]
+    explanation:
+      what: "`/etc/apt/sources.list` lists your repositories. Kali uses a single kali-rolling line. Extra repos go in /etc/apt/sources.list.d/."
+      why: "Understanding this explains keyring errors and why you shouldn't add random third-party repos."
+      where: "Config."
+    try_this: "cat /etc/apt/sources.list"
+    success_criteria: "One active deb line pointing at kali-rolling."
+    expected_output: |
+      # See https://www.kali.org/docs/general-use/kali-linux-sources-list-repositories/
+      deb http://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
+    alternatives:
+      - trigger: "you were told to add a repo from a blog"
+        cause: "Third-party repos are a common way to break Kali / import bad keys."
+        fix: "Prefer the official Kali repos; add extra repos only from trusted sources with their key."
+        check: "Kali docs list the correct sources.list."
+      - trigger: "the file is empty/edited"
+        cause: "Someone changed it."
+        fix: "Restore the official line from the Kali docs (link in the file's comment)."
+        check: "A broken sources.list breaks all apt."
+  - step_id: k10
+    title: "Clean the download cache (apt clean)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [cache]
+    explanation:
+      what: "`sudo apt clean` deletes cached .deb files from /var/cache/apt/archives; `apt autoclean` removes only outdated ones."
+      why: "Reclaim disk space after big upgrades."
+      where: "ACTION_OPTIONS."
+    try_this: "du -sh /var/cache/apt/archives; sudo apt clean; du -sh /var/cache/apt/archives"
+    success_criteria: "The cache size drops (often to a few kB) after clean."
+    expected_output: |
+      312M    /var/cache/apt/archives
+      68K     /var/cache/apt/archives
+    alternatives:
+      - trigger: "size barely changed"
+        cause: "The cache was already small/empty."
+        fix: "That's fine — nothing to reclaim right now."
+        check: "clean is safe to run anytime."
+  - step_id: k11
+    title: "Recap — the everyday apt cycle"
+    slot_target: null
+    explanation:
+      what: "The loop you'll use constantly: update -> search/show -> install -> (later) remove/autoremove -> clean."
+      why: "Ties the commands into one mental workflow."
+      where: "Synthesis."
+    try_this: "echo 'update -> search -> show -> install -> remove/autoremove -> clean'"
+    success_criteria: "You can recite the cycle and which command needs sudo."
+    expected_output: |
+      update -> search -> show -> install -> remove/autoremove -> clean
+    alternatives:
+      - trigger: "unsure which need sudo"
+        cause: "Read-only vs system-changing."
+        fix: "search/show/dpkg -l are read-only; update/install/remove/clean need sudo."
+        check: "Anything that CHANGES the system needs sudo."

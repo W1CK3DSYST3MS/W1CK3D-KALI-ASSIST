@@ -1,0 +1,273 @@
+lesson_id: lesson.processes
+title: "Processes & Jobs"
+topic_tags: [fundamentals, processes, jobs, systemd]
+audience: beginner
+os_profile: kali
+goal: >
+  See what's running and control it: list processes (ps/top), find a PID, send signals
+  (kill/pkill), manage foreground/background jobs, and start/stop/inspect services with
+  systemctl and journalctl.
+intro: >
+  Everything running on your machine is a process with a number (PID). This lesson teaches
+  you to see them, stop the runaway ones, run things in the background, and manage the
+  services (like PostgreSQL for Metasploit) that Kali depends on. Type each command,
+  compare to the EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can find, signal, and background processes and manage a service"
+next_suggestions:
+  - "Package Management on Kali"
+  - "Networking Basics"
+steps:
+  - step_id: pr1
+    title: "Snapshot of your processes (ps)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [process, pid]
+    explanation:
+      what: "`ps` shows processes. `ps aux` shows ALL processes with user, PID, CPU and memory."
+      why: "The first question in any 'what's it doing?' investigation."
+      where: "ACTION_OPTIONS (aux)."
+    try_this: "ps aux | head -n 5"
+    success_criteria: "A header row plus a few processes, each with a PID."
+    expected_output: |
+      USER   PID %CPU %MEM    VSZ   RSS TTY   STAT START   TIME COMMAND
+      root     1  0.0  0.3 167140 11840 ?     Ss   09:01   0:01 /sbin/init
+      root     2  0.0  0.0      0     0 ?     S    09:01   0:00 [kthreadd]
+      kali   842  0.1  0.9 720000 38000 ?     Sl   09:05   0:02 /usr/bin/plasma
+    alternatives:
+      - trigger: "ps: unknown option"
+        cause: "Some shells/systems want a dash: `ps -aux`."
+        fix: "Both `ps aux` (BSD style) and `ps -ef` work; try `ps -ef | head`."
+        check: "You just need the PID column."
+      - trigger: "too many lines"
+        cause: "aux lists everything."
+        fix: "Pipe to grep for a name: `ps aux | grep firefox`."
+        check: "grep narrows to what you care about."
+  - step_id: pr2
+    title: "Live view (top)"
+    slot_target: PROGRAM
+    glossary_refs: [process, load_average]
+    explanation:
+      what: "`top` is a live, updating process view sorted by CPU. Press q to quit, M to sort by memory."
+      why: "See what's hammering the CPU/RAM right now."
+      where: "Interactive."
+    try_this: "top    (watch it update, press M to sort by memory, then q to quit)"
+    success_criteria: "A live table; M re-sorts by memory; q exits."
+    expected_output: |
+      top - 10:12:04 up 1:11,  1 user,  load average: 0.15, 0.09, 0.05
+      Tasks: 180 total,   1 running, 179 sleeping
+      %Cpu(s):  2.3 us,  0.7 sy ...
+        PID USER  %CPU %MEM   TIME+ COMMAND
+        842 kali   3.0  0.9  0:05.2 plasmashell
+    alternatives:
+      - trigger: "you're stuck in top"
+        cause: "It's interactive and takes the screen."
+        fix: "Press q to quit."
+        check: "q exits; h shows help inside top."
+      - trigger: "you want a nicer version"
+        cause: "top is basic."
+        fix: "`htop` (if installed) is friendlier: colour, scroll, F9 to kill. `sudo apt install htop`."
+        check: "htop is optional but popular."
+  - step_id: pr3
+    title: "Find a process by name (pgrep)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [pid]
+    explanation:
+      what: "`pgrep -a name` finds PIDs whose command matches; `pidof prog` gives a program's PID."
+      why: "You need the PID before you can signal a process."
+      where: "ACTION_OPTIONS."
+    try_this: "sleep 300 & pgrep -a sleep"
+    success_criteria: "A background sleep starts and pgrep shows its PID and command."
+    expected_output: |
+      [1] 4123
+      4123 sleep 300
+    alternatives:
+      - trigger: "pgrep found nothing"
+        cause: "The name didn't match, or the process already exited."
+        fix: "Match part of the command; confirm it's running with `ps aux | grep name`."
+        check: "pgrep matches the process name."
+      - trigger: "you launched sleep without &"
+        cause: "Without & it runs in the foreground and blocks your shell."
+        fix: "Press Ctrl+C to stop it, then re-run with a trailing &."
+        check: "& sends it to the background."
+  - step_id: pr4
+    title: "Stop a process politely (kill)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [signal, pid]
+    explanation:
+      what: "`kill <PID>` sends SIGTERM (15) — a polite 'please exit'. Most processes clean up and stop."
+      why: "The normal way to stop something by its PID."
+      where: "POSITIONAL_ARGS (the PID)."
+    try_this: "kill $(pgrep -n sleep); pgrep -a sleep; echo done"
+    success_criteria: "The sleep is gone (pgrep prints nothing), then 'done'."
+    expected_output: |
+      done
+    alternatives:
+      - trigger: "No such process"
+        cause: "It already exited, or you used the wrong PID."
+        fix: "Re-check with `pgrep -a sleep`; kill the exact PID shown."
+        check: "pgrep -n gives the newest match."
+      - trigger: "it won't die"
+        cause: "The process is ignoring SIGTERM or is stuck."
+        fix: "Escalate to SIGKILL (next step) — a last resort."
+        check: "SIGTERM is polite; SIGKILL is forced."
+  - step_id: pr5
+    title: "Force-stop (kill -9) — last resort"
+    slot_target: ACTION_OPTIONS
+    destructive: true
+    recovery: "SIGKILL (9) can't be caught — the process gets no chance to save/clean up, which can corrupt data. Try plain kill (SIGTERM) first; use -9 only when it's truly stuck."
+    glossary_refs: [signal]
+    explanation:
+      what: "`kill -9 <PID>` sends SIGKILL — the kernel terminates it immediately, no cleanup."
+      why: "For genuinely hung processes that ignore SIGTERM."
+      where: "ACTION_OPTIONS (-9)."
+    try_this: "sleep 300 & kill -9 $(pgrep -n sleep); echo killed"
+    success_criteria: "The sleep is force-stopped; 'killed' prints."
+    expected_output: |
+      [1] 4200
+      [1]+  Killed                  sleep 300
+      killed
+    alternatives:
+      - trigger: "you reach for -9 first out of habit"
+        cause: "-9 skips cleanup and can lose data."
+        fix: "Default to plain `kill`; only escalate to -9 if it ignores SIGTERM."
+        check: "Polite first, forceful only if needed."
+      - trigger: "even -9 didn't remove it"
+        cause: "Process is in uninterruptible sleep (D state), often disk/driver."
+        fix: "You can't kill D-state; investigate the underlying I/O, or reboot."
+        check: "ps STAT column shows D for those."
+  - step_id: pr6
+    title: "Signal by name (pkill / killall)"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "pkill/killall match by NAME and can hit more processes than you intend. Check first with pgrep -a <name> before signalling."
+    explanation:
+      what: "`pkill name` / `killall name` signal every process matching a name."
+      why: "Faster than looking up PIDs, but riskier — it can match more than you meant."
+      where: "POSITIONAL_ARGS."
+    try_this: "sleep 111 & sleep 222 & pgrep -a sleep; pkill sleep; pgrep -a sleep; echo cleared"
+    success_criteria: "Both sleeps are listed, then all cleared."
+    expected_output: |
+      4301 sleep 111
+      4302 sleep 222
+      cleared
+    alternatives:
+      - trigger: "it killed something you didn't mean to"
+        cause: "The name matched more processes than expected."
+        fix: "Always `pgrep -a name` first to preview the matches."
+        check: "Preview, then pkill."
+      - trigger: "pkill matched nothing"
+        cause: "Name mismatch (pkill matches the process name, not the full path by default)."
+        fix: "Use `pkill -f pattern` to match the full command line."
+        check: "-f widens matching to the whole command."
+  - step_id: pr7
+    title: "Foreground, background, and jobs"
+    slot_target: null
+    glossary_refs: [job, foreground_background]
+    explanation:
+      what: "`cmd &` runs in the background; `jobs` lists them; `fg %1` brings one to the foreground; Ctrl+Z suspends the foreground one; `bg` resumes it in the background."
+      why: "Run long tasks without tying up your terminal."
+      where: "Job control."
+    try_this: "sleep 200 & sleep 250 & jobs"
+    success_criteria: "Two background jobs are listed with [1] and [2]."
+    expected_output: |
+      [1]-  Running                 sleep 200 &
+      [2]+  Running                 sleep 250 &
+    alternatives:
+      - trigger: "you started something huge in the foreground"
+        cause: "No trailing & , so it blocks the shell."
+        fix: "Press Ctrl+Z to suspend it, then type `bg` to resume in the background."
+        check: "Ctrl+Z suspends; bg backgrounds; fg foregrounds."
+      - trigger: "jobs is empty in a new terminal"
+        cause: "Jobs belong to the shell that started them."
+        fix: "Run the sleeps in the SAME terminal, then `jobs`."
+        check: "Job control is per-shell."
+  - step_id: pr8
+    title: "Keep running after logout (nohup)"
+    slot_target: PROGRAM
+    glossary_refs: [job, daemon]
+    explanation:
+      what: "`nohup cmd &` keeps a job alive after you close the terminal; output goes to nohup.out."
+      why: "For long scans/downloads you don't want killed when the session ends."
+      where: "PROGRAM prefix."
+    try_this: "cd ~; nohup sleep 5 & jobs; sleep 1; cat nohup.out 2>/dev/null; echo ok"
+    success_criteria: "The job runs detached from the terminal's lifecycle."
+    expected_output: |
+      [1] 4400
+      nohup: ignoring input and appending output to 'nohup.out'
+      ok
+    alternatives:
+      - trigger: "you want it gone from the jobs list too"
+        cause: "It's still attached as a job."
+        fix: "`disown %1` removes it from job control (it keeps running)."
+        check: "disown detaches; nohup survives logout."
+      - trigger: "there's a stray nohup.out file"
+        cause: "nohup writes output there by default."
+        fix: "Redirect explicitly: `nohup cmd > mylog 2>&1 &`, then `rm nohup.out`."
+        check: "You control where output lands."
+  - step_id: pr9
+    title: "Services with systemd (systemctl)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [service, systemd]
+    explanation:
+      what: "`systemctl status/start/stop/restart <svc>` controls background services; `enable` starts it at boot."
+      why: "Kali tools rely on services — e.g. PostgreSQL for Metasploit, ssh for remote access."
+      where: "ACTION_OPTIONS."
+    try_this: "systemctl status ssh --no-pager | head -n 6"
+    success_criteria: "The ssh service's state (active/inactive, enabled/disabled) prints."
+    expected_output: |
+      ● ssh.service - OpenBSD Secure Shell server
+           Loaded: loaded (/lib/systemd/system/ssh.service; disabled; preset: disabled)
+           Active: inactive (dead)
+    alternatives:
+      - trigger: "Unit ssh.service could not be found"
+        cause: "The service isn't installed (openssh-server may be absent)."
+        fix: "Install it (`sudo apt install openssh-server`) or try a service you have, e.g. postgresql."
+        check: "`systemctl list-units --type=service` shows what exists."
+      - trigger: "starting/stopping said 'Access denied'"
+        cause: "Changing service state needs root."
+        fix: "Prefix with sudo: `sudo systemctl start ssh`."
+        check: "status is readable; start/stop need sudo."
+  - step_id: pr10
+    title: "Read a service's logs (journalctl)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [systemd, service]
+    explanation:
+      what: "`journalctl -u <svc> -e` shows a service's logs (jump to the end); `-f` follows live."
+      why: "When a service won't start, its journal tells you exactly why."
+      where: "ACTION_OPTIONS (-u unit, -e end, -f follow)."
+    try_this: "journalctl -u ssh --no-pager | tail -n 5"
+    success_criteria: "The most recent ssh journal lines print."
+    expected_output: |
+      Jun 23 09:05:01 kali systemd[1]: Condition check resulted in OpenBSD Secure Shell server being skipped.
+    alternatives:
+      - trigger: "No journal files were found / permission"
+        cause: "Your user may not read the full journal."
+        fix: "Use sudo: `sudo journalctl -u ssh -e`."
+        check: "Adding your user to the systemd-journal group also works."
+      - trigger: "nothing for that unit"
+        cause: "The service never ran, so it logged nothing."
+        fix: "Start it once, then re-check the journal."
+        check: "Logs appear after the service runs."
+  - step_id: pr11
+    title: "System load & memory (uptime, free)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [load_average]
+    explanation:
+      what: "`uptime` shows load averages (1/5/15 min); `free -h` shows RAM used/free."
+      why: "Quick health check — is the box overloaded or out of memory?"
+      where: "ACTION_OPTIONS (-h)."
+    try_this: "uptime; free -h"
+    success_criteria: "Load averages, then a memory table in human units."
+    expected_output: |
+      10:15:22 up 1:14, 1 user, load average: 0.20, 0.12, 0.06
+                    total   used   free  shared  buff/cache  available
+      Mem:          7.6Gi  1.9Gi  4.1Gi   120Mi       1.6Gi      5.4Gi
+      Swap:         2.0Gi     0B  2.0Gi
+    alternatives:
+      - trigger: "load numbers look high"
+        cause: "Load ~= number of busy CPUs; compare to your core count (`nproc`)."
+        fix: "Load 4 on a 4-core box is 'fully busy', not necessarily broken."
+        check: "`nproc` shows your cores."
+      - trigger: "available is very low"
+        cause: "Memory pressure."
+        fix: "Find the hog with `top` (press M), then decide what to stop."
+        check: "buff/cache is reclaimable — 'available' is the real figure."

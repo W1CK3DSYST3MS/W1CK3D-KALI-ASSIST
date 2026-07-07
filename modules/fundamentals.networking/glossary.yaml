@@ -1,0 +1,21 @@
+terms:
+  - term: interface
+    definition: "A network device (eth0 wired, wlan0 Wi-Fi, lo loopback) shown by `ip a`."
+  - term: ip_address
+    definition: "The address your machine holds on a network (the inet line in `ip a`)."
+  - term: gateway
+    definition: "The router traffic exits through — the `default via` address in `ip route`."
+  - term: dns
+    definition: "Translates names to IPs; resolvers are listed in /etc/resolv.conf."
+  - term: port
+    definition: "A numbered endpoint on an IP (e.g. 22 ssh, 80 http) a service listens on."
+  - term: socket
+    definition: "An IP:port endpoint for a connection; `ss` lists them."
+  - term: listening
+    definition: "A socket waiting for incoming connections (a running service)."
+  - term: curl_wget
+    definition: "curl fetches URLs (headers with -I); wget downloads files."
+  - term: cidr
+    definition: "A subnet written as address/prefix, e.g. 192.168.1.0/24 (256 addresses)."
+  - term: loopback
+    definition: "The internal lo interface (127.0.0.1) — the machine talking to itself."

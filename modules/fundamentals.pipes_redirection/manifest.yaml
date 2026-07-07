@@ -1,0 +1,17 @@
+module_id: fundamentals.pipes_redirection
+name: "Pipes, Redirection & Chaining"
+version: "1.0.0"
+type: lesson
+os_profile: agnostic
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.viewing_editing]
+provides:
+  lessons: [lesson.pipes_redirection]
+  glossary_terms: [pipe, stdout, stderr, stdin, devnull, tee, xargs, command_substitution, and_or, exit_status]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored (original)"
+license: "project-proprietary lesson text"
+checksum: ""

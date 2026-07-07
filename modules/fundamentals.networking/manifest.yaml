@@ -1,0 +1,17 @@
+module_id: fundamentals.networking
+name: "Networking Basics"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.networking]
+  glossary_terms: [interface, ip_address, gateway, dns, port, socket, listening, curl_wget, cidr, loopback]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against ip/ss/dig/curl man pages + Kali docs"
+license: "project-proprietary lesson text"
+checksum: ""

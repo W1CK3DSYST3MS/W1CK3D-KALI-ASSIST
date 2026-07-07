@@ -1,0 +1,19 @@
+terms:
+  - term: process
+    definition: "A running program instance, tracked by the kernel with a PID."
+  - term: pid
+    definition: "Process ID — the unique number you use to signal a process."
+  - term: signal
+    definition: "A message to a process: SIGTERM (15, polite stop), SIGKILL (9, forced), SIGHUP, etc."
+  - term: job
+    definition: "A process managed by your shell's job control ([1], [2]); background with &."
+  - term: foreground_background
+    definition: "Foreground blocks your shell; background (&) frees it. Ctrl+Z suspends, bg/fg move jobs."
+  - term: daemon
+    definition: "A long-running background process (often a service), usually detached from a terminal."
+  - term: service
+    definition: "A daemon managed by systemd; controlled with systemctl (start/stop/enable)."
+  - term: systemd
+    definition: "The init system that starts and supervises services; logs via journalctl."
+  - term: load_average
+    definition: "Average number of processes wanting the CPU over 1/5/15 minutes (compare to core count)."

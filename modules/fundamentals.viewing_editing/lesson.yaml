@@ -1,0 +1,282 @@
+lesson_id: lesson.viewing_editing
+title: "Viewing & Editing Files"
+topic_tags: [fundamentals, files, text, grep, editor]
+audience: beginner
+os_profile: agnostic
+goal: >
+  Read, search, and edit text files from the terminal: cat/less/head/tail for viewing,
+  grep for searching, sort/uniq/cut for shaping, diff for comparing, and nano for editing.
+intro: >
+  Most of Linux is text — configs, logs, hashes, scripts. This lesson gives you the core
+  toolkit for reading and searching that text without a GUI, plus a simple editor. You'll
+  build a small sample file and work on it. Compare each run to the EXPECTED block, then
+  answer Yes/No.
+completion_criteria: "learner can view, search, and edit text files from the terminal"
+next_suggestions:
+  - "Pipes, Redirection & Chaining"
+  - "Processes & Jobs"
+steps:
+  - step_id: v1
+    title: "Make a sample file"
+    slot_target: OUTPUT_OPTIONS
+    explanation:
+      what: "Create a small multi-line file to practise on using redirection."
+      why: "We need real content to view/search/edit."
+      where: "Setup."
+    try_this: "mkdir -p ~/ka-text && cd ~/ka-text && printf 'apple\\nBanana\\ncherry\\napple\\n' > fruit.txt && cat fruit.txt"
+    success_criteria: "Four lines print: apple, Banana, cherry, apple."
+    expected_output: |
+      apple
+      Banana
+      cherry
+      apple
+    alternatives:
+      - trigger: "you see literal \\n instead of new lines"
+        cause: "printf interpreted differently, or you used echo without -e."
+        fix: "Use printf exactly as shown, or `echo -e 'apple\\nBanana...'`."
+        check: "cat should show four separate lines."
+  - step_id: v2
+    title: "Dump a file (cat)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [stdout]
+    explanation:
+      what: "`cat` prints a whole file to the screen. `cat -n` adds line numbers."
+      why: "Fastest way to see a short file; also concatenates multiple files."
+      where: "POSITIONAL_ARGS."
+    try_this: "cat -n fruit.txt"
+    success_criteria: "The four lines print, each with a line number."
+    expected_output: |
+           1  apple
+           2  Banana
+           3  cherry
+           4  apple
+    alternatives:
+      - trigger: "cat: fruit.txt: No such file or directory"
+        cause: "You're not in ~/ka-text, or the file wasn't created."
+        fix: "`cd ~/ka-text` then `ls`; recreate with step v1 if missing."
+        check: "pwd should end in /ka-text."
+      - trigger: "the file is huge and scrolls off-screen"
+        cause: "cat dumps everything at once."
+        fix: "For big files use a pager: `less fruit.txt` (next step)."
+        check: "cat is best for short files."
+  - step_id: v3
+    title: "Page through a file (less)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [pager]
+    explanation:
+      what: "`less` opens a file in a scrollable pager. Arrows/Space scroll, /word searches, q quits."
+      why: "The right way to read long files and logs without flooding the screen."
+      where: "POSITIONAL_ARGS."
+    try_this: "less /etc/services    (scroll, then type /tcp and Enter, then press q)"
+    success_criteria: "The file opens; /tcp jumps to a match; q returns you to the prompt."
+    expected_output: |
+      # /etc/services
+      tcpmux    1/tcp
+      echo      7/tcp
+      ... (scrollable; /tcp highlights matches; q to quit)
+    alternatives:
+      - trigger: "you're stuck in a full-screen view"
+        cause: "less is a pager — it takes over the screen."
+        fix: "Press q to quit. Use n/N to jump between search matches."
+        check: "q always exits less/man."
+      - trigger: "search found nothing"
+        cause: "Pattern not present, or case mismatch."
+        fix: "Try a broader term; less search is case-sensitive unless you set -i."
+        check: "/echo should match in /etc/services."
+  - step_id: v4
+    title: "First / last lines (head, tail) and follow"
+    slot_target: ACTION_OPTIONS
+    explanation:
+      what: "`head -n N` shows the first N lines; `tail -n N` the last. `tail -f` follows a file live."
+      why: "Logs are read from the end; tail -f watches events as they happen."
+      where: "ACTION_OPTIONS."
+    try_this: "tail -n 2 fruit.txt"
+    success_criteria: "The last two lines print (cherry, apple)."
+    expected_output: |
+      cherry
+      apple
+    alternatives:
+      - trigger: "you want to watch a log update live"
+        cause: "Static tail only shows a snapshot."
+        fix: "Use `tail -f /var/log/syslog` (Ctrl+C to stop)."
+        check: "New lines appear as the log grows."
+      - trigger: "tail -f never returns to the prompt"
+        cause: "-f follows indefinitely by design."
+        fix: "Press Ctrl+C to stop following."
+        check: "That's expected behaviour, not a hang."
+  - step_id: v5
+    title: "Count lines / words / bytes (wc)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [line_count]
+    explanation:
+      what: "`wc` counts lines (-l), words (-w), bytes (-c). Great at the end of a pipe."
+      why: "Answering 'how many?' is a constant need (hosts, matches, users)."
+      where: "ACTION_OPTIONS."
+    try_this: "wc -l fruit.txt"
+    success_criteria: "The line count (4) and the filename print."
+    expected_output: |
+      4 fruit.txt
+    alternatives:
+      - trigger: "the count is 3 not 4"
+        cause: "The file may lack a trailing newline on the last line."
+        fix: "That's a real gotcha — wc counts newlines. Our printf added one, so expect 4."
+        check: "Recreate with step v1 if unsure."
+  - step_id: v6
+    title: "Search within files (grep)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [grep, regex]
+    explanation:
+      what: "`grep 'pattern' file` prints lines that match. It's the workhorse of text search."
+      why: "Finding the needle — a config line, an error, a username — is a daily task."
+      where: "ACTION_OPTIONS (pattern), file in POSITIONAL."
+    try_this: "grep apple fruit.txt"
+    success_criteria: "Only the lines containing 'apple' print (two of them)."
+    expected_output: |
+      apple
+      apple
+    alternatives:
+      - trigger: "Banana didn't match 'banana'"
+        cause: "grep is case-sensitive by default."
+        fix: "Add -i for case-insensitive: `grep -i banana fruit.txt`."
+        check: "grep -i matches Banana."
+      - trigger: "your pattern has spaces/special chars"
+        cause: "The shell may split or expand it."
+        fix: "Quote the pattern: `grep 'two words' file`."
+        check: "Single quotes keep it literal."
+  - step_id: v7
+    title: "Useful grep flags (-i -n -r -v)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [grep]
+    explanation:
+      what: "`-i` ignore case, `-n` show line numbers, `-r` recurse a directory, `-v` invert (lines that DON'T match)."
+      why: "These four cover most real searches."
+      where: "ACTION_OPTIONS."
+    try_this: "grep -in apple fruit.txt; grep -v apple fruit.txt"
+    success_criteria: "First: numbered case-insensitive matches. Second: the non-apple lines."
+    expected_output: |
+      1:apple
+      4:apple
+      Banana
+      cherry
+    alternatives:
+      - trigger: "grep -r hit 'Is a directory'"
+        cause: "You grepped a directory without -r."
+        fix: "Add -r to search recursively: `grep -r pattern dir/`."
+        check: "-r walks the whole tree."
+      - trigger: "too many matches to read"
+        cause: "Broad pattern over big input."
+        fix: "Pipe to less or add more of the line: `grep pattern file | less`."
+        check: "Narrow the pattern to reduce noise."
+  - step_id: v8
+    title: "Sort and de-duplicate (sort, uniq)"
+    slot_target: null
+    glossary_refs: [sort, uniq]
+    explanation:
+      what: "`sort` orders lines; `uniq` collapses ADJACENT duplicates (so sort first). `sort | uniq -c` counts."
+      why: "Ranking and counting are everywhere — top talkers, most common values."
+      where: "A classic pipe."
+    try_this: "sort fruit.txt | uniq -c | sort -rn"
+    success_criteria: "Counts per fruit, most frequent first (apple 2)."
+    expected_output: |
+            2 apple
+            1 cherry
+            1 Banana
+    alternatives:
+      - trigger: "duplicates weren't collapsed"
+        cause: "uniq only removes ADJACENT duplicates."
+        fix: "Always `sort` before `uniq`."
+        check: "sort groups identical lines together first."
+      - trigger: "Banana sorted oddly"
+        cause: "Uppercase sorts before lowercase by ASCII."
+        fix: "Use `sort -f` to fold case if you want a-z regardless."
+        check: "-f = case-insensitive sort."
+  - step_id: v9
+    title: "Pick columns (cut) and fields"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [cut]
+    explanation:
+      what: "`cut -d: -f1 /etc/passwd` splits each line on ':' and keeps field 1 (the username)."
+      why: "Extracting one column from structured text is a constant need."
+      where: "ACTION_OPTIONS (-d delimiter, -f field)."
+    try_this: "cut -d: -f1 /etc/passwd | head -n 5"
+    success_criteria: "The first five usernames print."
+    expected_output: |
+      root
+      daemon
+      bin
+      sys
+      sync
+    alternatives:
+      - trigger: "whole lines printed unchanged"
+        cause: "Wrong delimiter — /etc/passwd uses ':', not tabs/spaces."
+        fix: "Set the delimiter: `-d:`."
+        check: "-d must match the file's separator."
+      - trigger: "you need a different column"
+        cause: "-f selects the field number."
+        fix: "Field 7 is the shell: `cut -d: -f7 /etc/passwd`."
+        check: "Count colon-separated fields to pick -f."
+  - step_id: v10
+    title: "Compare two files (diff)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [diff]
+    explanation:
+      what: "`diff a b` shows the lines that differ between two files."
+      why: "Spotting what changed (a config before/after) is a core troubleshooting skill."
+      where: "POSITIONAL_ARGS (two files)."
+    try_this: "cp fruit.txt fruit2.txt; printf 'date\\n' >> fruit2.txt; diff fruit.txt fruit2.txt"
+    success_criteria: "diff reports the added 'date' line."
+    expected_output: |
+      4a5
+      > date
+    alternatives:
+      - trigger: "no output at all"
+        cause: "The files are identical (diff prints nothing when equal)."
+        fix: "That's success for 'are these the same?'. Add a line to see a diff."
+        check: "Empty output = no differences."
+      - trigger: "the < / > confuses you"
+        cause: "< is the first file, > is the second."
+        fix: "Read '> date' as 'the second file added: date'."
+        check: "4a5 = after line 4, add line 5."
+  - step_id: v11
+    title: "Edit a file (nano)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [editor]
+    explanation:
+      what: "`nano file` opens a simple editor. Ctrl+O then Enter saves; Ctrl+X exits; Ctrl+W searches."
+      why: "You'll edit configs constantly; nano is the beginner-friendly choice on Kali."
+      where: "POSITIONAL_ARGS."
+    try_this: "nano fruit.txt    (add a line, press Ctrl+O Enter to save, Ctrl+X to exit)"
+    success_criteria: "Your new line is saved; `cat fruit.txt` shows it."
+    expected_output: |
+      apple
+      Banana
+      cherry
+      apple
+      <your new line here>
+    alternatives:
+      - trigger: "you can't find the save keys"
+        cause: "nano lists shortcuts at the bottom (^ means Ctrl)."
+        fix: "^O = WriteOut (save), ^X = Exit. Enter confirms the filename."
+        check: "The bottom bar shows the shortcuts."
+      - trigger: "it asks 'Save modified buffer?' on exit"
+        cause: "You pressed Ctrl+X with unsaved changes."
+        fix: "Press Y to save (then Enter), or N to discard."
+        check: "That prompt is nano confirming your intent."
+  - step_id: v12
+    title: "Clean up"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "Removes the throwaway ~/ka-text folder. Confirm the path first."
+    explanation:
+      what: "Remove the practice folder."
+      why: "Hygiene."
+      where: "POSITIONAL_ARGS."
+    try_this: "cd ~; rm -r ~/ka-text; ls -d ~/ka-text"
+    success_criteria: "The folder is gone."
+    expected_output: |
+      ls: cannot access '/home/kali/ka-text': No such file or directory
+    alternatives:
+      - trigger: "Directory not empty"
+        cause: "rm without -r."
+        fix: "Use `rm -r ~/ka-text`."
+        check: "Recursive for non-empty dirs."

@@ -1,0 +1,21 @@
+terms:
+  - term: pipe
+    definition: "| connects one command's stdout to the next command's stdin."
+  - term: stdout
+    definition: "Standard output — stream 1, a command's normal results."
+  - term: stderr
+    definition: "Standard error — stream 2, where error messages go (separate from stdout)."
+  - term: stdin
+    definition: "Standard input — stream 0, where a command reads its input from."
+  - term: devnull
+    definition: "/dev/null — a black hole; redirect here to discard output (2>/dev/null)."
+  - term: tee
+    definition: "Copies a pipe's data to a file AND passes it on; sudo tee writes protected files."
+  - term: xargs
+    definition: "Turns stdin items into command-line arguments (-n1 one per run, -0 null-safe)."
+  - term: command_substitution
+    definition: "$(cmd) runs cmd and inserts its output into the line."
+  - term: and_or
+    definition: "A && B runs B only on success; A || B runs B only on failure; A ; B runs both."
+  - term: exit_status
+    definition: "The 0/non-zero result &&/|| test; 0 = success."

@@ -1,0 +1,21 @@
+terms:
+  - term: stdout
+    definition: "Standard output — where a command's normal results go (the screen by default)."
+  - term: pager
+    definition: "A scrollable viewer for long text (less/more); q quits, / searches."
+  - term: grep
+    definition: "Searches text for lines matching a pattern; the core search tool."
+  - term: regex
+    definition: "Regular expression — a pattern language grep and others use to match text."
+  - term: line_count
+    definition: "wc -l — how many lines; wc -w words, wc -c bytes."
+  - term: sort
+    definition: "Orders lines alphabetically/numerically (-n numeric, -r reverse, -f fold case)."
+  - term: uniq
+    definition: "Collapses ADJACENT duplicate lines (sort first); -c counts them."
+  - term: cut
+    definition: "Extracts columns/fields from each line (-d delimiter, -f field)."
+  - term: diff
+    definition: "Shows the lines that differ between two files."
+  - term: editor
+    definition: "A terminal text editor such as nano (beginner-friendly) or vim."

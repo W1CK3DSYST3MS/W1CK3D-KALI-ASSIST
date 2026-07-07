@@ -1,0 +1,17 @@
+module_id: fundamentals.packages
+name: "Package Management on Kali (apt)"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.packages]
+  glossary_terms: [package, apt, dpkg, repository, sources_list, metapackage, dependency, keyring, cache]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against apt/dpkg man pages + Kali docs"
+license: "project-proprietary lesson text"
+checksum: ""

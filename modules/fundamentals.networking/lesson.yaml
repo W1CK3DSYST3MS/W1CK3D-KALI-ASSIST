@@ -1,0 +1,251 @@
+lesson_id: lesson.networking
+title: "Networking Basics"
+topic_tags: [fundamentals, networking, dns, ports]
+audience: beginner
+os_profile: kali
+goal: >
+  Understand and inspect your machine's networking from the CLI: interfaces and IPs,
+  the default gateway, DNS resolution, listening ports, and fetching URLs — the
+  foundation for every recon and troubleshooting task.
+intro: >
+  Before you scan or attack anything, you need to understand your OWN networking: what
+  address you have, how traffic leaves, how names resolve, and what's listening. This
+  lesson is read-only inspection of your machine and public test hosts. Compare each run
+  to the EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can inspect interfaces, routing, DNS, and listening ports"
+next_suggestions:
+  - "nmap — network scanning (tool module)"
+  - "Networking troubleshooter"
+steps:
+  - step_id: w1
+    title: "Your interfaces and addresses (ip a)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [interface, ip_address, loopback]
+    explanation:
+      what: "`ip a` lists network interfaces and their IP addresses. Look for an `inet` line that isn't 127.0.0.1."
+      why: "Your IP is the starting point for everything — you can't be on the network without one."
+      where: "ACTION_OPTIONS (a = address)."
+    try_this: "ip a"
+    success_criteria: "At least a loopback (lo) and one real interface with an inet address."
+    expected_output: |
+      1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 ...
+          inet 127.0.0.1/8 scope host lo
+      2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ...
+          inet 192.168.1.24/24 brd 192.168.1.255 scope global dynamic eth0
+    alternatives:
+      - trigger: "only lo (127.0.0.1) shows"
+        cause: "No interface has an address — link down or DHCP failed."
+        fix: "Bring it up / restart networking (see the Networking troubleshooter)."
+        check: "You need an inet line on eth0/wlan0, not just lo."
+      - trigger: "interface is named enp0s3 / wlan0"
+        cause: "Names vary by hardware/driver."
+        fix: "That's normal; use whatever name `ip a` shows in later commands."
+        check: "Note your real interface name."
+  - step_id: w2
+    title: "How traffic leaves — the default route (ip route)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [gateway, cidr]
+    explanation:
+      what: "`ip route` shows routing. The `default via <gateway>` line is how packets reach the internet."
+      why: "No default route = you can reach your LAN but not the outside world."
+      where: "ACTION_OPTIONS (route)."
+    try_this: "ip route"
+    success_criteria: "A line starting `default via ...` plus your local subnet route."
+    expected_output: |
+      default via 192.168.1.1 dev eth0 proto dhcp metric 100
+      192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.24
+    alternatives:
+      - trigger: "no default route"
+        cause: "DHCP didn't supply a gateway."
+        fix: "Reconnect the interface; see the Networking troubleshooter (no-internet)."
+        check: "Without `default via` you can't reach the internet."
+      - trigger: "you want just the gateway"
+        cause: "Full table is noisy."
+        fix: "`ip route | grep default` shows only the gateway line."
+        check: "The gateway is the address after 'via'."
+  - step_id: w3
+    title: "Can I reach it by number? (ping)"
+    slot_target: ACTION_OPTIONS
+    explanation:
+      what: "`ping -c4 <ip>` sends 4 probes and reports replies. Pinging an IP tests raw connectivity, skipping DNS."
+      why: "Splitting 'is the network up?' from 'is DNS working?' is the first troubleshooting move."
+      where: "ACTION_OPTIONS (-c count)."
+    try_this: "ping -c4 1.1.1.1"
+    success_criteria: "Four replies with times; 0% packet loss."
+    expected_output: |
+      PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
+      64 bytes from 1.1.1.1: icmp_seq=1 ttl=57 time=12.4 ms
+      ...
+      4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+    alternatives:
+      - trigger: "100% packet loss to an IP"
+        cause: "No route/gateway, or the network blocks ICMP."
+        fix: "Check `ip route` for a default; try your gateway IP first."
+        check: "Ping the gateway (from ip route) to isolate LAN vs internet."
+      - trigger: "ping never stops"
+        cause: "Without -c it pings forever."
+        fix: "Press Ctrl+C, or always pass `-c4`."
+        check: "-c limits the count."
+  - step_id: w4
+    title: "Can I reach it by name? (DNS)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [dns]
+    explanation:
+      what: "`dig +short <name>` (or `host <name>`) resolves a name to an IP using DNS."
+      why: "If pinging an IP works but a name doesn't, DNS is the problem — not connectivity."
+      where: "POSITIONAL_ARGS."
+    try_this: "dig +short example.com; host example.com"
+    success_criteria: "One or more IP addresses for example.com."
+    expected_output: |
+      93.184.215.14
+      example.com has address 93.184.215.14
+    alternatives:
+      - trigger: "no answer / connection timed out"
+        cause: "DNS resolver is missing or unreachable."
+        fix: "Check `/etc/resolv.conf` has a nameserver; test one directly: `dig @1.1.1.1 example.com`."
+        check: "Direct @resolver isolates 'server down' from 'local config'."
+      - trigger: "dig: command not found"
+        cause: "dnsutils not installed."
+        fix: "`sudo apt install dnsutils` (or use `host`/`nslookup`)."
+        check: "host and nslookup do the same job."
+  - step_id: w5
+    title: "Who resolves my names? (resolv.conf)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [dns]
+    explanation:
+      what: "`/etc/resolv.conf` lists your DNS servers (nameserver lines). On many systems it's managed automatically."
+      why: "This is where 'names won't resolve' problems usually live."
+      where: "Reading config."
+    try_this: "cat /etc/resolv.conf"
+    success_criteria: "At least one `nameserver` line."
+    expected_output: |
+      # Generated by NetworkManager
+      nameserver 192.168.1.1
+      nameserver 1.1.1.1
+    alternatives:
+      - trigger: "it points to 127.0.0.53"
+        cause: "systemd-resolved is the local stub resolver."
+        fix: "That's normal; inspect real servers with `resolvectl status`."
+        check: "127.0.0.53 = the local resolver stub."
+      - trigger: "no nameserver at all"
+        cause: "DNS isn't configured."
+        fix: "Set one via NetworkManager (don't hand-edit if NM manages the file) — see the troubleshooter."
+        check: "Without a nameserver, name lookups fail."
+  - step_id: w6
+    title: "What's listening on this machine? (ss)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [port, socket, listening]
+    explanation:
+      what: "`ss -tulpn` lists listening TCP/UDP sockets with their ports and owning process (needs sudo for the process names)."
+      why: "Know your own attack surface — what services are exposed and on which ports."
+      where: "ACTION_OPTIONS (-t tcp -u udp -l listening -p process -n numeric)."
+    try_this: "sudo ss -tulpn | head -n 8"
+    success_criteria: "A table of listening sockets with Local Address:Port and the process."
+    expected_output: |
+      Netid State  Local Address:Port  Peer Address:Port Process
+      tcp   LISTEN 127.0.0.1:5432      0.0.0.0:*         users:(("postgres",pid=901,fd=5))
+      tcp   LISTEN 0.0.0.0:22          0.0.0.0:*         users:(("sshd",pid=812,fd=3))
+    alternatives:
+      - trigger: "no process names, just dashes"
+        cause: "You ran it without sudo."
+        fix: "Add sudo: `sudo ss -tulpn`."
+        check: "Process column needs root."
+      - trigger: "you expected a service that's missing"
+        cause: "It isn't running, or listens only on localhost."
+        fix: "Start it (systemctl); note 127.0.0.1 = local only, 0.0.0.0 = all interfaces."
+        check: "Local Address tells you who can reach it."
+  - step_id: w7
+    title: "Fetch a URL (curl)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [curl_wget]
+    explanation:
+      what: "`curl -I <url>` fetches just the HTTP headers; `curl <url>` prints the body. Great for testing web services."
+      why: "Quickly check if a web server is up and what it returns, without a browser."
+      where: "ACTION_OPTIONS (-I headers)."
+    try_this: "curl -I https://example.com"
+    success_criteria: "An HTTP status line (e.g. HTTP/2 200) and response headers."
+    expected_output: |
+      HTTP/2 200
+      content-type: text/html; charset=UTF-8
+      date: Mon, 23 Jun 2026 10:20:00 GMT
+      server: ECS
+    alternatives:
+      - trigger: "curl: (6) Could not resolve host"
+        cause: "DNS problem."
+        fix: "Fix DNS (steps w4/w5) or test by IP."
+        check: "Resolve the name first with dig."
+      - trigger: "curl: (7) Failed to connect"
+        cause: "Reachable name but the port/service is closed or firewalled."
+        fix: "Confirm the host is up (ping) and the port is open (nmap)."
+        check: "DNS ok but connection refused = service/firewall."
+      - trigger: "SSL certificate problem"
+        cause: "Self-signed or untrusted cert."
+        fix: "For testing only, `curl -k` skips verification (never for real secrets)."
+        check: "-k ignores cert errors — use sparingly."
+  - step_id: w8
+    title: "Download a file (wget)"
+    slot_target: POSITIONAL_ARGS
+    glossary_refs: [curl_wget]
+    explanation:
+      what: "`wget <url>` downloads a file to the current directory; `-O name` sets the output name."
+      why: "Grabbing wordlists, tools, or scripts is a constant task."
+      where: "POSITIONAL_ARGS (the URL)."
+    try_this: "cd /tmp && wget -O robots.txt https://example.com/robots.txt; ls -l robots.txt"
+    success_criteria: "A file is saved and listed with a size."
+    expected_output: |
+      Saving to: 'robots.txt'
+      robots.txt          100%[===================>]     ...  in 0.1s
+      -rw-r--r-- 1 kali kali 45 Jun 23 10:22 robots.txt
+    alternatives:
+      - trigger: "403/404 saved a tiny error page"
+        cause: "The URL requires auth or doesn't exist."
+        fix: "Check the URL in curl -I first; some sites block wget's user-agent."
+        check: "curl -I shows the real status."
+      - trigger: "permission denied writing the file"
+        cause: "Current dir isn't writable."
+        fix: "cd to /tmp or your home first."
+        check: "You can always write in /tmp."
+  - step_id: w9
+    title: "Connection status (nmcli)"
+    slot_target: ACTION_OPTIONS
+    glossary_refs: [interface]
+    explanation:
+      what: "`nmcli device status` shows each interface's connection state under NetworkManager (the default on Kali desktop)."
+      why: "A quick 'am I connected, and to what?' — and the tool you'll use to fix Wi-Fi/DNS."
+      where: "ACTION_OPTIONS."
+    try_this: "nmcli device status"
+    success_criteria: "A table of devices with STATE (connected/disconnected) and the connection name."
+    expected_output: |
+      DEVICE  TYPE      STATE        CONNECTION
+      eth0    ethernet  connected    Wired connection 1
+      wlan0   wifi      disconnected --
+      lo      loopback  unmanaged    --
+    alternatives:
+      - trigger: "nmcli: command not found / not running"
+        cause: "NetworkManager isn't installed/active (some minimal or WSL setups)."
+        fix: "Use `ip a` / `ip route` instead; on desktop Kali, start it: `sudo systemctl start NetworkManager`."
+        check: "ip commands work without NetworkManager."
+      - trigger: "device shows unmanaged"
+        cause: "NetworkManager isn't managing that interface."
+        fix: "That's common for lo and for manually-configured interfaces; not an error."
+        check: "Your main interface should read connected."
+  - step_id: w10
+    title: "Recap — the connectivity ladder"
+    slot_target: null
+    explanation:
+      what: "Diagnose in order: IP (ip a) -> gateway (ip route) -> reach by number (ping IP) -> reach by name (dig) -> the service (curl/ss)."
+      why: "Each rung isolates the fault to one layer — the same ladder the troubleshooter uses."
+      where: "Synthesis."
+    try_this: "echo 'ip a -> ip route -> ping 1.1.1.1 -> dig example.com -> curl -I https://example.com'"
+    success_criteria: "You can name what each rung proves."
+    expected_output: |
+      ip a -> ip route -> ping 1.1.1.1 -> dig example.com -> curl -I https://example.com
+    alternatives:
+      - trigger: "ping IP works but dig fails"
+        cause: "Connectivity is fine; DNS is broken."
+        fix: "Fix resolvers (w5) — it's a DNS problem, not a link problem."
+        check: "That's the classic 'internet works but names don't'."
+      - trigger: "everything fails from rung 1"
+        cause: "No IP at all."
+        fix: "Start at the link layer — see the Networking troubleshooter."
+        check: "No IP means fix the interface first."

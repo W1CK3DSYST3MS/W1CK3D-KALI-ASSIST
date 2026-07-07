@@ -1,0 +1,19 @@
+terms:
+  - term: package
+    definition: "A bundled piece of software (.deb on Kali/Debian) installed via apt/dpkg."
+  - term: apt
+    definition: "The high-level package manager: update, install, remove, search, upgrade."
+  - term: dpkg
+    definition: "The low-level tool apt uses; query installed packages/files (-l, -L, -S)."
+  - term: repository
+    definition: "A server hosting packages; Kali's is kali-rolling in sources.list."
+  - term: sources_list
+    definition: "/etc/apt/sources.list — the repositories apt pulls from."
+  - term: metapackage
+    definition: "A package that installs a whole toolset (e.g. kali-tools-web, kali-linux-large)."
+  - term: dependency
+    definition: "Another package a program needs; apt resolves these automatically."
+  - term: keyring
+    definition: "The trusted signing keys apt uses to verify packages (kali-archive-keyring)."
+  - term: cache
+    definition: "Downloaded .deb files kept in /var/cache/apt/archives; clear with apt clean."

@@ -1,0 +1,17 @@
+module_id: fundamentals.processes
+name: "Processes & Jobs"
+version: "1.0.0"
+type: lesson
+os_profile: agnostic
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.processes]
+  glossary_terms: [process, pid, signal, job, foreground_background, daemon, service, systemd, load_average]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored (original)"
+license: "project-proprietary lesson text"
+checksum: ""

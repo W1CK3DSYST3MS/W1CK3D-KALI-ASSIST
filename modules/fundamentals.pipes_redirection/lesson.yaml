@@ -1,0 +1,267 @@
+lesson_id: lesson.pipes_redirection
+title: "Pipes, Redirection & Chaining"
+topic_tags: [fundamentals, pipes, redirection, shell]
+audience: beginner
+os_profile: agnostic
+goal: >
+  Compose small tools into powerful one-liners: pipe output between commands, redirect
+  stdout/stderr to files or /dev/null, split output with tee, build commands with xargs,
+  use command substitution, and chain with && / || / ;.
+intro: >
+  The real power of the shell is COMBINING commands. Each tool does one job; pipes and
+  redirection glue them into exactly what you need. This is the single biggest force
+  multiplier in Linux. Type each line, compare to the EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can build a multi-stage pipe and control where output goes"
+next_suggestions:
+  - "Processes & Jobs"
+  - "Networking Basics"
+steps:
+  - step_id: r1
+    title: "A pipe sends output into another command"
+    slot_target: null
+    glossary_refs: [pipe, stdout]
+    explanation:
+      what: "`|` connects the stdout of the left command to the stdin of the right one."
+      why: "It lets each tool do one thing, then hand off — the heart of Unix."
+      where: "Between two commands."
+    try_this: "ls /etc | wc -l"
+    success_criteria: "A single number: how many entries ls produced."
+    expected_output: |
+      85
+    alternatives:
+      - trigger: "you saw the file list, not a number"
+        cause: "The pipe wasn't there — you ran only `ls /etc`."
+        fix: "Include the | : `ls /etc | wc -l`."
+        check: "The | must join the two commands."
+  - step_id: r2
+    title: "stdout vs stderr (two output streams)"
+    slot_target: null
+    glossary_refs: [stdout, stderr]
+    explanation:
+      what: "Commands have TWO outputs: stdout (normal, stream 1) and stderr (errors, stream 2). They're separate."
+      why: "This is why an error can appear on screen even when you redirected 'the output' to a file."
+      where: "Concept."
+    try_this: "ls /etc /nope"
+    success_criteria: "The /etc listing (stdout) AND an error about /nope (stderr) both appear."
+    expected_output: |
+      ls: cannot access '/nope': No such file or directory
+      /etc:
+      apt  hostname  hosts  passwd  ...
+    alternatives:
+      - trigger: "you assumed all output is one stream"
+        cause: "It isn't — stdout and stderr are independent."
+        fix: "Remember: 1 = stdout, 2 = stderr. You redirect them separately (next steps)."
+        check: "The error line came from stream 2."
+  - step_id: r3
+    title: "Redirect stdout to a file (> and >>)"
+    slot_target: OUTPUT_OPTIONS
+    explanation:
+      what: "`> file` writes stdout to a file (overwriting); `>> file` appends."
+      why: "Saving results is the shell's built-in output slot."
+      where: "OUTPUT_OPTIONS."
+    try_this: "mkdir -p ~/ka-pipe && cd ~/ka-pipe && ls /etc > out.txt && wc -l out.txt"
+    success_criteria: "No listing on screen; the count of the saved file prints."
+    expected_output: |
+      85 out.txt
+    alternatives:
+      - trigger: "the listing still printed to screen"
+        cause: "You forgot the > , or it went to stderr (errors aren't caught by >)."
+        fix: "Use `> out.txt`; if it was an error, see the stderr steps."
+        check: "> only captures stdout."
+      - trigger: "you overwrote something you wanted"
+        cause: "> replaces the file's contents."
+        fix: "Use >> to append instead."
+        check: ">> keeps existing content."
+  - step_id: r4
+    title: "Redirect stderr (2>) and merge (2>&1)"
+    slot_target: OUTPUT_OPTIONS
+    glossary_refs: [stderr]
+    explanation:
+      what: "`2> errs.txt` sends stderr to a file; `> all.txt 2>&1` sends BOTH streams to one file."
+      why: "Separating or combining errors is essential for logging and scripting."
+      where: "OUTPUT_OPTIONS."
+    try_this: "ls /etc /nope > out.txt 2> err.txt; echo '--- errors ---'; cat err.txt"
+    success_criteria: "stdout went to out.txt; the error is in err.txt."
+    expected_output: |
+      --- errors ---
+      ls: cannot access '/nope': No such file or directory
+    alternatives:
+      - trigger: "you want both in one file"
+        cause: "Two separate redirects keep them apart."
+        fix: "Use `command > all.txt 2>&1` (order matters: file first, then 2>&1)."
+        check: "2>&1 means 'send stderr where stdout is going'."
+      - trigger: "2>&1 came before > and didn't work"
+        cause: "Order matters — 2>&1 copies the CURRENT stdout target."
+        fix: "Put the file redirect first: `> all.txt 2>&1`."
+        check: "Redirects are read left to right."
+  - step_id: r5
+    title: "Discard output with /dev/null"
+    slot_target: OUTPUT_OPTIONS
+    glossary_refs: [devnull]
+    explanation:
+      what: "`/dev/null` is a black hole. `2>/dev/null` throws away errors; `>/dev/null` throws away normal output."
+      why: "Silence noisy errors (like find's Permission denied) to keep results readable."
+      where: "OUTPUT_OPTIONS."
+    try_this: "find / -name sshd_config 2>/dev/null"
+    success_criteria: "Just the found path(s), no flood of Permission denied errors."
+    expected_output: |
+      /etc/ssh/sshd_config
+    alternatives:
+      - trigger: "you still see Permission denied lines"
+        cause: "You discarded stdout (>) instead of stderr (2>)."
+        fix: "Errors are stream 2: use `2>/dev/null`."
+        check: "2> targets stderr specifically."
+      - trigger: "you got no results AND no errors"
+        cause: "Nothing matched, or you also discarded stdout."
+        fix: "Only redirect stderr; keep stdout on screen."
+        check: "Confirm the filename exists somewhere."
+  - step_id: r6
+    title: "Multi-stage pipes"
+    slot_target: null
+    glossary_refs: [pipe]
+    explanation:
+      what: "Pipes chain: each | feeds the next command. Build left to right, testing as you grow it."
+      why: "Complex questions become a sequence of simple filters."
+      where: "Chained commands."
+    try_this: "cut -d: -f7 /etc/passwd | sort | uniq -c | sort -rn"
+    success_criteria: "A count of how many accounts use each login shell, most common first."
+    expected_output: |
+           28 /usr/sbin/nologin
+            6 /bin/false
+            2 /bin/bash
+            1 /bin/sync
+    alternatives:
+      - trigger: "the numbers look wrong"
+        cause: "uniq needs sorted input; missing a sort stage."
+        fix: "Always sort before uniq -c."
+        check: "Order: cut | sort | uniq -c | sort -rn."
+      - trigger: "you can't tell which stage broke"
+        cause: "Built the whole thing at once."
+        fix: "Grow it one | at a time and eyeball each stage's output."
+        check: "Run `cut -d: -f7 /etc/passwd` alone first."
+  - step_id: r7
+    title: "See it AND save it (tee)"
+    slot_target: null
+    glossary_refs: [tee]
+    explanation:
+      what: "`tee file` copies a pipe's data to a file AND passes it on to the screen/next command. `tee -a` appends."
+      why: "Keep a record without losing the live view; also lets you `sudo tee` to write protected files."
+      where: "Mid-pipe."
+    try_this: "ls /etc | tee etc-list.txt | wc -l"
+    success_criteria: "The count prints AND etc-list.txt now holds the listing."
+    expected_output: |
+      85
+    alternatives:
+      - trigger: "the file is empty"
+        cause: "tee wrote to a different path or the left command produced nothing."
+        fix: "Check `cat etc-list.txt`; confirm the left side outputs data."
+        check: "tee writes exactly what flows through it."
+      - trigger: "you need to write a root-owned file from a pipe"
+        cause: "`sudo cmd > file` doesn't elevate the redirect."
+        fix: "Use `echo data | sudo tee /path/file` (tee runs as root)."
+        check: "This is the standard sudo-write-a-file idiom."
+  - step_id: r8
+    title: "Turn output into arguments (xargs)"
+    slot_target: null
+    glossary_refs: [xargs, stdin]
+    explanation:
+      what: "`xargs` takes items on stdin and puts them as ARGUMENTS on another command's line."
+      why: "Some commands read arguments, not stdin (e.g. rm, ls). xargs bridges the gap."
+      where: "After a pipe."
+    try_this: "echo 'alpha beta gamma' | xargs -n1 echo item:"
+    success_criteria: "Each word becomes its own 'item:' line."
+    expected_output: |
+      item: alpha
+      item: beta
+      item: gamma
+    alternatives:
+      - trigger: "everything ended up on one line"
+        cause: "xargs batches by default."
+        fix: "`-n1` runs the command once per item."
+        check: "-n1 = one argument per invocation."
+      - trigger: "filenames with spaces broke"
+        cause: "xargs splits on whitespace by default."
+        fix: "Use `find ... -print0 | xargs -0` for safe handling."
+        check: "-0 pairs with -print0 (null-separated)."
+  - step_id: r9
+    title: "Command substitution $( )"
+    slot_target: null
+    glossary_refs: [command_substitution]
+    explanation:
+      what: "`$(command)` runs a command and drops its OUTPUT into the line, in place."
+      why: "Use one command's result as another's argument — e.g. today's date in a filename."
+      where: "Inline value."
+    try_this: "echo \"Kernel: $(uname -r), Host: $(hostname)\""
+    success_criteria: "One line with the live kernel version and hostname filled in."
+    expected_output: |
+      Kernel: 6.8.0-kali3-amd64, Host: kali
+    alternatives:
+      - trigger: "you saw the literal $(uname -r)"
+        cause: "It was inside single quotes (which don't expand)."
+        fix: "Use double quotes: \"...$(...)...\"."
+        check: "Single quotes are literal; double quotes expand $()."
+      - trigger: "you've seen backticks `cmd` do the same"
+        cause: "Backticks are the old form of substitution."
+        fix: "Prefer $() — it nests cleanly and reads better."
+        check: "$() and `` are equivalent; $() is modern."
+  - step_id: r10
+    title: "Chain on success/failure (&&, ||) and sequence (;)"
+    slot_target: null
+    glossary_refs: [and_or, exit_status]
+    explanation:
+      what: "`A && B` runs B only if A SUCCEEDED (exit 0); `A || B` runs B only if A FAILED; `A ; B` runs both regardless."
+      why: "Build safe sequences: only proceed if the previous step worked."
+      where: "Between commands."
+    try_this: "mkdir -p ~/ka-pipe/sub && echo made it || echo failed"
+    success_criteria: "'made it' prints (the mkdir succeeded, so && ran)."
+    expected_output: |
+      made it
+    alternatives:
+      - trigger: "'failed' printed instead"
+        cause: "The mkdir failed (permissions/path), so || ran."
+        fix: "Check the path is under your home; fix the error, retry."
+        check: "|| only fires on failure."
+      - trigger: "you want both parts no matter what"
+        cause: "&&/|| are conditional."
+        fix: "Use ; to run sequentially regardless: `A ; B`."
+        check: "; ignores exit status."
+  - step_id: r11
+    title: "Put it together — one real one-liner"
+    slot_target: null
+    glossary_refs: [pipe, command_substitution]
+    explanation:
+      what: "Combine everything: filter, count, sort, and save with a timestamped name."
+      why: "This is what daily shell work actually looks like."
+      where: "Synthesis."
+    try_this: "grep -v nologin /etc/passwd | cut -d: -f1 | sort | tee \"users-$(date +%F).txt\" | wc -l"
+    success_criteria: "Prints the count of login-capable users AND saves them to users-DATE.txt."
+    expected_output: |
+      6
+      (and a file like users-2026-06-23.txt was written)
+    alternatives:
+      - trigger: "you want to inspect the saved file"
+        cause: "tee wrote it silently mid-pipe."
+        fix: "`cat users-*.txt` to see the names."
+        check: "The file holds the usernames, the screen shows the count."
+      - trigger: "one stage misbehaved"
+        cause: "A long pipe is hard to debug whole."
+        fix: "Rebuild it | by | , checking each stage."
+        check: "Start from `grep -v nologin /etc/passwd`."
+  - step_id: r12
+    title: "Clean up"
+    slot_target: POSITIONAL_ARGS
+    destructive: true
+    recovery: "Removes the throwaway ~/ka-pipe folder. Confirm the path first."
+    explanation:
+      what: "Remove the practice folder."
+      why: "Hygiene."
+      where: "POSITIONAL_ARGS."
+    try_this: "cd ~; rm -r ~/ka-pipe; ls -d ~/ka-pipe"
+    success_criteria: "The folder is gone."
+    expected_output: |
+      ls: cannot access '/home/kali/ka-pipe': No such file or directory
+    alternatives:
+      - trigger: "Directory not empty"
+        cause: "rm without -r."
+        fix: "Use `rm -r ~/ka-pipe`."
+        check: "Recursive for non-empty dirs."
