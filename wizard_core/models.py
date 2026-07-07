@@ -68,6 +68,10 @@ class StepSpec(_Strict):
     required: bool = True
     try_this: str = Field("", description="Exact command the learner runs in their terminal.")
     success_criteria: str = Field("", description="What success looks like.")
+    expected_output: str = Field(
+        "", description="Reference: what a successful run looks like on screen "
+        "(monospace sample output shown under the Did-it-work? gate)."
+    )
     alternatives: list[StepAlternative] = Field(default_factory=list)
     glossary_refs: list[str] = Field(default_factory=list)
     destructive: bool = False

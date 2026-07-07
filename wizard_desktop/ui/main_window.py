@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from wizard_core.audit import AuditLogger
 from wizard_core.loader import Registry
+from wizard_core.progress import ProgressStore
 from wizard_core.stepper import StepperSession
 
 from .stepper_view import StepperView
@@ -71,10 +72,12 @@ class _Section(QWidget):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, registry: Registry, audit: AuditLogger, *, username: str = "local") -> None:
+    def __init__(self, registry: Registry, audit: AuditLogger, *,
+                 progress: "ProgressStore | None" = None, username: str = "local") -> None:
         super().__init__()
         self._reg = registry
         self._audit = audit
+        self._progress = progress
         self._user = username
         self.setWindowTitle("W1CK3D'S KALI ASSIST")
         self.resize(1180, 760)
@@ -110,26 +113,54 @@ class MainWindow(QMainWindow):
     # -- Lessons ----------------------------------------------------------- #
     def _lessons_tab(self) -> QWidget:
         sec = _Section("Lessons — fundamentals")
-        lst = QListWidget()
-        for lesson in self._reg.lessons.values():
-            it = QListWidgetItem(lesson.title)
-            it.setData(Qt.UserRole, lesson.lesson_id)
-            lst.addItem(it)
-        lst.itemActivated.connect(lambda it: self._open_lesson(sec, it.data(Qt.UserRole)))
-        lst.itemClicked.connect(lambda it: self._open_lesson(sec, it.data(Qt.UserRole)))
-        sec.chooser_layout.addWidget(lst)
+        hint = QLabel("Your progress is saved — pick a lesson to resume where you left off.")
+        hint.setObjectName("Muted")
+        sec.chooser_layout.addWidget(hint)
+        self._lessons_list = QListWidget()
+        self._refresh_lessons_list()
+        self._lessons_list.itemClicked.connect(
+            lambda it: self._open_lesson(sec, it.data(Qt.UserRole)))
+        sec.chooser_layout.addWidget(self._lessons_list)
         return sec
+
+    def _lesson_label(self, lesson) -> str:
+        step_ids = [s.step_id for s in lesson.steps]
+        if not self._progress:
+            return lesson.title
+        done, total = self._progress.counts(lesson.lesson_id, step_ids)
+        if done == 0:
+            badge = "· not started"
+        elif done >= total:
+            badge = "· ✓ complete"
+        else:
+            badge = f"· {done}/{total} — resume"
+        return f"{lesson.title}   {badge}"
+
+    def _refresh_lessons_list(self) -> None:
+        self._lessons_list.clear()
+        for lesson in self._reg.lessons.values():
+            it = QListWidgetItem(self._lesson_label(lesson))
+            it.setData(Qt.UserRole, lesson.lesson_id)
+            self._lessons_list.addItem(it)
 
     def _open_lesson(self, sec: _Section, lesson_id: str) -> None:
         lesson = self._reg.lessons[lesson_id]
         self._audit.selected("lesson", lesson_id)
         self._reg.glossary.reset_seen()
-        session = StepperSession(lesson.steps, flow_title=lesson.title)
-        view = StepperView(
-            session,
-            glossary=self._reg.glossary,
-            on_milestone=lambda sid, res: self._audit.step_milestone(lesson_id, sid, res),
-        )
+        step_ids = [s.step_id for s in lesson.steps]
+        start = 0
+        if self._progress:
+            r = self._progress.resume_index(lesson_id, step_ids)
+            start = r if r < len(step_ids) else 0  # completed -> allow a fresh run
+
+        def _milestone(sid: str, res: str) -> None:
+            self._audit.step_milestone(lesson_id, sid, res)
+            if res == "yes" and self._progress:
+                self._progress.mark_complete(lesson_id, sid)
+                self._refresh_lessons_list()
+
+        session = StepperSession(lesson.steps, flow_title=lesson.title, start_index=start)
+        view = StepperView(session, glossary=self._reg.glossary, on_milestone=_milestone)
         sec.show_detail(view)
 
     # -- Tools ------------------------------------------------------------- #

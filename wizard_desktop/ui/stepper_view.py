@@ -95,6 +95,17 @@ class StepperView(QWidget):
         self._success.setWordWrap(True)
         self._root.addWidget(self._success)
 
+        # Expected-output reference: what a successful run looks like on screen.
+        self._expected_cap = QLabel("EXPECTED — what a successful run looks like:")
+        self._expected_cap.setObjectName("Faint")
+        self._root.addWidget(self._expected_cap)
+        self._expected = QTextEdit()
+        self._expected.setObjectName("Mono")
+        self._expected.setReadOnly(True)
+        self._expected.setLineWrapMode(QTextEdit.NoWrap)  # preserve terminal columns
+        self._expected.setMaximumHeight(200)
+        self._root.addWidget(self._expected)
+
         self._glossary_box = QLabel("")
         self._glossary_box.setObjectName("Faint")
         self._glossary_box.setWordWrap(True)
@@ -151,6 +162,12 @@ class StepperView(QWidget):
         self._try.setText(v.try_this or "(no command for this step)")
         self._success.setText(f"Success looks like: {v.success_criteria}" if v.success_criteria else "")
 
+        has_expected = bool(v.expected_output.strip())
+        self._expected_cap.setVisible(has_expected)
+        self._expected.setVisible(has_expected)
+        if has_expected:
+            self._expected.setPlainText(v.expected_output)
+
         if v.on_alternative:
             self._alt.show()
             head = f"ALTERNATIVE {v.alternative_index + 1} / {v.alternative_total}"
@@ -183,7 +200,8 @@ class StepperView(QWidget):
 
     def _render_final(self) -> None:
         for w in (self._explain, self._alt, self._try, self._try_label,
-                  self._success, self._gate_host, self._glossary_box):
+                  self._success, self._expected_cap, self._expected,
+                  self._gate_host, self._glossary_box):
             w.hide()
         self._final.show()
         if self._s.state is StepperState.COMPLETE:

@@ -39,6 +39,7 @@ class StepView:
     where: str
     try_this: str
     success_criteria: str
+    expected_output: str
     slot_target: str | None
     glossary_refs: tuple[str, ...]
     destructive: bool
@@ -100,13 +101,14 @@ class StepperSession:
     """Drives one flow's steps. Front-end calls current()/answer_yes()/answer_no()."""
 
     def __init__(self, steps: Sequence[StepSpec], *, flow_title: str = "",
-                 context: dict[str, str] | None = None) -> None:
+                 context: dict[str, str] | None = None, start_index: int = 0) -> None:
         if not steps:
             raise ValueError("StepperSession requires at least one step.")
         self._steps: list[StepSpec] = list(steps)
         self._flow_title = flow_title
         self._context = dict(context or {})
-        self._i = 0                 # current step index
+        # Resume support: clamp into range; len(steps) would mean already complete.
+        self._i = max(0, min(start_index, len(self._steps) - 1))  # current step index
         self._alt = -1              # current alternative index (-1 = main step)
         self._state = StepperState.IN_PROGRESS
         self._attempts: list[_Attempt] = []
@@ -138,6 +140,7 @@ class StepperSession:
             where=step.explanation.where,
             try_this=step.try_this,
             success_criteria=step.success_criteria,
+            expected_output=step.expected_output,
             slot_target=step.slot_target.name if step.slot_target else None,
             glossary_refs=tuple(step.glossary_refs),
             destructive=step.destructive,

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from wizard_core.audit import AuditLogger
 from wizard_core.loader import load_modules
+from wizard_core.progress import ProgressStore
 
 from wizard_desktop.fonts import load_fonts
 from wizard_desktop.resources import modules_dir
@@ -28,10 +29,14 @@ from wizard_desktop.ui.main_window import MainWindow
 MODULES_DIR = modules_dir()
 
 
-def _audit_path() -> Path:
+def _state_dir() -> Path:
     base = Path.home() / ".w1ck3d-kali-assist"
     base.mkdir(parents=True, exist_ok=True)
-    return base / "activity.audit.jsonl"
+    return base
+
+
+def _audit_path() -> Path:
+    return _state_dir() / "activity.audit.jsonl"
 
 
 def _self_test() -> int:
@@ -83,7 +88,8 @@ def main() -> int:
     registry = load_modules(MODULES_DIR)
 
     # 3. Main window.
-    win = MainWindow(registry, audit, username=username)
+    progress = ProgressStore(_state_dir() / "progress.json")
+    win = MainWindow(registry, audit, progress=progress, username=username)
     win.show()
     return app.exec()
 
