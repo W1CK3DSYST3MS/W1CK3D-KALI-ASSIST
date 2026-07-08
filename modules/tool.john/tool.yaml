@@ -10,8 +10,153 @@ authorization_text: >
   CTF). Cracking others' password hashes is illegal. This is offline + heavy — the risk is
   legal/ethical, not detection. Continue?
 flows:
+  - flow_id: guided
+    title: "Guided first crack (START HERE)"
+    goal: "From a hash file to a revealed password — every input explained."
+    command_builder_id: john
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Get your hashes into a file"
+        slot_target: null
+        glossary_refs: [hash, unshadow, offline_cracking]
+        explanation:
+          what: "john cracks password HASHES — scrambled, one-way versions of passwords — from a text file, one hash per line. This is OFFLINE: you already have the hashes, nothing is attacked live."
+          why: "You can only crack what you can read. Different sources need a different 'extract' step to produce a hash file."
+          where: "The hash file is the last argument to john."
+        find_it: >
+          Where hashes come from (authorized only): a Linux system's accounts — combine with
+          `sudo unshadow /etc/passwd /etc/shadow > hashes.txt`; a protected file — use a helper
+          like zip2john / ssh2john / rar2john / pdf2john to make a .hash; or a CTF/lab that just
+          hands you a hash string. For this walk-through we'll make a known MD5 to practise on.
+        command_anatomy:
+          - {token: "echo -n 'password'", does: "print the word 'password' with no newline"}
+          - {token: "| md5sum", does: "hash it with MD5 (produces a 32-char hex string)"}
+          - {token: "> hashes.txt", does: "save the hash to a file"}
+        try_this: "echo -n 'password' | md5sum | cut -d' ' -f1 > hashes.txt && cat hashes.txt"
+        success_criteria: "hashes.txt contains one 32-character hex hash."
+        expected_output: |
+          5f4dcc3b5aa765d61d8327deb882cf99
+        alternatives:
+          - trigger: "you have a real /etc/shadow to crack (authorized)"
+            cause: "Linux account hashes are split across passwd + shadow."
+            fix: "Combine them: `sudo unshadow /etc/passwd /etc/shadow > hashes.txt`."
+            check: "hashes.txt has user:hash lines."
+          - trigger: "you have a password-protected zip/ssh key/pdf"
+            cause: "Those aren't plain hashes."
+            fix: "Convert first: `zip2john file.zip > file.hash` (or ssh2john/pdf2john), then crack the .hash."
+            check: "The .hash file has a $... line."
+      - step_id: g2
+        title: "Identify the hash type"
+        slot_target: null
+        glossary_refs: [format]
+        explanation:
+          what: "Different hashes (MD5, NTLM, bcrypt, sha512crypt) need john to know their format. `hashid` guesses the type from the string."
+          why: "If john mis-detects the type it either fails to load or wastes time. Knowing the type lets you set --format correctly."
+          where: "Informs the --format option (next steps)."
+        find_it: "Clues: a 32-char hex string is usually MD5; 'password:' style with $6$ is sha512crypt; $2b$ is bcrypt. `hashid` or `hash-identifier` automate this."
+        command_anatomy:
+          - {token: "hashid", does: "a tool that identifies hash types"}
+          - {token: "'5f4dcc3b...'", does: "the hash string to identify (quoted)"}
+        try_this: "hashid '5f4dcc3b5aa765d61d8327deb882cf99'"
+        success_criteria: "It suggests a type (MD5 for our example)."
+        expected_output: |
+          Analyzing '5f4dcc3b5aa765d61d8327deb882cf99'
+          [+] MD5
+          [+] Domain Cached Credentials
+        alternatives:
+          - trigger: "hashid: command not found"
+            cause: "Not installed."
+            fix: "Install it (`sudo apt install hashid`) or eyeball it: 32 hex chars ≈ MD5, 40 ≈ SHA1."
+            check: "You have a best-guess type."
+          - trigger: "several possible types listed"
+            cause: "Some lengths match multiple algorithms."
+            fix: "Try the most common first; if john says 'No hashes loaded', try the next candidate as --format."
+            check: "One format loads the hash."
+      - step_id: g3
+        title: "Try a quick automatic crack"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [pot_file]
+        explanation:
+          what: "`john <hashfile>` in auto mode tries the easy stuff first: single mode, then a default wordlist, then incremental. For a common password it often just works."
+          why: "It's the fastest thing to try before reaching for big wordlists."
+          where: "The hash file is the positional argument."
+        find_it: "Just point john at hashes.txt from step 1. For our MD5, add --format=raw-md5 so it doesn't guess."
+        command_anatomy:
+          - {token: "john", does: "the program"}
+          - {token: "--format=raw-md5", does: "tell john these are raw MD5 hashes (from step 2)"}
+          - {token: "hashes.txt", does: "the file of hashes to crack"}
+        try_this: "john --format=raw-md5 hashes.txt"
+        success_criteria: "john prints the cracked password (for our example: password)."
+        expected_output: |
+          Using default input encoding: UTF-8
+          Loaded 1 password hash (Raw-MD5 [MD5 256/256 AVX2 8x3])
+          password         (?)
+          1g 0:00:00:00 DONE
+        alternatives:
+          - trigger: "No password hashes loaded"
+            cause: "Wrong --format, or the file line isn't the format john expects."
+            fix: "Re-check step 2's type and set the matching --format; make sure the file has just the hash (or user:hash)."
+            check: "john reports 'Loaded 1 password hash'."
+          - trigger: "it runs but cracks nothing"
+            cause: "The password isn't in the default set."
+            fix: "Use a real wordlist with rules (next step)."
+            check: "You move to the wordlist attack."
+      - step_id: g4
+        title: "Use a wordlist with rules (the workhorse)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [wordlist_mode, rules, rockyou]
+        explanation:
+          what: "`--wordlist=rockyou.txt --rules` tries every word in the list AND mangled variants (Password, P@ssw0rd, password1)."
+          why: "This is john's most effective mode for human-chosen passwords. --rules multiplies each word into many realistic variations."
+          where: "ACTION_OPTIONS, before the hash file."
+        find_it: "rockyou ships gzipped on Kali — unpack it once with gunzip. See the Wordlists lesson for choosing/building lists."
+        command_anatomy:
+          - {token: "john --format=raw-md5", does: "the program + hash type"}
+          - {token: "--wordlist=/usr/share/wordlists/rockyou.txt", does: "try every password in rockyou"}
+          - {token: "--rules", does: "also try mangled variants of each word"}
+          - {token: "hashes.txt", does: "the hashes to crack"}
+        try_this: "sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz; john --format=raw-md5 --wordlist=/usr/share/wordlists/rockyou.txt --rules hashes.txt"
+        success_criteria: "More hashes crack than auto mode found."
+        expected_output: |
+          Loaded 1 password hash (Raw-MD5 ...)
+          password         (?)
+          1g 0:00:00:01 DONE
+        alternatives:
+          - trigger: "still nothing after rockyou + rules"
+            cause: "The password isn't in the list, or the ruleset is too small."
+            fix: "Try a bigger list or a stronger ruleset: `--rules=Jumbo`. For very slow hashes, hashcat on a GPU is faster."
+            check: "Either it cracks, or you switch engine/list."
+          - trigger: "'already cracked' / no output"
+            cause: "john caches results in its pot file — it won't re-crack."
+            fix: "Just view the result with --show (next step)."
+            check: "--show lists the password."
+      - step_id: g5
+        title: "Show what you cracked"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [pot_file]
+        explanation:
+          what: "`john --show <hashfile>` prints the cracked passwords (john stores them in its pot file, so results persist between runs)."
+          why: "The cracking output scrolls past; --show is how you reliably read the final answers."
+          where: "The hash file is the positional argument."
+        find_it: "Same hash file. Add --format if you set one, so --show matches the right hashes."
+        command_anatomy:
+          - {token: "john", does: "the program"}
+          - {token: "--show", does: "display already-cracked passwords from the pot file"}
+          - {token: "--format=raw-md5", does: "match the format you cracked with"}
+          - {token: "hashes.txt", does: "the hash file"}
+        try_this: "john --show --format=raw-md5 hashes.txt"
+        success_criteria: "The cracked password(s) print with a count."
+        expected_output: |
+          ?:password
+          1 password hash cracked, 0 left
+        alternatives:
+          - trigger: "0 password hashes cracked"
+            cause: "Nothing cracked yet (or wrong --format)."
+            fix: "Go back to the wordlist+rules step, or try a different --format from step 2."
+            check: "--show lists at least one password."
   - flow_id: prepare
-    title: "Prepare the hashes"
+    title: "Prepare the hashes (reference)"
     goal: "Get hashes into a crackable file."
     command_builder_id: john
     slots: [PROGRAM, EXTRA_FILES]
@@ -24,15 +169,22 @@ flows:
           what: "Linux accounts: `unshadow /etc/passwd /etc/shadow > hashes.txt`. Files: `zip2john`, `ssh2john`, `rar2john`, `pdf2john`…"
           why: "You can't crack what you can't read; the *2john helpers produce a .hash."
           where: "Prep step (not a john run yet)."
+        find_it: "Pick the helper that matches your source (zip2john for a zip, ssh2john for a private key)."
+        command_anatomy:
+          - {token: "zip2john", does: "extract a crackable hash from a password-protected zip"}
+          - {token: "secret.zip", does: "the protected file"}
+          - {token: "> zip.hash", does: "save the extracted hash"}
         try_this: "zip2john secret.zip > zip.hash"
         success_criteria: "A hash line is written to the output file."
+        expected_output: |
+          secret.zip/secret.txt:$pkzip2$1*...*$/pkzip2$:secret.txt:secret.zip
         alternatives:
           - trigger: "which type is this hash?"
             cause: "Unknown hash format."
             fix: "Identify it before cracking (see the formats flow)."
             check: "Inspect length/prefix."
   - flow_id: quickstart
-    title: "Quick start (auto) + show results"
+    title: "Quick start (auto) + show results (reference)"
     goal: "Crack with auto mode, then read results."
     command_builder_id: john
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -45,8 +197,15 @@ flows:
           what: "`john <hashfile>` auto-tries single -> wordlist -> incremental; `john --show <hashfile>` prints cracked creds."
           why: "Fastest way to begin; cracked results persist in the pot file."
           where: "hashfile is POSITIONAL (last)."
+        find_it: "Just the hash file."
+        command_anatomy:
+          - {token: "john hashes.txt", does: "auto-crack the file"}
+          - {token: "john --show hashes.txt", does: "print what cracked"}
         try_this: "john hashes.txt   # then: john --show hashes.txt"
         success_criteria: "john reports cracked passwords; --show lists user:password."
+        expected_output: |
+          myp4ss           (alice)
+          1 password hash cracked, 0 left
         alternatives:
           - trigger: "No password hashes loaded"
             cause: "Wrong/garbled file or undetected type."
@@ -57,7 +216,7 @@ flows:
             fix: "Use a real wordlist + rules."
             check: "Switch to the wordlist flow."
   - flow_id: wordlist_rules
-    title: "Wordlist mode + rules (the workhorse)"
+    title: "Wordlist mode + rules (reference)"
     goal: "Dictionary attack with mangling."
     command_builder_id: john
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -70,15 +229,22 @@ flows:
           what: "`--wordlist=<file>` runs a dictionary; `--rules` mangles each word (case/digits/leet)."
           why: "Best bang-for-buck for human passwords; rockyou is gzipped on Kali (gunzip first)."
           where: "ACTION_OPTIONS (before the positional hashfile)."
+        find_it: "Unpack rockyou (gunzip -k); pick a ruleset (default or Jumbo)."
+        command_anatomy:
+          - {token: "--wordlist=.../rockyou.txt", does: "the dictionary"}
+          - {token: "--rules", does: "mangle each word into variants"}
         try_this: "john --wordlist=/usr/share/wordlists/rockyou.txt --rules hashes.txt"
         success_criteria: "More hashes crack than with a plain wordlist."
+        expected_output: |
+          Summer2024!      (bob)
+          1g 0:00:00:12 ...
         alternatives:
           - trigger: "still nothing"
             cause: "List/ruleset too small, or wrong format."
             fix: "Try a bigger list or --rules=Jumbo; confirm --format."
             check: "Re-check the hash type."
   - flow_id: single
-    title: "Single crack mode (fast, context-aware)"
+    title: "Single crack mode (reference)"
     goal: "Use username/GECOS info for quick wins."
     command_builder_id: john
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -91,15 +257,22 @@ flows:
           what: "`--single` derives guesses from the username/GECOS fields in the file."
           why: "Cheap and often a quick win — run it first."
           where: "ACTION_OPTIONS."
+        find_it: "Needs a file that includes usernames (e.g. unshadow output)."
+        command_anatomy:
+          - {token: "--single", does: "guess from username / account info in the file"}
+          - {token: "hashes.txt", does: "the hash file (with usernames)"}
         try_this: "john --single hashes.txt"
         success_criteria: "Name-based passwords (if any) crack quickly."
+        expected_output: |
+          alice            (alice)
+          1g 0:00:00:00 DONE (single)
         alternatives:
           - trigger: "no GECOS info in file"
             cause: "The file lacks username context."
             fix: "Move to wordlist + rules."
             check: "Inspect the file format."
   - flow_id: incremental
-    title: "Incremental / brute force (last resort)"
+    title: "Incremental / brute force (reference)"
     goal: "Exhaustive character combinations."
     command_builder_id: john
     slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -112,15 +285,22 @@ flows:
           what: "`--incremental` tries char combos exhaustively (e.g. --incremental=Digits)."
           why: "Slow — only for short passwords or fast hashes; otherwise prefer wordlist+rules or hashcat GPU."
           where: "ACTION_OPTIONS."
+        find_it: "No input needed, but expect long runtimes; consider --incremental=Digits for PIN-like passwords."
+        command_anatomy:
+          - {token: "--incremental", does: "brute-force every character combination"}
+          - {token: "hashes.txt", does: "the hash file"}
         try_this: "john --incremental hashes.txt"
         success_criteria: "Short passwords eventually crack."
+        expected_output: |
+          1234             (guest)
+          (keeps running for longer passwords)
         alternatives:
           - trigger: "too slow"
             cause: "Large keyspace on a slow hash."
             fix: "Prefer wordlist+rules, or switch to hashcat + GPU."
             check: "Estimate keyspace vs time."
   - flow_id: formats
-    title: "Format selection (avoid mis-detection)"
+    title: "Format selection (reference)"
     goal: "Set the hash type explicitly."
     command_builder_id: john
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -133,15 +313,21 @@ flows:
           what: "`--format=<name>` (raw-md5, sha512crypt, bcrypt, NT…); list with `john --list=formats`."
           why: "Auto-detect can pick wrong; explicit format avoids it."
           where: "GLOBAL_OPTIONS."
+        find_it: "Identify the type first (hashid); list john's names with `john --list=formats`."
+        command_anatomy:
+          - {token: "--format=raw-md5", does: "force john to treat hashes as raw MD5"}
+          - {token: "--wordlist=rockyou.txt", does: "the dictionary"}
         try_this: "john --format=raw-md5 --wordlist=rockyou.txt hashes.txt"
         success_criteria: "Hashes load and cracking proceeds."
+        expected_output: |
+          Loaded 3 password hashes (Raw-MD5 [MD5 256/256 AVX2 8x3])
         alternatives:
           - trigger: "No password hashes loaded (see FAQ)"
             cause: "Wrong --format or malformed file."
             fix: "Identify the hash type and set the matching --format."
             check: "Compare prefix/length to known formats."
   - flow_id: sessions
-    title: "Sessions, status, and going faster"
+    title: "Sessions, status, and going faster (reference)"
     goal: "Name, resume, and parallelize runs."
     command_builder_id: john
     slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
@@ -153,8 +339,15 @@ flows:
           what: "`--session=<name>` names a run; `--restore[=name]` resumes; `--fork=<n>` splits across cores."
           why: "Pause/resume long runs and use all CPU cores."
           where: "GLOBAL_OPTIONS."
+        find_it: "Pick a session name; know your CPU core count for --fork."
+        command_anatomy:
+          - {token: "--session=crackA", does: "name this run 'crackA'"}
+          - {token: "--restore=crackA", does: "(later) resume that run where it stopped"}
+          - {token: "--fork=4", does: "split work across 4 CPU cores"}
         try_this: "john --session=crackA --wordlist=rockyou.txt --rules hashes.txt   # resume: john --restore=crackA"
         success_criteria: "The session runs and can be resumed."
+        expected_output: |
+          Session completed / or: press 'q' then later --restore=crackA
         alternatives:
           - trigger: "too slow on bcrypt"
             cause: "Slow hash on CPU."
