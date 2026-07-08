@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QTabWidget,
     QVBoxLayout,
@@ -114,26 +115,34 @@ class MainWindow(QMainWindow):
         user.setObjectName("Muted")
         header.addWidget(user)
 
-        # Accessibility: text-size control (persisted). A− / reset / A+.
+        # Accessibility: text-size control (persisted).  Text size  [ − ] 100% [ + ]
         self._scale = get_text_scale()
-        tsize = QLabel("  Text")
+        tsize = QLabel("  Text size")
         tsize.setObjectName("Muted")
         header.addWidget(tsize)
-        smaller = QPushButton("A−")
+        smaller = QPushButton("−")
+        smaller.setObjectName("Compact")
         smaller.setToolTip("Smaller text")
-        smaller.setFixedWidth(42)
         smaller.clicked.connect(lambda: self._bump_text_scale(-0.1))
         header.addWidget(smaller)
-        reset = QPushButton("A")
-        reset.setToolTip("Reset text size")
-        reset.setFixedWidth(34)
-        reset.clicked.connect(lambda: self._set_text_scale(1.0))
-        header.addWidget(reset)
-        bigger = QPushButton("A+")
+        # The percentage read-out doubles as a reset button (click to return to 100%).
+        self._scale_readout = QPushButton(self._scale_pct())
+        self._scale_readout.setObjectName("Compact")
+        self._scale_readout.setToolTip("Current text size — click to reset to 100%")
+        self._scale_readout.clicked.connect(lambda: self._set_text_scale(1.0))
+        header.addWidget(self._scale_readout)
+        bigger = QPushButton("+")
+        bigger.setObjectName("Compact")
         bigger.setToolTip("Larger text")
-        bigger.setFixedWidth(42)
         bigger.clicked.connect(lambda: self._bump_text_scale(0.1))
         header.addWidget(bigger)
+        # Fixed size + explicit minimum widths so a crowded header can never
+        # shrink these below their text (that was clipping "A−" to "half an A").
+        for b in (smaller, self._scale_readout, bigger):
+            b.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self._tsize_minus = smaller
+        self._tsize_plus = bigger
+        self._size_text_controls()
         root.addLayout(header)
 
         tabs = QTabWidget()
@@ -143,6 +152,20 @@ class MainWindow(QMainWindow):
         root.addWidget(tabs)
 
     # -- Accessibility: text size ------------------------------------------ #
+    def _scale_pct(self) -> str:
+        return f"{round(self._scale * 100)}%"
+
+    def _size_text_controls(self) -> None:
+        """Pin control widths to the current scale so labels never clip.
+
+        setFixedWidth is the strongest width constraint (min == max), so a
+        crowded header can't compress these and clip their labels.
+        """
+        s = self._scale
+        self._tsize_minus.setFixedWidth(round(40 * s))
+        self._tsize_plus.setFixedWidth(round(40 * s))
+        self._scale_readout.setFixedWidth(round(80 * s))
+
     def _bump_text_scale(self, delta: float) -> None:
         self._set_text_scale(self._scale + delta)
 
@@ -151,6 +174,8 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(build_qss(self._scale))
+        self._scale_readout.setText(self._scale_pct())
+        self._size_text_controls()
         set_text_scale(self._scale)
 
     # -- Lessons ----------------------------------------------------------- #

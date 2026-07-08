@@ -151,6 +151,16 @@ def build_qss(scale: float = 1.0) -> str:
 
     QPushButton#Primary {{ background-color: {t['purple']}; border: 1px solid {t['purple_glow']}; color: {t['text_strong']}; }}
     QPushButton#Primary:hover {{ background-color: {t['purple_deep']}; }}
+
+    /* Compact header controls (text-size stepper) — tight padding, body font,
+       no letter-spacing so single-character labels aren't clipped. */
+    QPushButton#Compact {{
+        font-family: {FONT_BODY};
+        font-size: {fs(14)}px;
+        letter-spacing: 0;
+        padding: 4px 8px;
+        min-width: 20px;
+    }}
     QPushButton#Yes {{ background-color: {t['secure']}; border: 1px solid {t['secure_glow']}; color: {t['text_strong']}; }}
     QPushButton#No {{ background-color: {t['critical_deep']}; border: 1px solid {t['critical']}; color: {t['text_strong']}; }}
 
