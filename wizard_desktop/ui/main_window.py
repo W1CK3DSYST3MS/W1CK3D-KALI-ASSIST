@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QTabWidget,
     QVBoxLayout,
@@ -27,6 +29,8 @@ from wizard_core.loader import Registry
 from wizard_core.progress import ProgressStore
 from wizard_core.stepper import StepperSession
 
+from ..settings import get_text_scale, set_text_scale
+from ..theme import build_qss
 from .stepper_view import StepperView
 from .tool_page import ToolPage
 
@@ -67,7 +71,14 @@ class _Section(QWidget):
             w = self._detail_slot.widget(0)
             self._detail_slot.removeWidget(w)
             w.deleteLater()
-        self._detail_slot.addWidget(widget)
+        # Wrap in a scroll area so tall content (walk-through steps with several
+        # cards) scrolls instead of squashing into an unreadable panel.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setWidget(widget)
+        self._detail_slot.addWidget(scroll)
         self.stack.setCurrentIndex(1)
 
 
@@ -102,6 +113,27 @@ class MainWindow(QMainWindow):
         user = QLabel(f"  {self._user}")
         user.setObjectName("Muted")
         header.addWidget(user)
+
+        # Accessibility: text-size control (persisted). A− / reset / A+.
+        self._scale = get_text_scale()
+        tsize = QLabel("  Text")
+        tsize.setObjectName("Muted")
+        header.addWidget(tsize)
+        smaller = QPushButton("A−")
+        smaller.setToolTip("Smaller text")
+        smaller.setFixedWidth(42)
+        smaller.clicked.connect(lambda: self._bump_text_scale(-0.1))
+        header.addWidget(smaller)
+        reset = QPushButton("A")
+        reset.setToolTip("Reset text size")
+        reset.setFixedWidth(34)
+        reset.clicked.connect(lambda: self._set_text_scale(1.0))
+        header.addWidget(reset)
+        bigger = QPushButton("A+")
+        bigger.setToolTip("Larger text")
+        bigger.setFixedWidth(42)
+        bigger.clicked.connect(lambda: self._bump_text_scale(0.1))
+        header.addWidget(bigger)
         root.addLayout(header)
 
         tabs = QTabWidget()
@@ -109,6 +141,17 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._tools_tab(), "TOOLS")
         tabs.addTab(self._troubleshooter_tab(), "TROUBLESHOOTER")
         root.addWidget(tabs)
+
+    # -- Accessibility: text size ------------------------------------------ #
+    def _bump_text_scale(self, delta: float) -> None:
+        self._set_text_scale(self._scale + delta)
+
+    def _set_text_scale(self, scale: float) -> None:
+        self._scale = max(0.8, min(2.2, round(scale, 2)))
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(build_qss(self._scale))
+        set_text_scale(self._scale)
 
     # -- Lessons ----------------------------------------------------------- #
     def _lessons_tab(self) -> QWidget:

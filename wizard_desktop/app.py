@@ -73,7 +73,8 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("W1CK3D'S KALI ASSIST")
     load_fonts()
-    app.setStyleSheet(build_qss())
+    from wizard_desktop.settings import get_text_scale
+    app.setStyleSheet(build_qss(get_text_scale()))  # honor saved accessibility text size
 
     # 1. Login + disclaimer gate.
     login = LoginWindow()

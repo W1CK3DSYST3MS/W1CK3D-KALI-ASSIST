@@ -67,30 +67,40 @@ def category_color(category: str) -> str:
     return CATEGORY_COLOR.get(category.lower(), TOKENS["purple"])
 
 
-def build_qss() -> str:
-    """Generate the application stylesheet from the tokens."""
+def build_qss(scale: float = 1.0) -> str:
+    """Generate the application stylesheet from the tokens.
+
+    ``scale`` multiplies every font size (the accessibility text-size control),
+    clamped so text stays legible. 1.0 = default; the UI offers ~0.9–2.0.
+    """
     t = TOKENS
+    scale = max(0.8, min(2.2, scale))
+
+    def fs(base: int) -> int:  # scaled font-size in px, never below 9
+        return max(9, round(base * scale))
+
     return f"""
     QWidget {{
         background-color: {t['bg_base']};
         color: {t['text_body']};
         font-family: {FONT_BODY};
-        font-size: 14px;
+        font-size: {fs(14)}px;
     }}
     QMainWindow, QDialog {{ background-color: {t['bg_void']}; }}
 
     QLabel#Wordmark {{
         font-family: {FONT_DISPLAY};
         color: {t['text_strong']};
-        font-size: 30px;
+        font-size: {fs(30)}px;
         letter-spacing: 3px;
         padding: 4px 0;
     }}
-    QLabel#Subwordmark {{ color: {t['gold']}; font-family: {FONT_HEADING}; letter-spacing: 4px; font-size: 11px; }}
-    QLabel#H1 {{ font-family: {FONT_HEADING}; color: {t['text_strong']}; font-size: 20px; letter-spacing: 1px; }}
-    QLabel#H2 {{ font-family: {FONT_HEADING}; color: {t['text_strong']}; font-size: 16px; letter-spacing: 1px; }}
-    QLabel#Muted {{ color: {t['text_muted']}; }}
-    QLabel#Faint {{ color: {t['text_faint']}; }}
+    QLabel#Subwordmark {{ color: {t['gold']}; font-family: {FONT_HEADING}; letter-spacing: 4px; font-size: {fs(11)}px; }}
+    QLabel#H1 {{ font-family: {FONT_HEADING}; color: {t['text_strong']}; font-size: {fs(20)}px; letter-spacing: 1px; }}
+    QLabel#H2 {{ font-family: {FONT_HEADING}; color: {t['text_strong']}; font-size: {fs(16)}px; letter-spacing: 1px; }}
+    QLabel#Muted {{ color: {t['text_muted']}; font-size: {fs(13)}px; }}
+    QLabel#Faint {{ color: {t['text_faint']}; font-size: {fs(13)}px; }}
+    QLabel#Body {{ font-size: {fs(14)}px; }}
 
     /* Cards / panels */
     QFrame#Card {{
@@ -105,7 +115,7 @@ def build_qss() -> str:
         background-color: {t['bg_inset']};
         color: {t['secure_glow']};
         font-family: {FONT_MONO};
-        font-size: 14px;
+        font-size: {fs(14)}px;
         border: 1px solid {t['line']};
         border-radius: 5px;
         padding: 8px;
