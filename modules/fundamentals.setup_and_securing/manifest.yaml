@@ -1,0 +1,17 @@
+module_id: fundamentals.setup_and_securing
+name: "First Setup & Securing — Kali"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.setup_and_securing]
+  glossary_terms: [os_release, kali_rolling, full_upgrade, keyring, sudo_group, sudoers, ufw, listening_port, ss_cmd, systemd_service, macchanger, persistence]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against apt/passwd/ufw/ss/systemctl man pages + kali.org/docs"
+license: "project-proprietary lesson text"
+checksum: ""

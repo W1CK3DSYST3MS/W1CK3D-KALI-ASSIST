@@ -1,0 +1,271 @@
+lesson_id: lesson.setup_and_securing
+title: "First Setup & Securing (Kali)"
+topic_tags: [fundamentals, setup, hardening, kali, day-one]
+audience: beginner
+os_profile: kali
+goal: >
+  Take a fresh Kali system from default to set-up-and-secured: confirm the distro,
+  update the rolling release correctly, replace the public default password, work as a
+  sudo user instead of root, raise a firewall, shrink your attack surface, and verify it
+  all held. This is the "day one" flow every other lesson assumes you've done.
+intro: >
+  Kali ships with public default credentials and a rolling release that changes daily, so
+  the very first thing you do on a new install matters. Every command here acts on YOUR
+  own machine — nothing offensive. Run each one in your terminal, compare it to the
+  EXPECTED block, then answer Yes/No. If something looks different, the No-branches walk
+  you through the usual causes before you ever need outside help.
+completion_criteria: "learner has updated, set a strong password, confirmed sudo, enabled ufw, and verified listening ports"
+next_suggestions:
+  - "Shell Grammar — how commands are built (fundamentals)"
+  - "Networking Basics — inspect your own networking (fundamentals)"
+  - "Packages & Keys troubleshooter — apt/keyring errors"
+steps:
+  - step_id: su1
+    title: "Confirm you're actually on Kali"
+    slot_target: null
+    glossary_refs: [os_release, kali_rolling]
+    explanation:
+      what: "`cat /etc/os-release` prints the distro's identity file — NAME, ID and VERSION."
+      why: "This lesson is Kali-correct (rolling release, apt, ufw). On another distro some commands differ, so confirm first."
+      where: "Read-only; it just prints a file."
+    try_this: "cat /etc/os-release"
+    success_criteria: "The output names Kali GNU/Linux and shows ID=kali."
+    expected_output: |
+      PRETTY_NAME="Kali GNU/Linux Rolling"
+      NAME="Kali GNU/Linux"
+      VERSION="2025.2"
+      ID=kali
+      ID_LIKE=debian
+    alternatives:
+      - trigger: "it says Parrot, Ubuntu, or Debian — not Kali"
+        cause: "You're on a different distro; this Kali edition doesn't apply."
+        fix: "Use that distro's setup guide. Debian/Ubuntu are close (apt/ufw) but not identical; Parrot has its own edition."
+        check: "The ID= line should read exactly `kali`."
+      - trigger: "cat: /etc/os-release: No such file"
+        cause: "A very minimal or non-standard system."
+        fix: "Try `lsb_release -a` or `hostnamectl` to identify the OS instead."
+        check: "Either command should name the distribution."
+  - step_id: su2
+    title: "Update the rolling release the right way"
+    slot_target: null
+    glossary_refs: [kali_rolling, full_upgrade, keyring]
+    explanation:
+      what: "`apt update` refreshes the package lists; `apt full-upgrade` then upgrades, allowing the add/remove of dependencies that plain `upgrade` refuses."
+      why: "Kali rides Debian testing and changes daily. `full-upgrade` is the Kali-recommended command because rolling updates often restructure dependencies."
+      where: "System administration; needs sudo."
+    try_this: "sudo apt update && sudo apt full-upgrade"
+    success_criteria: "Lists refresh, packages upgrade after you confirm y, and you return to the prompt (reboot if the kernel changed)."
+    expected_output: |
+      Get:1 http://http.kali.org/kali kali-rolling InRelease [41.5 kB]
+      ...
+      Reading package lists... Done
+      Building dependency tree... Done
+      Calculating upgrade... Done
+      The following packages will be upgraded:
+        ...
+      42 upgraded, 5 newly installed, 0 to remove and 0 not upgraded.
+      Do you want to continue? [Y/n]
+    alternatives:
+      - trigger: "The following signatures couldn't be verified ... NO_PUBKEY"
+        cause: "Kali's archive signing key rotated and your keyring is stale — the single most common Kali apt error."
+        fix: "Refresh the keyring: `sudo apt install kali-archive-keyring`, then re-run `sudo apt update`."
+        check: "`apt update` completes with no NO_PUBKEY / signature line."
+      - trigger: "E: Could not get lock /var/lib/dpkg/lock-frontend"
+        cause: "Another apt/dpkg process (or the background auto-updater) is already running."
+        fix: "Wait a minute and retry; if it persists, find it with `ps aux | grep -i apt` and let it finish. Don't delete the lock file."
+        check: "The command proceeds instead of reporting a lock."
+      - trigger: "Could not resolve 'http.kali.org' / connection failed"
+        cause: "No network or DNS."
+        fix: "Confirm connectivity first (`ping -c1 1.1.1.1`, then `ping -c1 kali.org`); the Networking lesson covers fixing this."
+        check: "You can reach kali.org, then apt succeeds."
+      - trigger: "packages 'kept back' / held"
+        cause: "`apt upgrade` was used, which won't restructure dependencies."
+        fix: "Use `sudo apt full-upgrade` (this lesson's command) so held packages come through."
+        check: "The kept-back list clears after full-upgrade."
+  - step_id: su3
+    title: "Replace the public default password"
+    slot_target: null
+    glossary_refs: []
+    explanation:
+      what: "`passwd` changes the current user's password. It asks for the old one, then the new one twice."
+      why: "Kali's classic default is kali/kali — publicly known. Until you change it, anyone who reaches the box can log in."
+      where: "Account security; no sudo needed to change your own password."
+    try_this: "passwd"
+    success_criteria: "It reports the password was updated successfully."
+    expected_output: |
+      Changing password for kali.
+      Current password:
+      New password:
+      Retype new password:
+      passwd: password updated successfully
+    alternatives:
+      - trigger: "BAD PASSWORD: it is too short / based on a dictionary word"
+        cause: "The system's password quality check rejected a weak choice."
+        fix: "Choose a longer passphrase (multiple unrelated words, 12+ chars). It's a warning you can sometimes override, but don't — pick a stronger one."
+        check: "The 'password updated successfully' line appears."
+      - trigger: "passwd: Authentication token manipulation error"
+        cause: "You mistyped the current password, or the disk/home is read-only (e.g. live USB)."
+        fix: "Re-run and enter the correct current password. On a live session, changes may not persist without persistence set up."
+        check: "It accepts the current password and updates."
+  - step_id: su4
+    title: "Work as a sudo user, not as root"
+    slot_target: null
+    glossary_refs: [sudo_group, sudoers]
+    explanation:
+      what: "`id` shows your user id and group memberships; `sudo whoami` runs a single command as root to prove escalation works."
+      why: "Modern Kali logs you in as a normal user already in the `sudo` group. Living as root makes every mistake and every exploit run with full privilege — escalate only when a task needs it."
+      where: "Account model; `sudo` gates the second command."
+    try_this: "id && sudo whoami"
+    success_criteria: "`id` lists your user and includes the sudo group; `sudo whoami` prints root."
+    expected_output: |
+      uid=1000(kali) gid=1000(kali) groups=1000(kali),27(sudo),...
+      [sudo] password for kali:
+      root
+    alternatives:
+      - trigger: "kali is not in the sudoers file. This incident will be reported."
+        cause: "Your user isn't in the sudo group (rare on Kali defaults, common after manual account creation)."
+        fix: "As root (`su -`, root password), run `usermod -aG sudo <youruser>`, then log out and back in."
+        check: "`id` now lists the sudo group and `sudo whoami` returns root."
+      - trigger: "it asks for a password every single time"
+        cause: "That's normal — sudo caches your password for a few minutes per terminal, then asks again."
+        fix: "Nothing to fix; entering it is expected. Don't disable the prompt."
+        check: "root is printed after you authenticate."
+  - step_id: su5
+    title: "Raise a firewall (ufw)"
+    slot_target: null
+    glossary_refs: [ufw]
+    explanation:
+      what: "`ufw` (Uncomplicated Firewall) is a beginner-friendly front end to the kernel firewall. You set a default-deny-incoming policy and enable it."
+      why: "Default-deny incoming means nothing can reach services on your box unless you explicitly allow it — a big attack-surface reduction for one command."
+      where: "System hardening; every step needs sudo."
+    try_this: "sudo apt install -y ufw && sudo ufw default deny incoming && sudo ufw default allow outgoing && sudo ufw enable"
+    success_criteria: "It reports the firewall is active and enabled on startup; `sudo ufw status verbose` shows deny(incoming)/allow(outgoing)."
+    expected_output: |
+      Default incoming policy changed to 'deny'
+      Default outgoing policy changed to 'allow'
+      Firewall is active and enabled on system startup
+      Status: active
+      Default: deny (incoming), allow (outgoing), disabled (routed)
+    alternatives:
+      - trigger: "you're connected over SSH and about to enable ufw"
+        cause: "Default-deny incoming will drop your own SSH session and lock you out."
+        fix: "Allow SSH first: `sudo ufw allow 22/tcp`, THEN `sudo ufw enable`."
+        check: "`sudo ufw status` lists 22/tcp ALLOW before you rely on the connection."
+      - trigger: "sudo: ufw: command not found"
+        cause: "ufw isn't installed yet (older/minimal image)."
+        fix: "Install it first: `sudo apt install ufw`, then re-run the enable sequence."
+        check: "`ufw --version` prints a version."
+      - trigger: "Status: inactive after enable"
+        cause: "The enable step errored, or a previous `ufw reset` left it off."
+        fix: "Run `sudo ufw enable` on its own and read any error; re-apply the default policies if needed."
+        check: "`sudo ufw status verbose` shows Status: active."
+  - step_id: su6
+    title: "See and shrink your attack surface"
+    slot_target: null
+    glossary_refs: [listening_port, ss_cmd, systemd_service]
+    explanation:
+      what: "`ss -tulpn` lists TCP/UDP sockets that are LISTENING (with the owning program); the systemctl line lists running services."
+      why: "Anything listening is something an attacker can talk to. Knowing what's open — and turning off what you don't use — is core hardening."
+      where: "Inspection; `-p` needs sudo to show process names."
+    try_this: "sudo ss -tulpn && systemctl list-units --type=service --state=running"
+    success_criteria: "Both lists print; ideally only loopback (127.0.0.1/::1) services are listening, not 0.0.0.0."
+    expected_output: |
+      Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+      tcp   LISTEN 0      128    127.0.0.1:631     0.0.0.0:*         users:(("cupsd",pid=812,fd=7))
+      ...
+      cups.service              loaded active running CUPS Scheduler
+      NetworkManager.service    loaded active running Network Manager
+    alternatives:
+      - trigger: "a service is listening on 0.0.0.0 (all interfaces) and you don't recognise it"
+        cause: "Something is reachable from the network — could be intended (SSH) or not."
+        fix: "Identify it by the Process column, then if unused: `sudo systemctl disable --now <service>` (disable = stays off after reboot)."
+        check: "Re-run `sudo ss -tulpn`; the port no longer listens."
+      - trigger: "the Process column is empty / shows no program"
+        cause: "`ss` can't read process info without privilege."
+        fix: "Re-run with sudo: `sudo ss -tulpn`."
+        check: "The users:((...)) process detail now appears."
+      - trigger: "you're unsure whether something is safe to disable"
+        cause: "Some services are needed by the desktop (e.g. NetworkManager, dbus)."
+        fix: "Leave anything you don't recognise; only disable services you know you don't use. When in doubt, check the Services troubleshooter."
+        check: "The desktop and networking still work after any change."
+  - step_id: su7
+    title: "Privacy add-ons (optional on Kali)"
+    slot_target: null
+    glossary_refs: [macchanger]
+    explanation:
+      what: "Tools like `macchanger` (spoof a network card's MAC) aren't preinstalled on modern Kali — you add them if you want them."
+      why: "For authorized testing you sometimes want to change your MAC or route through Tor. This step just installs and shows the tool's help; it changes nothing yet."
+      where: "Optional tooling; install needs sudo."
+    try_this: "sudo apt install -y macchanger && macchanger --help"
+    success_criteria: "macchanger installs and prints its usage/help."
+    expected_output: |
+      GNU MAC Changer
+      Usage: macchanger [options] device
+        -h, --help    Print this help
+        -r, --random  Set fully random MAC
+        -p, --permanent Reset to permanent hardware MAC
+    alternatives:
+      - trigger: "a purple debconf screen asks 'change MAC automatically?'"
+        cause: "macchanger's installer offers to spoof on every boot."
+        fix: "Choose No unless you specifically want that — you can always run it manually. Use Tab then Enter to select."
+        check: "Install finishes and `macchanger --help` prints."
+      - trigger: "E: Unable to locate package macchanger"
+        cause: "Package lists are stale."
+        fix: "Run `sudo apt update` first, then retry the install."
+        check: "The package installs."
+  - step_id: su8
+    title: "Know your storage and persistence"
+    slot_target: null
+    glossary_refs: [persistence]
+    explanation:
+      what: "`df -h` shows disk usage per filesystem in human units; `ls -la ~` shows your home directory including hidden files."
+      why: "You need to know whether you're installed-to-disk (changes persist, back up `~` and `/etc`) or on a live USB (changes vanish on reboot unless persistence is set up)."
+      where: "Read-only inspection."
+    try_this: "df -h && ls -la ~"
+    success_criteria: "You can see how full each filesystem is and what's in your home directory."
+    expected_output: |
+      Filesystem      Size  Used Avail Use% Mounted on
+      /dev/sda1        79G   18G   57G  24% /
+      tmpfs           2.0G     0  2.0G   0% /dev/shm
+      total 40
+      drwxr-xr-x 15 kali kali 4096 Jul  8 09:12 .
+      -rw-r--r--  1 kali kali  220 Jul  1 08:00 .bashrc
+    alternatives:
+      - trigger: "the root filesystem shows as an overlay / you booted a live USB"
+        cause: "Live sessions are amnesiac by design — nothing you change survives a reboot."
+        fix: "Set up persistence (a labeled partition + persistence.conf) if you want changes to stick. The Rare & Hard troubleshooter has the full flow."
+        check: "After reboot, a file you created still exists."
+      - trigger: "Use% is 90-100% on /"
+        cause: "The disk is nearly full — this silently breaks updates and the GUI."
+        fix: "Reclaim space: `sudo apt clean && sudo apt autoremove --purge`. See the disk-full symptom in the troubleshooter for more."
+        check: "`df -h` shows free space on /."
+  - step_id: su9
+    title: "Verify it all held"
+    slot_target: null
+    glossary_refs: [ufw, listening_port]
+    explanation:
+      what: "A final pass: firewall status, a package-list refresh, and the listening-port list together confirm your hardening survived."
+      why: "Security work isn't done until you've checked it. This is the same verification you'll repeat after any future change."
+      where: "Inspection; ufw status and ss -p want sudo."
+    try_this: "sudo ufw status && sudo apt update && sudo ss -tulpn"
+    success_criteria: "Firewall is active, apt refreshes cleanly (no signature errors), and only ports you intend are listening."
+    expected_output: |
+      Status: active
+      ...
+      Reading package lists... Done
+      ...
+      Netid State  Recv-Q Send-Q Local Address:Port Process
+      tcp   LISTEN 0      128    127.0.0.1:631 users:(("cupsd",...))
+    alternatives:
+      - trigger: "ufw status shows inactive"
+        cause: "The firewall didn't persist, or was reset."
+        fix: "Re-enable it: `sudo ufw enable` (allow SSH first if remote)."
+        check: "`sudo ufw status` reads active."
+      - trigger: "apt update again shows a signature / NO_PUBKEY error"
+        cause: "The keyring fix from step 2 didn't stick or a new key rotated."
+        fix: "Re-run `sudo apt install kali-archive-keyring` and update again."
+        check: "apt update completes with no signature warnings."
+      - trigger: "a port you didn't expect is listening"
+        cause: "A service you installed (or a leftover) is exposed."
+        fix: "Identify it via the Process column and disable it: `sudo systemctl disable --now <service>`."
+        check: "The unexpected port is gone on re-check."

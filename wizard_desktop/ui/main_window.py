@@ -136,9 +136,29 @@ class MainWindow(QMainWindow):
             badge = f"· {done}/{total} — resume"
         return f"{lesson.title}   {badge}"
 
+    # Suggested learning order; anything not listed sorts after, alphabetically.
+    _LESSON_ORDER = [
+        "lesson.setup_and_securing",
+        "lesson.shell_grammar",
+        "lesson.files_navigation",
+        "lesson.permissions",
+        "lesson.viewing_editing",
+        "lesson.pipes_redirection",
+        "lesson.processes",
+        "lesson.packages",
+        "lesson.networking",
+    ]
+
+    def _ordered_lessons(self) -> list:
+        order = {lid: i for i, lid in enumerate(self._LESSON_ORDER)}
+        return sorted(
+            self._reg.lessons.values(),
+            key=lambda le: (order.get(le.lesson_id, len(order)), le.title),
+        )
+
     def _refresh_lessons_list(self) -> None:
         self._lessons_list.clear()
-        for lesson in self._reg.lessons.values():
+        for lesson in self._ordered_lessons():
             it = QListWidgetItem(self._lesson_label(lesson))
             it.setData(Qt.UserRole, lesson.lesson_id)
             self._lessons_list.addItem(it)

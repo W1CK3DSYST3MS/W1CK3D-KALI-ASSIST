@@ -1,0 +1,25 @@
+terms:
+  - term: os_release
+    definition: "The /etc/os-release file that identifies the distribution (NAME, ID, VERSION)."
+  - term: kali_rolling
+    definition: "Kali's release model: a continuous 'rolling' stream built on Debian testing, updated frequently rather than in fixed versions."
+  - term: full_upgrade
+    definition: "`apt full-upgrade` — upgrades packages and may add/remove dependencies to do so; the Kali-recommended upgrade (plain `upgrade` won't restructure deps)."
+  - term: keyring
+    definition: "The set of trusted signing keys apt uses to verify packages; `kali-archive-keyring` refreshes Kali's keys and fixes NO_PUBKEY errors."
+  - term: sudo_group
+    definition: "The Unix group whose members may run commands as root via `sudo`; modern Kali's default user is already in it."
+  - term: sudoers
+    definition: "The policy (file /etc/sudoers) that decides who may use sudo; 'not in the sudoers file' means your user lacks that right."
+  - term: ufw
+    definition: "Uncomplicated Firewall — a simple front end to the kernel firewall; a default-deny-incoming policy blocks unsolicited inbound traffic."
+  - term: listening_port
+    definition: "A port where a program waits for incoming connections; each listener is potential attack surface."
+  - term: ss_cmd
+    definition: "`ss` — socket statistics; `ss -tulpn` lists listening TCP/UDP sockets with the owning process (replaces the older netstat)."
+  - term: systemd_service
+    definition: "A background service managed by systemd; `systemctl disable --now <name>` stops it and keeps it off after reboot."
+  - term: macchanger
+    definition: "A tool to view or spoof a network interface's MAC address; not preinstalled on modern Kali."
+  - term: persistence
+    definition: "The live-USB feature that saves changes across reboots via a labeled partition + persistence.conf; without it a live session is amnesiac."

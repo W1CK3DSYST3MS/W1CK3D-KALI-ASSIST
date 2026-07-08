@@ -59,7 +59,16 @@ def main() -> int:
 
     tp = ToolPage(registry.tools["nmap"])
     tp._authorized = True
-    tp._targets.setText("scanme.nmap.org")
+    # Fill the dynamic quick-build form: set required fields to sample values.
+    from PySide6.QtWidgets import QComboBox, QLineEdit
+
+    for fid, (fs, w) in tp._fields.items():
+        if not fs.required:
+            continue
+        if isinstance(w, QLineEdit):
+            w.setText("scanme.nmap.org")
+        elif isinstance(w, QComboBox) and w.currentData() is None:
+            w.setCurrentIndex(w.count() - 1)
     tp._build_command()
     assert tp._preview._plan is not None
     print("tool page built command:", tp._preview._plan.bash_preview_string)
