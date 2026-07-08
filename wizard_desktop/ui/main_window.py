@@ -7,6 +7,7 @@ lessons and troubleshooters run through the shared adaptive StepperView.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -92,8 +93,24 @@ class MainWindow(QMainWindow):
         self._progress = progress
         self._user = username
         self.setWindowTitle("W1CK3D'S KALI ASSIST")
-        self.resize(1180, 760)
         self._build()
+        self._apply_default_geometry()
+
+    def _apply_default_geometry(self) -> None:
+        """Open at a size that fits common laptop screens (incl. 1366x768),
+        clamped to the available desktop, and centred."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            self.resize(1120, 720)
+            return
+        avail = screen.availableGeometry()
+        w = min(1120, avail.width() - 40)
+        h = min(720, avail.height() - 60)
+        self.resize(w, h)
+        self.setMinimumSize(min(880, w), min(560, h))
+        frame = self.frameGeometry()
+        frame.moveCenter(avail.center())
+        self.move(frame.topLeft())
 
     def _build(self) -> None:
         central = QWidget()

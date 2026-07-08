@@ -11,8 +11,117 @@ authorization_text: >
   targets. Practice on your own servers, DVWA / OWASP Juice Shop / Metasploitable, HTB/THM.
   Continue?
 flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "Baseline a web server for known problems and save a report — inputs explained."
+    command_builder_id: nikto
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm you have a web server to scan"
+        slot_target: null
+        glossary_refs: [web_vuln_scan]
+        explanation:
+          what: "nikto checks a WEB server for thousands of known-bad files, outdated software and misconfigurations. You need a URL/host that serves web pages."
+          why: "Pointing nikto at a non-web port just wastes time — confirm there's a web service first."
+          where: "This host/URL goes after -h."
+        find_it: >
+          Find web ports with the nmap tool (usually 80 = http, 443 = https, sometimes 8080/8443).
+          Then your target is http://HOST or https://HOST. Only scan hosts you own or are
+          authorized to test — nikto is very noisy and WILL appear in the server's logs.
+        command_anatomy:
+          - {token: "curl", does: "fetch a URL"}
+          - {token: "-sI", does: "silently fetch just the headers"}
+          - {token: "http://TARGET", does: "the web target to confirm"}
+        try_this: "curl -sI http://TARGET"
+        success_criteria: "You get an HTTP response — confirming a web server is there."
+        expected_output: |
+          HTTP/1.1 200 OK
+          Server: Apache/2.4.7 (Ubuntu)
+        alternatives:
+          - trigger: "connection refused"
+            cause: "No web service on that port."
+            fix: "Run `nmap -sV -p- TARGET` to find the real web port, then use http://TARGET:PORT."
+            check: "curl returns an HTTP line."
+      - step_id: g2
+        title: "Run the baseline scan"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "`-h <host>` runs nikto's full battery of checks. It streams findings as it goes: the server banner, missing security headers, interesting files, and reference IDs (OSVDB)."
+          why: "This one command gives you a broad first picture of what's wrong with the server."
+          where: "TARGET_PIVOT (-h)."
+        find_it: "Use the URL from step 1. nikto auto-detects http vs https and the common port."
+        command_anatomy:
+          - {token: "nikto", does: "the program"}
+          - {token: "-h http://TARGET", does: "the host/URL to scan"}
+        try_this: "nikto -h http://TARGET"
+        success_criteria: "Findings stream out — server version, headers, and flagged items with + bullets."
+        expected_output: |
+          + Server: Apache/2.4.7 (Ubuntu)
+          + The anti-clickjacking X-Frame-Options header is not present.
+          + The X-XSS-Protection header is not defined.
+          + /admin/: This might be interesting...
+          + OSVDB-3268: /icons/: Directory indexing found.
+        alternatives:
+          - trigger: "the scan hangs or is very slow"
+            cause: "Slow or filtered responses from the server."
+            fix: "Cap the run: add `-maxtime 5m` and/or `-timeout 10`."
+            check: "It finishes within the time cap."
+          - trigger: "No web server found on this host/port"
+            cause: "Wrong scheme/port."
+            fix: "Add the port and scheme: `nikto -h TARGET -p 8443 -ssl`."
+            check: "The scan connects."
+      - step_id: g3
+        title: "Focus the scan to cut the noise"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [tuning]
+        explanation:
+          what: "`-Tuning` limits which categories run. Digits: 1 = interesting files, 2 = misconfig, 3 = info disclosure, 4 = XSS, 9 = SQLi. Combine them (1234)."
+          why: "A full scan tests everything and is slow/loud. Tuning to what you care about is faster and kinder to the target."
+          where: "ACTION_OPTIONS; the digits pick categories."
+        find_it: "Decide what you care about. A good general choice is 1234 (files + misconfig + info + XSS). Avoid 6 (DoS) on anything you can't disrupt."
+        command_anatomy:
+          - {token: "nikto -h http://TARGET", does: "the scan from step 2"}
+          - {token: "-Tuning 1234", does: "run only categories 1,2,3,4 (files, misconfig, info, XSS)"}
+        try_this: "nikto -h http://TARGET -Tuning 1234"
+        success_criteria: "Only the chosen categories run — faster, more focused output."
+        expected_output: |
+          + Testing categories: 1,2,3,4
+          + /config.bak: Backup file found.
+          + Cookie without HttpOnly flag.
+        alternatives:
+          - trigger: "you're not sure which category number you need"
+            cause: "The digit meanings aren't memorised."
+            fix: "Run `nikto -H` to list all -Tuning categories, or just use 1234 as a sensible default."
+            check: "You pick the categories you want."
+      - step_id: g4
+        title: "Save a report you can share"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o report.html -Format htm` writes an HTML report of the findings. The file EXTENSION and the -Format must match."
+          why: "You need a record to review, verify, and hand over — the terminal output scrolls away."
+          where: "OUTPUT_OPTIONS; -o names the file, -Format sets the type."
+        find_it: "Choose a filename in a writable folder (your home). Use .html with -Format htm, or .csv with -Format csv for spreadsheets."
+        command_anatomy:
+          - {token: "nikto -h http://TARGET", does: "the scan"}
+          - {token: "-o ~/scans/nikto.html", does: "write the report to this file"}
+          - {token: "-Format htm", does: "format it as HTML (must match the .html extension)"}
+        try_this: "mkdir -p ~/scans && nikto -h http://TARGET -o ~/scans/nikto.html -Format htm"
+        success_criteria: "~/scans/nikto.html is created; open it in a browser to read the findings."
+        expected_output: |
+          + 1 host(s) tested
+          (and ~/scans/nikto.html now exists)
+        alternatives:
+          - trigger: "error about the format"
+            cause: "The file extension and -Format disagree (e.g. .html with -Format csv)."
+            fix: "Make them match: .html + `-Format htm`, .csv + `-Format csv`."
+            check: "The report writes without error."
+          - trigger: "a finding looks wrong / doesn't exist"
+            cause: "nikto is signature-based and produces false positives."
+            fix: "Verify each finding by hand (open the flagged path yourself) before trusting or reporting it."
+            check: "You can reproduce the issue manually."
   - flow_id: first_scan
-    title: "First scan"
+    title: "First scan (reference)"
     goal: "Baseline a web server."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT]
@@ -25,8 +134,15 @@ flows:
           what: "`-h <host>` scans the server; nikto auto-detects http/https and common ports."
           why: "One command to baseline known server flaws/misconfigs."
           where: "TARGET_PIVOT (-h)."
+        find_it: "A confirmed web URL/host (use nmap/curl to check)."
+        command_anatomy:
+          - {token: "nikto", does: "the program"}
+          - {token: "-h http://10.0.0.20", does: "the host to scan"}
         try_this: "nikto -h http://10.0.0.20"
         success_criteria: "Findings stream (server banner, headers, interesting files, refs)."
+        expected_output: |
+          + Server: Apache/2.4.7 (Ubuntu)
+          + /admin/: This might be interesting...
         alternatives:
           - trigger: "No web server found / connection refused"
             cause: "Target isn't serving HTTP on the assumed port."
@@ -37,7 +153,7 @@ flows:
             fix: "Add -timeout and/or -maxtime to cap the run."
             check: "Re-run with -maxtime 5m."
   - flow_id: port_ssl
-    title: "Port & SSL targeting"
+    title: "Port & SSL targeting (reference)"
     goal: "Hit non-standard ports / force TLS."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
@@ -50,15 +166,22 @@ flows:
           what: "`-p 8443` sets the port (comma-list for several); `-ssl` forces TLS, `-nossl` forces plain."
           why: "Targets that only speak HTTPS or run on odd ports."
           where: "ACTION_OPTIONS."
+        find_it: "Get the real port from nmap -sV; decide if it's TLS (https) or plain."
+        command_anatomy:
+          - {token: "-p 8443", does: "scan this port"}
+          - {token: "-ssl", does: "force an HTTPS/TLS connection"}
         try_this: "nikto -h 10.0.0.20 -p 8443 -ssl"
         success_criteria: "The scan connects over TLS on the chosen port."
+        expected_output: |
+          + Target Port: 8443
+          + SSL Info: Subject: /CN=10.0.0.20
         alternatives:
           - trigger: "SSL negotiation fails"
             cause: "Port isn't actually TLS, or vice-versa."
             fix: "Try -nossl, or the correct port."
             check: "Confirm with nmap -sV."
   - flow_id: tuning
-    title: "Tuning (pick what to test)"
+    title: "Tuning (reference)"
     goal: "Focus the scan, cut noise/time."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
@@ -71,15 +194,20 @@ flows:
           what: "`-Tuning` picks categories: 1 files, 2 misconfig, 3 info, 4 XSS, 5 remote file, 6 DoS, 9 SQLi, 0 upload, x exclude."
           why: "Faster and less noisy; combine digits e.g. -Tuning 1234."
           where: "ACTION_OPTIONS."
+        find_it: "Combine the digits for what you want; skip 6 (DoS)."
+        command_anatomy:
+          - {token: "-Tuning 1234", does: "run categories 1,2,3,4 only"}
         try_this: "nikto -h http://site -Tuning 1234"
         success_criteria: "Only the chosen categories run."
+        expected_output: |
+          + Testing categories: 1,2,3,4
         alternatives:
           - trigger: "too slow / too noisy"
             cause: "Running all categories."
             fix: "Tune to what you care about; skip 6 (DoS) on anything you can't disrupt."
             check: "Re-run with a narrower -Tuning."
   - flow_id: output
-    title: "Output & reports"
+    title: "Output & reports (reference)"
     goal: "Save a shareable report."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT, OUTPUT_OPTIONS]
@@ -91,15 +219,21 @@ flows:
           what: "`-o <file> -Format <htm|csv|xml|json|txt>` saves results."
           why: "HTML for write-ups; CSV/JSON for parsing."
           where: "OUTPUT_OPTIONS."
+        find_it: "Match the file extension to -Format; write to a folder you own."
+        command_anatomy:
+          - {token: "-o report.html", does: "output file"}
+          - {token: "-Format htm", does: "HTML format (match the extension)"}
         try_this: "nikto -h http://site -o report.html -Format htm"
         success_criteria: "report.html is created with the findings."
+        expected_output: |
+          + 1 host(s) tested   (report.html written)
         alternatives:
           - trigger: "format error"
             cause: "Extension and -Format disagree."
             fix: "Make the file extension and -Format match."
             check: "Use .html with -Format htm."
   - flow_id: auth_proxy_vhost
-    title: "Auth, proxy & virtual hosts"
+    title: "Auth, proxy & virtual hosts (reference)"
     goal: "Authenticated/proxied scans and named vhosts."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, ENV_INTERFACE]
@@ -112,15 +246,23 @@ flows:
           what: "`-id user:pass` basic auth; `-useproxy http://127.0.0.1:8080`; `-vhost <name>` for a shared IP."
           why: "Pairs with gobuster vhost results; route via Burp/ZAP to log traffic."
           where: "ENV_INTERFACE (proxy/auth); -vhost in ACTION_OPTIONS."
+        find_it: "Get vhost names from gobuster vhost mode; start Burp/ZAP on 127.0.0.1:8080 for the proxy."
+        command_anatomy:
+          - {token: "-vhost admin.site.local", does: "scan this virtual host (Host header) on a shared IP"}
+          - {token: "-useproxy http://127.0.0.1:8080", does: "route through your local Burp/ZAP"}
+          - {token: "-id user:pass", does: "(if needed) HTTP basic-auth credentials"}
         try_this: "nikto -h http://10.0.0.20 -vhost admin.site.local -useproxy http://127.0.0.1:8080"
         success_criteria: "The named vhost is scanned through the proxy."
+        expected_output: |
+          + Target Host: admin.site.local
+          (requests visible in Burp/ZAP)
         alternatives:
           - trigger: "401 unauthorized"
             cause: "Missing/incorrect credentials."
             fix: "Supply -id user:pass."
             check: "Verify the credentials work in a browser."
   - flow_id: evasion_pace
-    title: "Evasion & pacing (the noisy-tool reality)"
+    title: "Evasion & pacing (reference)"
     goal: "Be gentler / study IDS behavior (still detectable)."
     command_builder_id: nikto
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -133,15 +275,21 @@ flows:
           what: "`-Pause <sec>` between requests, `-maxtime <time>` caps the run; `-evasion <1-8>` mangles requests."
           why: "nikto is NOT stealthy — it will show in logs. Pacing is courtesy, not invisibility."
           where: "GLOBAL_OPTIONS (pace); -evasion in ACTION_OPTIONS."
+        find_it: "No new input — add pacing flags to a scan you can already run."
+        command_anatomy:
+          - {token: "-Pause 2", does: "wait 2 seconds between requests"}
+          - {token: "-maxtime 10m", does: "stop after 10 minutes no matter what"}
         try_this: "nikto -h http://site -Pause 2 -maxtime 10m"
         success_criteria: "The scan runs more slowly within the time cap."
+        expected_output: |
+          (findings appear more slowly; run stops at the 10m cap)
         alternatives:
           - trigger: "blocked / lots of 403s"
             cause: "A WAF/IPS is filtering."
             fix: "Pacing/evasion may help on authorized tests, but expect detection — it's inherent to nikto."
             check: "Review whether a WAF is in path."
   - flow_id: update
-    title: "Update database & plugins"
+    title: "Update database & plugins (reference)"
     goal: "Refresh nikto's signatures."
     command_builder_id: nikto
     slots: [PROGRAM, ACTION_OPTIONS]
@@ -154,15 +302,22 @@ flows:
           what: "`nikto -update` refreshes the DB/plugins; `-list-plugins` shows what's available."
           why: "Fresh signatures catch newer issues."
           where: "ACTION_OPTIONS."
+        find_it: "Just needs internet access."
+        command_anatomy:
+          - {token: "nikto", does: "the program"}
+          - {token: "-update", does: "download the latest signature database and plugins"}
         try_this: "nikto -update"
         success_criteria: "nikto reports the database/plugins updated."
+        expected_output: |
+          + Retrieving 'db_tests'
+          + CIRT.net message: Databases are up to date
         alternatives:
           - trigger: "update fails (offline/permissions)"
             cause: "No network or insufficient permissions."
             fix: "On Kali, update via apt instead (see Packages troubleshooter)."
             check: "Retry with connectivity, or apt."
   - flow_id: integration
-    title: "Integration & reading results"
+    title: "Integration & reading results (reference)"
     goal: "Chain the web-recon tools; verify findings."
     command_builder_id: nikto
     slots: [PROGRAM, TARGET_PIVOT, OUTPUT_OPTIONS]
@@ -175,8 +330,13 @@ flows:
           what: "nmap finds the web port, gobuster finds paths/vhosts, nikto flags server vulns; save with -o."
           why: "nikto is signature-based — expect false positives; verify each finding manually."
           where: "OUTPUT_OPTIONS."
+        find_it: "Feed the web port from nmap and paths from gobuster into a focused nikto run; save the report."
+        command_anatomy:
+          - {token: "-o report.html -Format htm", does: "save a report to verify finding-by-finding"}
         try_this: "nikto -h http://site -o report.html -Format htm"
         success_criteria: "A report you can verify finding-by-finding."
+        expected_output: |
+          + 1 host(s) tested   (report.html written)
         alternatives:
           - trigger: "finding looks wrong"
             cause: "Signature match without real vulnerability (false positive)."
