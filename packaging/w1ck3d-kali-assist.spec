@@ -45,6 +45,39 @@ a = Analysis(
     excludes=["tkinter"],
     noarchive=False,
 )
+
+# --- Slim the Qt payload -------------------------------------------------- #
+# collect_all AND PyInstaller's automatic PySide6 hook both add the full Qt
+# stack, including enormous components this app never imports (it uses only
+# QtCore/QtGui/QtWidgets). Qt6WebEngineCore alone is ~195 MB. Filter the merged
+# TOCs here (after Analysis) so the removals actually stick. KEEP everything
+# under the plugins tree (platforms/imageformats — the Linux xcb plugin lives
+# there) and the core QtCore/Gui/Widgets/Network/DBus/OpenGL/Svg libraries so
+# the GUI, icons and image loading still work on Kali.
+_QT_DROP = (
+    "webengine", "webchannel", "qt3d", "quick3d", "quick", "qtquick",
+    "qml", "qmlmodels", "multimedia", "spatialaudio", "charts",
+    "datavisualization", "graphs", "qt6pdf", "pdfquick", "designer",
+    "qthelp", "qttest", "sensors", "serialport", "serialbus", "bluetooth",
+    "nfc", "positioning", "qt6location", "texttospeech", "remoteobjects",
+    "scxml", "qt6sql", "virtualkeyboard", "shadertools",
+    "avcodec", "avformat", "avutil", "swscale", "swresample",
+    "qtwebengineprocess", "devtools_resources",
+)
+
+
+def _drop(dest: str) -> bool:
+    low = dest.replace("\\", "/").lower()
+    if "/plugins/" in low:          # never drop platform/imageformat plugins
+        return False
+    return any(tok in low for tok in _QT_DROP)
+
+
+_before = len(a.binaries) + len(a.datas)
+a.binaries = [e for e in a.binaries if not _drop(e[0])]
+a.datas = [e for e in a.datas if not _drop(e[0])]
+print(f"[slim] Qt filter removed {_before - len(a.binaries) - len(a.datas)} entries")
+
 pyz = PYZ(a.pure)
 
 exe = EXE(

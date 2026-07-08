@@ -67,6 +67,53 @@ and `Module-00` setup/securing lesson (Kali edition + router).
 Finalize PyInstaller/AppImage packaging, bundle fonts/logo, theme polish vs the tokens,
 onboarding checklist, settings (output base dir).
 
+### Building the Kali/Linux binary — one clean pass
+PyInstaller **cannot cross-compile**: build the Linux binary ON Kali (bare metal, VM, or
+win-kex/WSL2). The spec bundles `modules/` + `assets/` and slims the Qt payload, so the one
+file contains all 9 lessons, 10 tools and 5 troubleshooters and runs fully offline.
+
+```bash
+# 0. Get the source onto Kali (the "send me" folder). Then, from the repo root:
+cd w1ck3d-kali-assist
+
+# 1. Isolated environment + deps (do NOT `pip install -e .` — just the runtime deps).
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install pydantic PyYAML PySide6 pyinstaller pillow
+
+# 2. Prove the engine before packaging.
+python -m pytest -q                     # expect: all pass
+python tools/gui_smoke.py               # offscreen; expect: GUI SMOKE PASSED
+
+# 3. Build the one-file binary.
+pyinstaller packaging/w1ck3d-kali-assist.spec --noconfirm
+
+# 4. Verify the FROZEN binary finds everything (no GUI needed).
+./dist/w1ck3d-kali-assist              # launches the app, OR:
+./dist/w1ck3d-kali-assist --self-test  # expect: SELF-TEST OK ... lessons=9 tools=10 builders=11
+```
+
+**Expected size:** ~70–90 MB (the spec drops WebEngine/Quick/Multimedia etc., which cut a
+raw ~250 MB build down by ~3×). The `[slim] Qt filter removed N entries` line prints during
+the build.
+
+**Harmless warnings you can ignore:** `ignoring icon` / PNG-not-.ico (Linux ELFs carry no
+embedded icon); `hidden import "pycparser.lextab" not found`; `library ole32 ... not found`
+(a Windows-only lib, irrelevant on Linux). None affect the build.
+
+**If the binary fails to start on Kali** with a Qt *"could not load the xcb platform plugin"*
+(or similar platform-plugin) error, the Qt slim filter removed one lib too many. Escape
+hatch: open `packaging/w1ck3d-kali-assist.spec`, comment out the whole
+`# --- Slim the Qt payload ---` block (the `a.binaries = [...]` / `a.datas = [...]` lines),
+and rebuild — you get a larger but guaranteed-complete binary. Then report which lib was
+missing so the droplist can be corrected. On Kali the xcb plugin also needs the system
+package `libxcb-cursor0` (`sudo apt install libxcb-cursor0`) — install it if Qt complains.
+
+**AppImage (optional, portable across distros):** wrap `dist/w1ck3d-kali-assist` with
+`appimagetool` (an AppDir with the binary + a `.desktop` + the logo). The PyInstaller one-file
+already runs on Kali/Ubuntu directly, so AppImage is only for wider portability.
+
 ## Milestone 5 (later) — Termux edition
 Reuse `wizard_core`; add a TUI front-end. Curated-only, no GUI deps.
 
