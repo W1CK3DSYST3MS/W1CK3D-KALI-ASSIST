@@ -1,0 +1,21 @@
+terms:
+  - term: shell
+    definition: "The program that reads your commands and runs them (bash, zsh). It handles expansion, PATH lookup, pipes and your rc file."
+  - term: zsh
+    definition: "The Z shell — modern Kali's DEFAULT interactive shell. Its startup file is ~/.zshrc (NOT ~/.bashrc); editing the wrong one is a common beginner trap."
+  - term: path_var
+    definition: "PATH — a colon-separated list of directories the shell searches (in order) to find a command. 'command not found' usually means the program's dir isn't in PATH."
+  - term: environment_variable
+    definition: "A named value (HOME, USER, PATH, EDITOR...) available to the shell and, if exported, to programs it launches. Read with $NAME, list with printenv."
+  - term: export
+    definition: "Marks a variable so child processes inherit it: `export NAME=value`. Without export a variable is visible only in the current shell."
+  - term: alias
+    definition: "A shell shortcut, e.g. `alias ll='ls -la'`. Session-only unless added to your rc file; bypass one with a leading backslash (\\ls)."
+  - term: rc_file
+    definition: "The shell startup script read at launch (~/.zshrc for zsh, ~/.bashrc for bash) where exports and aliases go to persist across sessions."
+  - term: source_cmd
+    definition: "`source file` (or `. file`) runs a script in the CURRENT shell, so changes to ~/.zshrc take effect without opening a new terminal."
+  - term: shell_builtin
+    definition: "A command implemented by the shell itself (cd, export, alias, history) rather than a separate program in PATH. `type name` tells you which it is."
+  - term: command_hash
+    definition: "The shell's cache of where each command lives. After moving/updating a binary, refresh it with `hash -r` (bash) or `rehash` (zsh)."

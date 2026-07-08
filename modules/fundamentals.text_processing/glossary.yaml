@@ -1,0 +1,21 @@
+terms:
+  - term: regex
+    definition: "Regular expression — a pattern language for matching text (used by grep -E, sed, awk). Special chars like ^ $ . * [] + describe shapes, not literal characters."
+  - term: anchor
+    definition: "A regex marker that ties a match to a position: ^ = start of line, $ = end of line. Anchors stop a pattern matching in the middle of a line."
+  - term: character_class
+    definition: "A regex set in brackets matching any one listed character, e.g. [0-9] a digit, [a-z] a lowercase letter, [^0-9] a non-digit."
+  - term: capture_group
+    definition: "A parenthesised part of a regex, e.g. (ab)+, that can be quantified or (in sed) referenced back as \\1. Needs grep -E or sed -E for plain parentheses."
+  - term: field_delimiter
+    definition: "The character that separates columns in a line (colon, comma, tab). cut -d and awk -F tell the tool which one to split on."
+  - term: sort_key
+    definition: "The field sort orders by, set with -k (and -t for the delimiter), e.g. sort -t: -k2 -n sorts numerically on the 2nd colon-field."
+  - term: deduplicate
+    definition: "Collapse repeated lines to one. uniq only merges ADJACENT duplicates, so sort first (or use sort -u)."
+  - term: stream_editor
+    definition: "sed — reads text line by line and applies edit commands (substitute, delete, insert), printing the result without needing an interactive editor."
+  - term: substitution
+    definition: "sed's s/OLD/NEW/ command that replaces matched text; add the g flag for every occurrence on a line, -i to edit the file in place."
+  - term: awk_field
+    definition: "In awk, $1 $2 ... are the fields of the current line, $0 is the whole line, NR is the current line number, NF the field count. -F sets the separator."

@@ -1,0 +1,21 @@
+terms:
+  - term: uid
+    definition: "User ID — the number that actually identifies a user to the kernel. 0 is root; system accounts are usually < 1000; the first human user is typically 1000."
+  - term: gid
+    definition: "Group ID — the number identifying a group. Every user has a primary gid plus zero or more supplementary groups."
+  - term: root
+    definition: "The superuser, uid 0. Bypasses all permission checks. On Kali the root account is often locked; use sudo instead of logging in as root."
+  - term: passwd_file
+    definition: "/etc/passwd — the world-readable account list (name:x:uid:gid:comment:home:shell). Password hashes are NOT here; they're in root-only /etc/shadow."
+  - term: su_cmd
+    definition: "`su - <user>` switches to a full login shell as another user using THEIR password. Plain `su` (no dash) keeps your old environment — usually not what you want."
+  - term: sudo_cmd
+    definition: "`sudo CMD` runs one command as root (or another user) using YOUR password, governed by the sudoers policy. `sudo -l` lists what you may run."
+  - term: supplementary_group
+    definition: "Extra groups a user belongs to beyond their primary group; they grant capabilities (sudo, adm, wireshark). Add with `usermod -aG` — the -a is essential."
+  - term: primary_group
+    definition: "A user's main group (their gid in /etc/passwd); new files they create are owned by it by default."
+  - term: home_directory
+    definition: "A user's personal directory (e.g. /home/kali), the 6th field of their passwd entry and the value of $HOME."
+  - term: login_shell
+    definition: "The program started when a user logs in (7th passwd field), e.g. /usr/bin/zsh on Kali. Change it with chsh."

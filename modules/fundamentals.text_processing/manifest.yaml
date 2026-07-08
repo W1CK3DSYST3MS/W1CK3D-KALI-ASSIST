@@ -1,0 +1,17 @@
+module_id: fundamentals.text_processing
+name: "Text Processing (grep, sed, awk & friends)"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.pipes_redirection]
+provides:
+  lessons: [lesson.text_processing]
+  glossary_terms: [regex, anchor, field_delimiter, stream_editor, substitution, awk_field, sort_key, deduplicate, character_class, capture_group]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against grep/sed/awk/cut/sort/uniq/tr/wc man pages"
+license: "project-proprietary lesson text"
+checksum: ""

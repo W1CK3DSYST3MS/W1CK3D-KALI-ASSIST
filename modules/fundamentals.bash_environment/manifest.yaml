@@ -1,0 +1,17 @@
+module_id: fundamentals.bash_environment
+name: "Your Shell Environment (zsh, PATH & aliases)"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.shell_grammar]
+provides:
+  lessons: [lesson.bash_environment]
+  glossary_terms: [shell, zsh, path_var, environment_variable, export, alias, rc_file, source_cmd, shell_builtin, command_hash]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against zsh/bash, PATH, alias, export docs + Kali (default shell = zsh)"
+license: "project-proprietary lesson text"
+checksum: ""

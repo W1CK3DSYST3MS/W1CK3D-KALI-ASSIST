@@ -1,0 +1,220 @@
+lesson_id: lesson.archives_transfer
+title: "Archives & File Transfer"
+topic_tags: [fundamentals, tar, gzip, zip, scp, rsync, download]
+audience: beginner
+os_profile: kali
+goal: >
+  Package and move files around: create and extract tar/gzip and zip archives, download files
+  with wget and curl, verify them with checksums, and copy or sync files to and from remote
+  hosts with scp and rsync. These are daily skills for grabbing tools, wordlists, and loot.
+intro: >
+  You constantly bundle results, unpack downloaded tools, and move files between machines. This
+  lesson builds a small folder, archives it several ways, downloads and verifies a file, and
+  shows the remote-copy commands. Local steps are safe; the scp/rsync steps show the exact
+  syntax to use against a host you control. Run each command, compare to EXPECTED, answer Yes/No.
+completion_criteria: "learner can create/extract tar and zip archives, download + checksum a file, and use scp/rsync"
+next_suggestions:
+  - "Files, Paths & Navigation (fundamentals)"
+  - "Wordlists — where they live and how tools use them"
+steps:
+  - step_id: at0
+    title: "Make a folder to archive"
+    slot_target: null
+    glossary_refs: []
+    explanation:
+      what: "We create a small directory with two files so every archive command has known contents."
+      why: "Predictable input means your output matches the EXPECTED blocks."
+      where: "Setup."
+    try_this: "mkdir -p demo && echo one > demo/a.txt && echo two > demo/b.txt && ls demo"
+    success_criteria: "demo/ contains a.txt and b.txt."
+    expected_output: |
+      a.txt
+      b.txt
+    alternatives:
+      - trigger: "mkdir: cannot create directory 'demo': File exists"
+        cause: "You ran it before."
+        fix: "That's fine — the -p flag already suppresses the error; if you see it, the folder exists. Continue."
+        check: "ls demo shows the two files."
+  - step_id: at1
+    title: "Create a compressed tarball (tar -czf)"
+    slot_target: null
+    glossary_refs: [tarball, gzip, archive_vs_compress]
+    explanation:
+      what: "`tar -czf demo.tar.gz demo` packs the folder into one file. c=create, z=gzip-compress, f=file (name comes next). Remember the order: 'czf then the archive name'."
+      why: "tar bundles many files into one; the z adds gzip compression. It's THE standard way Linux software and results are shipped."
+      where: "Creates demo.tar.gz in the current directory."
+    try_this: "tar -czf demo.tar.gz demo && ls -l demo.tar.gz"
+    success_criteria: "demo.tar.gz is created (a small non-zero size)."
+    expected_output: |
+      -rw-r--r-- 1 kali kali 152 Jul  8 10:40 demo.tar.gz
+    alternatives:
+      - trigger: "tar: demo.tar.gz: Cannot open: No such file or directory"
+        cause: "The -f flag wasn't immediately followed by the filename, so tar misread the arguments."
+        fix: "Keep f LAST in the flag cluster and put the archive name right after: `tar -czf name.tar.gz folder`."
+        check: "The archive is created."
+      - trigger: "you want maximum/xz compression instead of gzip"
+        cause: "gzip is fast but not the smallest."
+        fix: "Use J for xz: `tar -cJf demo.tar.xz demo` (smaller, slower)."
+        check: "A .tar.xz is produced."
+  - step_id: at2
+    title: "Look inside, then extract (tar -tzf / -xzf)"
+    slot_target: null
+    glossary_refs: [tarball, extract]
+    explanation:
+      what: "`tar -tzf demo.tar.gz` LISTS contents (t=list) without extracting; `tar -xzf demo.tar.gz` extracts (x=extract). Add `-C /path` to extract somewhere specific."
+      why: "Always list an archive before extracting so you know WHERE its files will land (a 'tar bomb' can splatter files into your current dir)."
+      where: "List is read-only; extract writes files."
+    try_this: "tar -tzf demo.tar.gz; tar -xzf demo.tar.gz -C /tmp && ls /tmp/demo"
+    success_criteria: "The listing shows demo/ files; extraction recreates them under /tmp/demo."
+    expected_output: |
+      demo/
+      demo/a.txt
+      demo/b.txt
+      a.txt
+      b.txt
+    alternatives:
+      - trigger: "extracting dumped files all over your current directory"
+        cause: "The archive had no top-level folder (a 'tar bomb')."
+        fix: "List first with -tzf; if there's no common prefix, extract into a fresh dir: `mkdir out && tar -xzf a.tgz -C out`."
+        check: "Files land only where you intended."
+      - trigger: "tar: This does not look like a tar archive"
+        cause: "Wrong compression flag (e.g. -z on an xz file) or a corrupt/partial download."
+        fix: "Let tar auto-detect: modern tar accepts `tar -xf file` without the z/J. Re-download if truncated."
+        check: "Extraction succeeds."
+  - step_id: at3
+    title: "Compress single files (gzip / gunzip)"
+    slot_target: null
+    glossary_refs: [gzip, archive_vs_compress]
+    explanation:
+      what: "`gzip file` compresses ONE file in place to file.gz (the original is removed); `gunzip file.gz` reverses it. `gzip -k` keeps the original."
+      why: "Many wordlists and logs ship as plain .gz (e.g. rockyou.txt.gz). gzip is for single files; tar is for bundling many."
+      where: "Replaces the file with a .gz unless -k."
+    try_this: "cp demo/a.txt note.txt && gzip -k note.txt && ls note.txt*"
+    success_criteria: "You get note.txt.gz (and, thanks to -k, note.txt is kept)."
+    expected_output: |
+      note.txt  note.txt.gz
+    alternatives:
+      - trigger: "your original file vanished after gzip"
+        cause: "gzip replaces the file by default."
+        fix: "Use -k to keep it, or gunzip to get it back: `gunzip note.txt.gz`."
+        check: "Both the .gz and original exist (with -k)."
+      - trigger: "you have rockyou.txt.gz and want the plain file"
+        cause: "It ships compressed to save space."
+        fix: "`gunzip /usr/share/wordlists/rockyou.txt.gz` (or `gunzip -k` to keep the .gz)."
+        check: "rockyou.txt appears next to it."
+  - step_id: at4
+    title: "Zip archives (zip / unzip)"
+    slot_target: null
+    glossary_refs: [zip_archive, extract]
+    explanation:
+      what: "`zip -r out.zip demo` creates a zip (r=recurse into folders); `unzip out.zip` extracts it; `unzip -l out.zip` lists it. Zip is the cross-platform format Windows understands."
+      why: "You'll receive and send .zip files with other people/tools; zip bundles AND compresses in one step (unlike tar)."
+      where: "zip creates; unzip extracts."
+    try_this: "zip -r out.zip demo >/dev/null && unzip -l out.zip"
+    success_criteria: "The zip is listed with demo/a.txt and demo/b.txt inside."
+    expected_output: |
+      Archive:  out.zip
+        Length      Date    Time    Name
+      ---------  ---------- -----   ----
+              4  2026-07-08 10:40   demo/a.txt
+              4  2026-07-08 10:40   demo/b.txt
+    alternatives:
+      - trigger: "zip: command not found"
+        cause: "zip/unzip aren't always preinstalled on minimal images."
+        fix: "Install them: `sudo apt install zip unzip`."
+        check: "zip/unzip now run."
+      - trigger: "the zip is password protected"
+        cause: "It was created with encryption."
+        fix: "Provide the password: `unzip -P '<pw>' file.zip` (or unzip prompts). For cracking authorized test zips, that's a job for john/zip2john."
+        check: "Extraction succeeds with the password."
+  - step_id: at5
+    title: "Download a file (wget / curl)"
+    slot_target: null
+    glossary_refs: [download_tool]
+    explanation:
+      what: "`wget URL` saves a file using its remote name; `curl -O URL` does the same, while `curl -L URL -o name` follows redirects and names the output. Both are for fetching over HTTP(S)."
+      why: "You'll download tools, wordlists and payload hosts constantly. Knowing both matters because one is often missing or scripted around."
+      where: "Writes the downloaded file into the current directory."
+    try_this: "wget -q https://www.kali.org/robots.txt -O robots.txt && head -2 robots.txt"
+    success_criteria: "robots.txt downloads and its first lines print."
+    expected_output: |
+      User-agent: *
+      Allow: /
+    alternatives:
+      - trigger: "wget: unable to resolve host address"
+        cause: "No network or DNS."
+        fix: "Check connectivity (Networking lesson): `ping -c1 1.1.1.1` then `ping -c1 kali.org`."
+        check: "The download completes."
+      - trigger: "a certificate / TLS error"
+        cause: "System clock is wrong, or the site's cert is untrusted."
+        fix: "Fix the clock first (`sudo timedatectl set-ntp true`). Only bypass verification (`curl -k`) for hosts you control in testing."
+        check: "The download succeeds after fixing the clock."
+  - step_id: at6
+    title: "Verify a download (sha256sum)"
+    slot_target: null
+    glossary_refs: [checksum]
+    explanation:
+      what: "`sha256sum file` prints a fixed-length fingerprint. Compare it to the value the source published; if they match, the file is intact and untampered."
+      why: "Downloads can be corrupted or malicious. Verifying the hash is how you trust a tool or ISO before using it."
+      where: "Read-only; produces a hash."
+    try_this: "sha256sum robots.txt"
+    success_criteria: "A 64-character hex hash prints next to the filename."
+    expected_output: |
+      3b7c1e0f2a9d4c8b5e6f70a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6  robots.txt
+    alternatives:
+      - trigger: "your hash doesn't match the published one"
+        cause: "Truncated/corrupt download, wrong file, or tampering."
+        fix: "Re-download and re-check. Persistent mismatch on a signed release = do NOT run it."
+        check: "The hashes match exactly."
+      - trigger: "the source published an MD5 or SHA1 instead"
+        cause: "Different algorithm."
+        fix: "Use the matching tool: `md5sum` or `sha1sum`. Prefer sha256 when offered."
+        check: "You compare like-for-like."
+  - step_id: at7
+    title: "Copy to/from a remote host (scp)"
+    slot_target: null
+    glossary_refs: [scp_cmd, ssh_remote]
+    explanation:
+      what: "`scp file user@host:/path/` copies a local file to a remote host over SSH; reverse the arguments to pull. `-r` copies directories, `-P` sets a non-default SSH port (capital P!)."
+      why: "The simplest way to move a file to a box you have SSH access to — no extra services needed."
+      where: "Uses SSH; runs against a host you control."
+    try_this: "scp demo.tar.gz user@192.168.1.10:/tmp/"
+    success_criteria: "The file transfers and scp shows a 100% progress line (given valid SSH access)."
+    expected_output: |
+      user@192.168.1.10's password:
+      demo.tar.gz                             100%  152    0.1KB/s   00:00
+    alternatives:
+      - trigger: "Permission denied (publickey,password)"
+        cause: "Wrong user/password, or the host only allows key auth."
+        fix: "Confirm you can `ssh user@host` first; add your key with `ssh-copy-id user@host` if password auth is disabled."
+        check: "ssh works, then scp works."
+      - trigger: "Connection refused / timed out"
+        cause: "SSH isn't running on the host or a firewall blocks the port."
+        fix: "Verify the port (default 22) and that sshd is up on the target; use `-P <port>` if non-standard."
+        check: "scp connects."
+  - step_id: at8
+    title: "Sync efficiently (rsync -av)"
+    slot_target: null
+    glossary_refs: [rsync_cmd, ssh_remote]
+    explanation:
+      what: "`rsync -av src/ dest/` copies only what changed, preserving permissions/timestamps (a=archive, v=verbose). Over SSH: `rsync -av src/ user@host:/path/`. A TRAILING SLASH on src means 'contents of', no slash means 'the folder itself'."
+      why: "For repeated copies and large trees, rsync is far faster than scp because it transfers only differences and can resume."
+      where: "Local or over SSH; the trailing-slash rule is the classic gotcha."
+    try_this: "rsync -av demo/ /tmp/demo_sync/"
+    success_criteria: "The files copy and rsync summarises what it sent."
+    expected_output: |
+      sending incremental file list
+      ./
+      a.txt
+      b.txt
+
+      sent 178 bytes  received 57 bytes  470.00 bytes/sec
+    alternatives:
+      - trigger: "you got an extra nested folder (dest/demo/demo/...)"
+        cause: "Trailing-slash mismatch — `demo` (no slash) copies the folder itself into the destination."
+        fix: "Use `demo/` (with slash) to copy its CONTENTS into dest, or omit the slash deliberately to nest."
+        check: "The destination layout is what you intended."
+      - trigger: "rsync: command not found on the remote"
+        cause: "rsync must exist on BOTH ends for SSH sync."
+        fix: "Install it on the remote (`sudo apt install rsync`), or fall back to scp -r."
+        check: "The sync completes."

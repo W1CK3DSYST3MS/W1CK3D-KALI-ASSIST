@@ -1,0 +1,207 @@
+lesson_id: lesson.bash_environment
+title: "Your Shell Environment (zsh, PATH & aliases)"
+topic_tags: [fundamentals, shell, zsh, path, environment, aliases]
+audience: beginner
+os_profile: kali
+goal: >
+  Understand the environment your commands run in: which shell you're using (Kali defaults to
+  zsh, not bash), how PATH decides which program runs, environment variables and export,
+  aliases, and the rc file where you make changes stick. This fixes the classic
+  'I installed it but command not found' and 'I edited .bashrc and nothing changed' problems.
+intro: >
+  When you type a command, the shell has to FIND it, and it runs inside an environment of
+  variables. Getting comfortable with PATH, variables and your rc file saves you from the most
+  common beginner frustrations on Kali. Note the big gotcha up front: modern Kali uses ZSH, so
+  the file that matters is ~/.zshrc, not ~/.bashrc. Run each command, compare to EXPECTED,
+  then answer Yes/No.
+completion_criteria: "learner can identify their shell, read/modify PATH, set env vars and aliases, and persist them in the right rc file"
+next_suggestions:
+  - "Package Management on Kali (apt)"
+  - "Rare & Hard troubleshooter — PATH / shell issues"
+steps:
+  - step_id: be1
+    title: "Which shell am I actually using?"
+    slot_target: null
+    glossary_refs: [shell, zsh]
+    explanation:
+      what: "`echo $SHELL` shows your login shell; `ps -p $$` shows the shell running THIS session. On modern Kali both are usually zsh."
+      why: "Every tweak you make (aliases, PATH) goes in a shell-specific file. Editing the wrong shell's file does nothing."
+      where: "Read-only; $$ is the current process id."
+    try_this: "echo $SHELL; ps -p $$"
+    success_criteria: "You can see which shell you're in (likely /usr/bin/zsh on Kali)."
+    expected_output: |
+      /usr/bin/zsh
+          PID TTY          TIME CMD
+        1423 pts/0    00:00:00 zsh
+    alternatives:
+      - trigger: "it says bash, not zsh"
+        cause: "Older Kali, a custom account, or you started bash manually."
+        fix: "That's fine — just use ~/.bashrc instead of ~/.zshrc in the later steps. To switch default to zsh: `chsh -s /usr/bin/zsh` then re-login."
+        check: "You know your shell and which rc file to edit."
+      - trigger: "$SHELL and the running shell disagree"
+        cause: "$SHELL is your LOGIN shell; you may have launched a different one since."
+        fix: "Trust `ps -p $$` for what's running right now; $SHELL for what you log into."
+        check: "You understand the difference."
+  - step_id: be2
+    title: "How the shell finds a command: PATH"
+    slot_target: null
+    glossary_refs: [path_var, command_hash]
+    explanation:
+      what: "`echo $PATH` prints a colon-separated list of directories. When you type a command, the shell searches these in order and runs the first match. `which nmap` shows which one wins."
+      why: "'command not found' almost always means the program's directory isn't in PATH — not that it isn't installed."
+      where: "Read-only; PATH is an environment variable."
+    try_this: "echo $PATH; which ls"
+    success_criteria: "You see the directory list and the full path to ls (e.g. /usr/bin/ls)."
+    expected_output: |
+      /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      /usr/bin/ls
+    alternatives:
+      - trigger: "which <tool> prints nothing for a tool you just installed"
+        cause: "Its install directory isn't in PATH (common for pipx ~/.local/bin and Go ~/go/bin)."
+        fix: "Add the directory to PATH — see step be7. `pipx ensurepath` does this for pipx automatically."
+        check: "which <tool> now prints a path."
+      - trigger: "the shell runs an OLD copy after you moved/updated a binary"
+        cause: "zsh/bash caches command locations (the command hash)."
+        fix: "Refresh it: `hash -r` (bash) or `rehash` (zsh), or open a new terminal."
+        check: "which points at the new location."
+  - step_id: be3
+    title: "Environment variables"
+    slot_target: null
+    glossary_refs: [environment_variable]
+    explanation:
+      what: "Variables hold values the shell and programs read. `printenv` (or `env`) lists exported ones; `echo $HOME` prints a single value."
+      why: "HOME, PATH, USER, EDITOR and many tool settings are environment variables — reading them is how you diagnose behaviour."
+      where: "Read-only; $NAME expands a variable."
+    try_this: "echo \"$HOME $USER\"; printenv | head -5"
+    success_criteria: "Your home path and username print, followed by a few environment entries."
+    expected_output: |
+      /home/kali kali
+      SHELL=/usr/bin/zsh
+      PWD=/home/kali
+      LOGNAME=kali
+      HOME=/home/kali
+      LANG=en_US.UTF-8
+    alternatives:
+      - trigger: "$HOME or $USER is empty"
+        cause: "A broken login environment, or you're in a minimal shell (su without -)."
+        fix: "Use `su -` (with the dash) to get a full login environment, or set them manually."
+        check: "The variables expand to sensible values."
+      - trigger: "you set a var but a program doesn't see it"
+        cause: "It wasn't exported, so child processes don't inherit it."
+        fix: "Export it (next step): `export VAR=value`."
+        check: "The program picks up the value."
+  - step_id: be4
+    title: "Set a variable and export it"
+    slot_target: null
+    glossary_refs: [environment_variable, export]
+    explanation:
+      what: "`NAME=value` sets a shell variable (this shell only). `export NAME=value` also makes it visible to programs you launch. No spaces around the =."
+      why: "Config for many tools is passed via exported variables (e.g. EDITOR, http_proxy)."
+      where: "Session-only unless you also put it in your rc file (step be6)."
+    try_this: "GREETING=hello; echo $GREETING; export EDITOR=nano; printenv EDITOR"
+    success_criteria: "GREETING echoes 'hello'; EDITOR shows nano in the environment."
+    expected_output: |
+      hello
+      nano
+    alternatives:
+      - trigger: "bash: VAR = value: command not found"
+        cause: "You put spaces around the =."
+        fix: "Remove them: `VAR=value`, not `VAR = value`."
+        check: "The assignment succeeds silently."
+      - trigger: "the variable is gone after you close the terminal"
+        cause: "Shell/env vars are session-only by design."
+        fix: "To persist it, add the export line to ~/.zshrc (step be6)."
+        check: "It's present in a new terminal after the rc edit."
+  - step_id: be5
+    title: "Aliases — shortcuts for commands"
+    slot_target: null
+    glossary_refs: [alias, shell_builtin]
+    explanation:
+      what: "`alias ll='ls -la'` makes `ll` expand to `ls -la`. `alias` with no args lists current aliases; `unalias ll` removes one."
+      why: "Aliases save typing for commands you run constantly and let you add safe defaults (e.g. `rm -i`)."
+      where: "Session-only until you add them to your rc file."
+    try_this: "alias ll='ls -la'; ll ~ | head -3; alias | grep ll"
+    success_criteria: "`ll` runs a long listing; the alias shows in the alias list."
+    expected_output: |
+      total 40
+      drwxr-xr-x 15 kali kali 4096 Jul  8 09:12 .
+      drwxr-xr-x  3 root root 4096 Jul  1 08:00 ..
+      ll='ls -la'
+    alternatives:
+      - trigger: "the alias is gone in a new terminal"
+        cause: "Aliases defined at the prompt are session-only."
+        fix: "Add the `alias ll='ls -la'` line to ~/.zshrc and reload (step be6)."
+        check: "ll works in a fresh terminal."
+      - trigger: "an alias gets in the way of the real command"
+        cause: "The alias shadows the program for that name."
+        fix: "Bypass it once with a leading backslash: `\\ls`, or remove it with `unalias ls`."
+        check: "The underlying command runs."
+  - step_id: be6
+    title: "Make it stick: the rc file (~/.zshrc)"
+    slot_target: null
+    glossary_refs: [rc_file, source_cmd, zsh]
+    explanation:
+      what: "Your shell reads ~/.zshrc (zsh) or ~/.bashrc (bash) at startup. Add exports/aliases there to make them permanent. `source ~/.zshrc` reloads it without a new terminal."
+      why: "This is the single most useful configuration skill — and the #1 place beginners edit the WRONG file on Kali (bashrc under zsh does nothing)."
+      where: "Persistent config; append with >> so you don't overwrite it."
+    try_this: "echo \"alias ll='ls -la'\" >> ~/.zshrc; source ~/.zshrc; ll ~ | head -1"
+    success_criteria: "After reloading, ll works and will keep working in new terminals."
+    expected_output: |
+      total 40
+    alternatives:
+      - trigger: "you edited ~/.bashrc but nothing changed"
+        cause: "You're in zsh, which ignores ~/.bashrc entirely."
+        fix: "Put your changes in ~/.zshrc instead (confirm your shell with step be1)."
+        check: "The change takes effect after `source ~/.zshrc`."
+      - trigger: "you accidentally overwrote the rc file"
+        cause: "You used > (overwrite) instead of >> (append)."
+        fix: "Restore from a backup, or copy the system default: `cp /etc/skel/.zshrc ~/.zshrc`. Always append with >>."
+        check: "The rc file has its normal contents plus your additions."
+      - trigger: "a syntax error in .zshrc breaks new shells"
+        cause: "A bad line is run at every startup."
+        fix: "Open a shell that skips it (`zsh -f`), fix the offending line, then reload."
+        check: "New terminals start cleanly."
+  - step_id: be7
+    title: "Add a directory to PATH permanently"
+    slot_target: null
+    glossary_refs: [path_var, rc_file, source_cmd]
+    explanation:
+      what: "`export PATH=\"$HOME/.local/bin:$PATH\"` prepends a directory to PATH. Put that line in ~/.zshrc to keep it. Keep `$PATH` on the end so you don't lose the existing entries."
+      why: "pipx installs to ~/.local/bin and Go to ~/go/bin — both off the default PATH, which is why freshly installed tools report 'command not found'."
+      where: "Persistent; goes in the rc file."
+    try_this: "echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc; source ~/.zshrc; echo $PATH | tr ':' '\\n' | grep local/bin"
+    success_criteria: "~/.local/bin now appears in your PATH."
+    expected_output: |
+      /home/kali/.local/bin
+    alternatives:
+      - trigger: "you dropped the :$PATH and now most commands are gone"
+        cause: "Overwriting PATH instead of prepending removed the system directories."
+        fix: "In the SAME terminal run `export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` to recover, then fix the rc line to end with :$PATH."
+        check: "Normal commands work again and your dir is included."
+      - trigger: "pipx tools still not found"
+        cause: "pipx has its own helper for this."
+        fix: "Run `pipx ensurepath`, then open a new terminal."
+        check: "which <pipx-tool> resolves."
+  - step_id: be8
+    title: "Command history"
+    slot_target: null
+    glossary_refs: [shell_builtin]
+    explanation:
+      what: "`history` lists recent commands; Ctrl+R searches history interactively; `!!` re-runs the last command and `!123` runs history entry 123."
+      why: "Recalling and re-running commands is a huge time-saver, and history is where you find that long command you ran yesterday."
+      where: "Interactive; history lives in ~/.zsh_history (zsh) or ~/.bash_history (bash)."
+    try_this: "history | tail -3"
+    success_criteria: "Your last few commands print with numbers."
+    expected_output: |
+      1021  echo $PATH
+      1022  source ~/.zshrc
+      1023  history | tail -3
+    alternatives:
+      - trigger: "history is empty or doesn't persist"
+        cause: "The history file isn't being written (new shell, or HISTFILE/HISTSIZE unset)."
+        fix: "It usually saves on clean exit; ensure you close terminals normally. In zsh, `SAVEHIST` and `HISTFILE` control it (set in ~/.zshrc)."
+        check: "Past commands appear in a new session."
+      - trigger: "you don't want a sensitive command saved"
+        cause: "History records everything you type, including secrets on the command line."
+        fix: "Prefix the command with a space (if HIST_IGNORE_SPACE is on), or avoid putting secrets in arguments at all."
+        check: "The command isn't in `history`."

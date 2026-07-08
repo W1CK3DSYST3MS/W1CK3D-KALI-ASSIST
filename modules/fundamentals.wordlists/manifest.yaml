@@ -1,0 +1,17 @@
+module_id: fundamentals.wordlists
+name: "Wordlists — Where They Live & How Tools Use Them"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.text_processing]
+provides:
+  lessons: [lesson.wordlists]
+  glossary_terms: [wordlist, rockyou, seclists, dictionary_attack, wordlist_dir, custom_wordlist, cewl, crunch, deduplicate_list, wordlist_flag]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against Kali /usr/share/wordlists layout, seclists, cewl/crunch, tool -w/-P/--wordlist flags"
+license: "project-proprietary lesson text"
+checksum: ""

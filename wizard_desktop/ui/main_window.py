@@ -144,9 +144,14 @@ class MainWindow(QMainWindow):
         "lesson.permissions",
         "lesson.viewing_editing",
         "lesson.pipes_redirection",
+        "lesson.text_processing",
         "lesson.processes",
         "lesson.packages",
+        "lesson.bash_environment",
+        "lesson.users_groups",
+        "lesson.archives_transfer",
         "lesson.networking",
+        "lesson.wordlists",
     ]
 
     def _ordered_lessons(self) -> list:

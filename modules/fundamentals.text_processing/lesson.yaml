@@ -1,0 +1,257 @@
+lesson_id: lesson.text_processing
+title: "Text Processing (grep, sed, awk & friends)"
+topic_tags: [fundamentals, text, grep, sed, awk, filtering]
+audience: beginner
+os_profile: kali
+goal: >
+  Slice, filter and reshape text from the command line: search with grep and regular
+  expressions, cut out columns, sort and deduplicate, count, translate characters, do
+  find-and-replace with sed, and pull fields with awk. These are the tools you'll reach for
+  constantly when reading tool output, logs, and wordlists.
+intro: >
+  Almost every security tool prints text, and the real skill is turning that firehose into
+  the few lines you care about. This lesson builds a small sample file, then filters it with
+  grep, cut, sort, uniq, wc, tr, sed and awk. Everything is read-only transformation — your
+  files aren't changed unless you redirect output yourself. Run each command, compare it to
+  the EXPECTED block, then answer Yes/No.
+completion_criteria: "learner can grep with regex, cut fields, sort/uniq, and do basic sed/awk transforms"
+next_suggestions:
+  - "Pipes, Redirection & Chaining (fundamentals)"
+  - "Wordlists — where they live and how tools use them"
+steps:
+  - step_id: tp0
+    title: "Make a sample file to work on"
+    slot_target: null
+    glossary_refs: []
+    explanation:
+      what: "A heredoc (`cat > file <<'EOF' ... EOF`) writes the lines between the markers into a file. We build a small colon-separated dataset to practise on."
+      why: "So every later command has predictable input and your EXPECTED blocks match exactly."
+      where: "Setup; this is the only step that writes a file."
+    try_this: "cat > people.txt <<'EOF'\nalice:30:admin\nbob:25:user\ncarol:41:admin\ndave:25:user\nEOF"
+    success_criteria: "`cat people.txt` shows the four colon-separated lines."
+    expected_output: |
+      alice:30:admin
+      bob:25:user
+      carol:41:admin
+      dave:25:user
+    alternatives:
+      - trigger: "the shell shows a > prompt and waits"
+        cause: "You're inside the heredoc — it reads lines until it sees EOF on its own."
+        fix: "Type EOF on a line by itself and press Enter to finish. If stuck, press Ctrl+C and start over."
+        check: "You return to the normal prompt and people.txt exists."
+      - trigger: "bash: cat: command not found (unlikely)"
+        cause: "Broken PATH."
+        fix: "Use the full path /bin/cat, and check your PATH (see the Bash Environment lesson)."
+        check: "The file gets written."
+  - step_id: tp1
+    title: "Find lines with grep"
+    slot_target: null
+    glossary_refs: [regex]
+    explanation:
+      what: "`grep PATTERN file` prints every line that contains the pattern."
+      why: "Filtering to matching lines is the single most-used text operation on Linux."
+      where: "Reads the file; prints matches to stdout."
+    try_this: "grep admin people.txt"
+    success_criteria: "Only the lines containing 'admin' are printed."
+    expected_output: |
+      alice:30:admin
+      carol:41:admin
+    alternatives:
+      - trigger: "no output at all"
+        cause: "No line contains that exact text, or case differs (grep is case-sensitive)."
+        fix: "Add -i for case-insensitive: `grep -i ADMIN people.txt`."
+        check: "Matching lines appear."
+      - trigger: "grep: people.txt: No such file or directory"
+        cause: "You're not in the directory where you made the file."
+        fix: "`ls` to confirm it's here, or `cd` to where it is. Re-run step tp0 if needed."
+        check: "grep finds the file."
+  - step_id: tp2
+    title: "Useful grep flags (-i -n -v -c -r)"
+    slot_target: null
+    glossary_refs: [regex]
+    explanation:
+      what: "-i ignores case, -n shows line numbers, -v inverts (non-matching lines), -c counts matches, -r searches a directory recursively."
+      why: "These five flags cover most real searches — especially -v (exclude) and -r (search a whole tree)."
+      where: "Flags go before the pattern."
+    try_this: "grep -n -v admin people.txt"
+    success_criteria: "The non-admin lines print, each with its line number."
+    expected_output: |
+      2:bob:25:user
+      4:dave:25:user
+    alternatives:
+      - trigger: "you wanted a count, not the lines"
+        cause: "Use -c to count matching lines instead of printing them."
+        fix: "`grep -c user people.txt` prints 2."
+        check: "A single number prints."
+      - trigger: "grep -r over a directory floods the screen / is slow"
+        cause: "Recursive search hit many files or binary files."
+        fix: "Add --include='*.txt' to limit file types, or -l to print only filenames with a match."
+        check: "Output is a manageable list."
+  - step_id: tp3
+    title: "Regex: anchors and classes (grep -E)"
+    slot_target: null
+    glossary_refs: [regex, anchor, character_class, capture_group]
+    explanation:
+      what: "A regular expression describes a text pattern: `^` anchors the start of a line, `$` the end, `[0-9]` is a character class, `+` means one-or-more. `grep -E` enables extended regex."
+      why: "Regex turns grep from literal search into pattern matching — the basis of sed, awk, and most tools' filters."
+      where: "Pattern is a regex when you think of it as one; -E enables +, |, () without backslashes."
+    try_this: "grep -E ':2[0-9]:' people.txt"
+    success_criteria: "Lines whose age field is in the twenties print (bob, dave)."
+    expected_output: |
+      bob:25:user
+      dave:25:user
+    alternatives:
+      - trigger: "grep -E 'admin$' matches nothing"
+        cause: "The line ends in 'admin' only if there's no trailing character — check for hidden spaces or CRLF."
+        fix: "Inspect endings with `cat -A people.txt` (a `$` marks each line end); strip CRLF with `tr -d '\\r'` if the file came from Windows."
+        check: "The anchor matches once the endings are clean."
+      - trigger: "special characters like . or * match too much"
+        cause: "In regex `.` is any character and `*` is a quantifier."
+        fix: "Escape them with a backslash to match literally: `\\.` matches a real dot."
+        check: "The pattern matches only what you intend."
+  - step_id: tp4
+    title: "Cut out columns (cut -d -f)"
+    slot_target: null
+    glossary_refs: [field_delimiter]
+    explanation:
+      what: "`cut -d: -f1` splits each line on the delimiter `:` and prints field 1. `-f1,3` prints fields 1 and 3."
+      why: "Structured output (colons, commas, tabs) is everywhere — cut pulls the column you want."
+      where: "-d sets the delimiter, -f selects fields."
+    try_this: "cut -d: -f1,3 people.txt"
+    success_criteria: "Only the name and role columns print, colon-separated."
+    expected_output: |
+      alice:admin
+      bob:user
+      carol:admin
+      dave:user
+    alternatives:
+      - trigger: "the whole line prints unchanged"
+        cause: "The delimiter didn't match — cut defaults to TAB, and your file uses colons."
+        fix: "Set the delimiter explicitly with -d: (or -d',' for CSV)."
+        check: "Only the chosen fields print."
+      - trigger: "fields are separated by multiple/variable spaces"
+        cause: "cut can't handle runs of whitespace as one delimiter."
+        fix: "Use awk instead: `awk '{print $1, $3}'` treats any whitespace run as a separator."
+        check: "The right columns print."
+  - step_id: tp5
+    title: "Sort and deduplicate (sort, uniq)"
+    slot_target: null
+    glossary_refs: [sort_key, deduplicate]
+    explanation:
+      what: "`sort` orders lines; `-t: -k2 -n` sorts numerically on the 2nd colon-field. `uniq -c` collapses ADJACENT duplicate lines and counts them — so you almost always `sort | uniq`."
+      why: "Ordering and counting are how you find the top talkers, common values, or unique entries in tool output."
+      where: "Pipe sort into uniq; uniq only dedupes neighbours, hence sort first."
+    try_this: "cut -d: -f3 people.txt | sort | uniq -c"
+    success_criteria: "A count of each role prints (2 admin, 2 user)."
+    expected_output: |
+            2 admin
+            2 user
+    alternatives:
+      - trigger: "uniq shows duplicates it should have merged"
+        cause: "The input wasn't sorted — uniq only merges adjacent equal lines."
+        fix: "Always `sort` before `uniq` (or use `sort -u` for plain dedupe)."
+        check: "Each value appears once."
+      - trigger: "numbers sort as 1, 10, 2, 20 ..."
+        cause: "Default sort is lexicographic (text), not numeric."
+        fix: "Add -n for numeric sort: `sort -n`; combine with -t and -k to sort on a field."
+        check: "Numbers order 2, 10, 20 as expected."
+  - step_id: tp6
+    title: "Count with wc"
+    slot_target: null
+    glossary_refs: []
+    explanation:
+      what: "`wc` counts: -l lines, -w words, -c bytes. `wc -l` on a pipe is the fastest way to answer 'how many?'."
+      why: "Counting matches/hosts/lines is a constant need — how many open ports, how many users, how many hits."
+      where: "Usually at the end of a pipe."
+    try_this: "grep -c '' people.txt; wc -l < people.txt"
+    success_criteria: "Both report 4 lines."
+    expected_output: |
+      4
+      4
+    alternatives:
+      - trigger: "wc -l shows one fewer than you expect"
+        cause: "The last line has no trailing newline, so wc doesn't count it."
+        fix: "That's normal for some tools; `grep -c ''` counts it. Either is fine as long as you're consistent."
+        check: "You understand the off-by-one and pick one method."
+      - trigger: "you piped `ls | wc -l` and the count seems off"
+        cause: "ls formats into columns when writing to a terminal but one-per-line into a pipe — usually fine, but hidden files aren't counted without -a."
+        fix: "Use `ls -1a` for an explicit one-per-line count including hidden files."
+        check: "The count matches what you expect."
+  - step_id: tp7
+    title: "Translate and delete characters (tr)"
+    slot_target: null
+    glossary_refs: [character_class]
+    explanation:
+      what: "`tr` maps or deletes characters from stdin: `tr a-z A-Z` upper-cases, `tr -d '\\r'` strips carriage returns, `tr -s ' '` squeezes repeats."
+      why: "Great for normalising text: fixing Windows line endings, changing delimiters, uppercasing."
+      where: "tr only reads stdin — always pipe into it."
+    try_this: "cut -d: -f1 people.txt | tr a-z A-Z"
+    success_criteria: "The names print in uppercase."
+    expected_output: |
+      ALICE
+      BOB
+      CAROL
+      DAVE
+    alternatives:
+      - trigger: "tr people.txt errors / does nothing with a filename"
+        cause: "tr does NOT take a filename argument; it only reads stdin."
+        fix: "Pipe or redirect: `tr a-z A-Z < people.txt`."
+        check: "The translation happens."
+      - trigger: "a file from Windows has ^M at line ends"
+        cause: "CRLF line endings."
+        fix: "Strip them: `tr -d '\\r' < winfile.txt > unixfile.txt`."
+        check: "`cat -A` no longer shows ^M / the ending is just $."
+  - step_id: tp8
+    title: "Find and replace with sed"
+    slot_target: null
+    glossary_refs: [stream_editor, substitution]
+    explanation:
+      what: "`sed 's/OLD/NEW/'` replaces the first OLD on each line; add `g` for all occurrences. By default sed prints to stdout and does NOT change the file."
+      why: "sed is the scriptable find-and-replace for streams and files — renaming, rewriting config, cleaning data."
+      where: "Reads the file/stdin, prints the edited stream."
+    try_this: "sed 's/admin/superuser/' people.txt"
+    success_criteria: "'admin' becomes 'superuser' in the output; the file on disk is unchanged."
+    expected_output: |
+      alice:30:superuser
+      bob:25:user
+      carol:41:superuser
+      dave:25:user
+    alternatives:
+      - trigger: "only the first match per line changed"
+        cause: "Without the g flag, sed replaces once per line."
+        fix: "Add g: `sed 's/o/0/g'` replaces every o on each line."
+        check: "All occurrences change."
+      - trigger: "you wanted to actually edit the file"
+        cause: "sed prints by default and leaves the file alone."
+        fix: "Use -i to edit in place (make a backup first): `sed -i.bak 's/old/new/g' file`."
+        check: "The file changes and file.bak holds the original."
+      - trigger: "your pattern contains slashes (e.g. a path)"
+        cause: "The / delimiter clashes with slashes in the text."
+        fix: "Use a different delimiter: `sed 's#/old/path#/new/path#'`."
+        check: "The substitution works without escaping every slash."
+  - step_id: tp9
+    title: "Pull fields and filter with awk"
+    slot_target: null
+    glossary_refs: [awk_field, field_delimiter]
+    explanation:
+      what: "`awk -F: '$2 > 30 {print $1}'` sets the field separator to `:`, keeps rows whose 2nd field exceeds 30, and prints the 1st. `$0` is the whole line, `$1`/`$2`... are fields, `NR` is the line number."
+      why: "awk is a tiny language for columnar data — filter by a column AND reshape output in one step, which grep+cut can't."
+      where: "-F sets the delimiter; the {action} runs on rows matching the pattern."
+    try_this: "awk -F: '$2 > 30 {print $1, \"is\", $3}' people.txt"
+    success_criteria: "Only people older than 30 print, in a reshaped sentence."
+    expected_output: |
+      alice is admin
+      carol is admin
+    alternatives:
+      - trigger: "every line prints regardless of the condition"
+        cause: "The field separator didn't match, so $2 isn't the age."
+        fix: "Set it: `-F:` for colons (or `-F,` for CSV). Check with `awk -F: '{print $2}' people.txt`."
+        check: "The numeric comparison filters correctly."
+      - trigger: "numeric comparison behaves oddly"
+        cause: "A field has spaces or non-digits, so awk treats it as text."
+        fix: "Force a number with +0: `$2+0 > 30`, or trim whitespace first."
+        check: "The comparison is numeric."
+      - trigger: "you only want a count of matches"
+        cause: "You can count in awk itself."
+        fix: "`awk -F: '$2>30{c++} END{print c}' people.txt` prints the total."
+        check: "A single count prints."

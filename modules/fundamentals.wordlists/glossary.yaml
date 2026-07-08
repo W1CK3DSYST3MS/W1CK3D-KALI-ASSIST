@@ -1,0 +1,21 @@
+terms:
+  - term: wordlist
+    definition: "A plain text file with one candidate per line (passwords, usernames, directory or subdomain names) that a tool tries in turn."
+  - term: rockyou
+    definition: "Kali's classic ~14M-line password list (from a 2009 breach), shipped as /usr/share/wordlists/rockyou.txt.gz — gunzip it before use."
+  - term: seclists
+    definition: "A large community collection of lists (passwords, usernames, web content, subdomains, payloads). Install with apt; lands under /usr/share/seclists."
+  - term: dictionary_attack
+    definition: "Trying every entry in a wordlist as the guess (password, path, name) rather than every possible combination. Fast and effective when the answer is a known word."
+  - term: wordlist_dir
+    definition: "/usr/share/wordlists — Kali's standard location, largely symlinks into packages like dirb, dirbuster, wfuzz and seclists."
+  - term: custom_wordlist
+    definition: "A target-specific list you build (by hand, by scraping with cewl, or generating with crunch). Small and tailored often beats huge and generic."
+  - term: cewl
+    definition: "A tool that scrapes a website and outputs the words it finds as a wordlist — good for target-specific password guesses (authorized targets only)."
+  - term: crunch
+    definition: "A generator that produces every string for a given length range and character set. Powerful but explodes in size — always estimate before generating."
+  - term: deduplicate_list
+    definition: "Removing repeated entries. `sort -u` dedupes exactly (reordering); `awk '!seen[$0]++'` dedupes while preserving original order."
+  - term: wordlist_flag
+    definition: "The option each tool uses to load a list: hydra -P/-L, john --wordlist=, gobuster/ffuf/wfuzz -w, hashcat as a positional in -a 0."

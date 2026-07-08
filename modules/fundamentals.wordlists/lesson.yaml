@@ -1,0 +1,221 @@
+lesson_id: lesson.wordlists
+title: "Wordlists — Where They Live & How Tools Use Them"
+topic_tags: [fundamentals, wordlists, rockyou, seclists, tooling]
+audience: beginner
+os_profile: kali
+goal: >
+  Get comfortable with wordlists: where Kali keeps them, how to unpack rockyou, inspect and
+  filter a list with the text tools you learned, install more (SecLists), build a small custom
+  list, combine and dedupe lists, and understand which flag each tool uses to consume one. This
+  is the bridge from OS fundamentals into the tool modules.
+intro: >
+  A wordlist is just a text file with one candidate per line — usernames, passwords, directory
+  names, subdomains. Almost every cracking/brute/fuzzing tool takes one via a flag. This lesson
+  is pure file handling and inspection — nothing here attacks anything. You only ever run these
+  lists against systems you're authorized to test, using the tool modules. Run each command,
+  compare to EXPECTED, then answer Yes/No.
+completion_criteria: "learner can locate/unpack wordlists, inspect and filter them, build/combine lists, and knows each tool's wordlist flag"
+next_suggestions:
+  - "hydra / john / hashcat tool modules"
+  - "gobuster — directory & DNS brute forcing"
+steps:
+  - step_id: wl1
+    title: "Where Kali keeps wordlists"
+    slot_target: null
+    glossary_refs: [wordlist_dir, wordlist]
+    explanation:
+      what: "Kali stores wordlists under /usr/share/wordlists. Many are symlinks into packages like dirb, dirbuster, wfuzz and (once installed) seclists."
+      why: "Knowing the standard location means you can point any tool at a real list without hunting."
+      where: "Read-only listing."
+    try_this: "ls -l /usr/share/wordlists"
+    success_criteria: "You see entries like rockyou.txt.gz, dirb/, dirbuster/, and maybe a seclists symlink."
+    expected_output: |
+      total 136436
+      lrwxrwxrwx 1 root root       26 Jun  1 09:00 dirb -> /usr/share/dirb/wordlists
+      lrwxrwxrwx 1 root root       30 Jun  1 09:00 dirbuster -> /usr/share/dirbuster/wordlists
+      -rw-r--r-- 1 root root 139921507 Jun  1 09:00 rockyou.txt.gz
+    alternatives:
+      - trigger: "the directory is nearly empty"
+        cause: "A minimal Kali install ships few wordlists."
+        fix: "Install the metapackage: `sudo apt install wordlists`, and SecLists (step wl6)."
+        check: "ls shows rockyou and friends."
+      - trigger: "ls: cannot access '/usr/share/wordlists'"
+        cause: "The wordlists package isn't installed."
+        fix: "`sudo apt update && sudo apt install wordlists`."
+        check: "The directory now exists."
+  - step_id: wl2
+    title: "Unpack rockyou (it ships gzipped)"
+    slot_target: null
+    glossary_refs: [rockyou, wordlist]
+    explanation:
+      what: "rockyou.txt is Kali's classic ~14-million-line password list, shipped compressed as rockyou.txt.gz to save space. `gunzip -k` unpacks it while keeping the .gz."
+      why: "Most tools want the plain .txt path; you unpack it once. It's the default 'does anything crack?' list."
+      where: "Writes rockyou.txt next to the .gz (needs sudo since it's root-owned)."
+    try_this: "sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz && ls -l /usr/share/wordlists/rockyou.txt"
+    success_criteria: "rockyou.txt now exists uncompressed."
+    expected_output: |
+      -rw-r--r-- 1 root root 139921507 Jun  1 09:00 /usr/share/wordlists/rockyou.txt
+    alternatives:
+      - trigger: "gzip: rockyou.txt already exists"
+        cause: "You already unpacked it."
+        fix: "Nothing to do — the .txt is ready. Skip to the next step."
+        check: "rockyou.txt is present."
+      - trigger: "Permission denied"
+        cause: "Files under /usr/share are root-owned."
+        fix: "Use sudo, or copy the .gz to your home first: `cp .../rockyou.txt.gz ~ && gunzip ~/rockyou.txt.gz`."
+        check: "You get an uncompressed rockyou.txt you can read."
+  - step_id: wl3
+    title: "How big is a wordlist? (wc -l)"
+    slot_target: null
+    glossary_refs: [wordlist, dictionary_attack]
+    explanation:
+      what: "`wc -l file` counts lines = candidates. Size drives how long a run takes: 14M passwords is fine for offline hashcat, but far too many for a slow network login attack."
+      why: "Choosing a right-sized list is the difference between a 2-minute and a 2-week job."
+      where: "Read-only count."
+    try_this: "wc -l /usr/share/wordlists/rockyou.txt"
+    success_criteria: "A line count in the millions prints."
+    expected_output: |
+      14344392 /usr/share/wordlists/rockyou.txt
+    alternatives:
+      - trigger: "the count is huge and your attack would take forever"
+        cause: "The list is too big for a rate-limited/online target."
+        fix: "Use a smaller, targeted list (top-1000 passwords), or filter rockyou down (next step)."
+        check: "You pick a list sized to the job."
+      - trigger: "wc is slow on a giant file"
+        cause: "It reads the whole file to count."
+        fix: "That's expected once; note the number. For a quick peek use head/tail instead."
+        check: "You have the count."
+  - step_id: wl4
+    title: "Peek inside (head / tail)"
+    slot_target: null
+    glossary_refs: [wordlist]
+    explanation:
+      what: "`head -n 5 file` shows the first lines, `tail -n 5` the last. Wordlists are usually ordered most-likely-first (rockyou starts with the most common passwords)."
+      why: "You should know what a list actually contains before you rely on it — ordering, character sets, junk lines."
+      where: "Read-only preview."
+    try_this: "head -n 5 /usr/share/wordlists/rockyou.txt"
+    success_criteria: "The five most common passwords print."
+    expected_output: |
+      123456
+      12345
+      123456789
+      password
+      iloveyou
+    alternatives:
+      - trigger: "the lines look garbled / have odd characters"
+        cause: "The list contains non-ASCII or was made on another OS (CRLF)."
+        fix: "Strip carriage returns with `tr -d '\\r'`; that's normal for real-world lists."
+        check: "Lines look clean."
+      - trigger: "you want a random sample, not the top"
+        cause: "head only shows the start."
+        fix: "`shuf -n 5 file` prints 5 random lines."
+        check: "A varied sample prints."
+  - step_id: wl5
+    title: "Filter a list to a targeted subset"
+    slot_target: null
+    glossary_refs: [custom_wordlist, deduplicate_list]
+    explanation:
+      what: "Use the text tools to carve a smaller, relevant list: `grep -E '^.{8,}$'` keeps 8+ char lines (matches a min-length policy); pipe through sort -u to dedupe."
+      why: "A password policy or known pattern lets you drop candidates that can't be valid — huge time savings on slow targets."
+      where: "Read-only; redirect to save the result."
+    try_this: "grep -E '^.{8,12}$' /usr/share/wordlists/rockyou.txt | head -n 3 > policy.txt; cat policy.txt"
+    success_criteria: "policy.txt holds a few 8-12 character candidates."
+    expected_output: |
+      123456789
+      iloveyou
+      princess
+    alternatives:
+      - trigger: "grep is slow scanning 14M lines"
+        cause: "Whole-file scan."
+        fix: "Pre-trim with head, or work from a smaller base list. For big cracking jobs, hashcat/john apply rules instead of pre-filtering."
+        check: "You get a workable subset."
+      - trigger: "you need only lines WITH a digit and a letter"
+        cause: "More specific policy."
+        fix: "Chain greps: `grep '[0-9]' list | grep '[A-Za-z]'`, or one -E pattern with lookahead-free classes."
+        check: "The subset matches the policy."
+  - step_id: wl6
+    title: "Get more lists: SecLists"
+    slot_target: null
+    glossary_refs: [seclists, wordlist_dir]
+    explanation:
+      what: "SecLists is the community collection (passwords, usernames, web content, subdomains). `sudo apt install seclists` puts it under /usr/share/seclists."
+      why: "rockyou is passwords only; real work needs directory lists, subdomain lists, default creds — SecLists has them all."
+      where: "Installs a large tree under /usr/share/seclists."
+    try_this: "sudo apt install -y seclists && ls /usr/share/seclists"
+    success_criteria: "SecLists installs and shows categories like Discovery, Passwords, Usernames."
+    expected_output: |
+      Discovery  Fuzzing  IADS  Miscellaneous  Passwords  Pattern-Matching  Payloads  Usernames  Web-Shells
+    alternatives:
+      - trigger: "Unable to locate package seclists"
+        cause: "Stale package lists."
+        fix: "`sudo apt update` first, then re-run the install."
+        check: "seclists installs."
+      - trigger: "you can't find a good directory list for gobuster"
+        cause: "Not sure which file."
+        fix: "A solid default: /usr/share/seclists/Discovery/Web-Content/common.txt (or raft-*-directories.txt)."
+        check: "You have a path to pass to -w."
+  - step_id: wl7
+    title: "Build a small custom wordlist"
+    slot_target: null
+    glossary_refs: [custom_wordlist, cewl, crunch]
+    explanation:
+      what: "You can craft targeted lists: from words you gather (put one per line in a file), from a site with `cewl` (scrapes page words), or generated patterns with `crunch`. Here we make one by hand and normalise it."
+      why: "Target-specific words (company name, product, local terms) often beat generic lists. Custom lists are small and effective."
+      where: "Writes your own list file."
+    try_this: "printf 'Company\\ncompany\\nCompany2024\\ncompany\\n' > words.txt; sort -u words.txt"
+    success_criteria: "Duplicates collapse; you see the unique candidates."
+    expected_output: |
+      Company
+      Company2024
+      company
+    alternatives:
+      - trigger: "you want case/number variations automatically"
+        cause: "Manual variation is tedious."
+        fix: "Feed a base list to hashcat/john with rules, or use `cewl -d 2 -w out.txt http://target` to scrape a site (authorized targets only)."
+        check: "You get expanded candidates."
+      - trigger: "crunch tries to generate a gigantic file"
+        cause: "Broad length/charset makes combinatorial explosion."
+        fix: "Constrain it: `crunch 6 8 abc123` and always estimate size first (crunch prints it)."
+        check: "The generated list is a sane size."
+  - step_id: wl8
+    title: "Combine and dedupe multiple lists"
+    slot_target: null
+    glossary_refs: [deduplicate_list, custom_wordlist]
+    explanation:
+      what: "`cat list1 list2 | sort -u > merged.txt` concatenates several lists and removes duplicates in one pass. `sort -u` = sort then unique."
+      why: "Merging a targeted list with a common one, without duplicates, gives broad-but-efficient coverage."
+      where: "Reads several files, writes one merged list."
+    try_this: "cat words.txt policy.txt | sort -u | wc -l"
+    success_criteria: "A single count of the unique combined candidates prints."
+    expected_output: |
+      6
+    alternatives:
+      - trigger: "the merged list still has near-duplicates (Pass vs pass)"
+        cause: "sort -u only removes EXACT duplicates."
+        fix: "Case-fold if appropriate: `sort -uf` treats Pass and pass as equal (only if case doesn't matter to you)."
+        check: "The list is as tight as you want."
+      - trigger: "order matters (most-likely first) but sort scrambled it"
+        cause: "sort -u reorders alphabetically."
+        fix: "To dedupe while KEEPING order, use `awk '!seen[$0]++' list1 list2 > merged.txt`."
+        check: "Duplicates gone, original order preserved."
+  - step_id: wl9
+    title: "How each tool consumes a wordlist"
+    slot_target: null
+    glossary_refs: [wordlist_flag, dictionary_attack]
+    explanation:
+      what: "Each tool has its own flag: hydra `-P passwords.txt` (and `-L users.txt`), john `--wordlist=list`, hashcat passes the list as a positional in `-a 0`, gobuster `-w list`, wfuzz/ffuf `-w list`. This app's Tool tab builds these for you."
+      why: "Once you have a good list, the only new thing per tool is which flag points at it — this ties the fundamentals into the tool modules."
+      where: "Reference; nothing is run here."
+    try_this: "echo 'hydra -L users.txt -P rockyou.txt <target> ssh   # john --wordlist=rockyou.txt hash.txt   # gobuster dir -w common.txt -u <url>'"
+    success_criteria: "You can see, side by side, how three tools reference a wordlist."
+    expected_output: |
+      hydra -L users.txt -P rockyou.txt <target> ssh   # john --wordlist=rockyou.txt hash.txt   # gobuster dir -w common.txt -u <url>
+    alternatives:
+      - trigger: "a tool complains it can't open the wordlist"
+        cause: "Wrong path, or it's still gzipped."
+        fix: "Pass the FULL path (e.g. /usr/share/wordlists/rockyou.txt) and unzip it first (step wl2)."
+        check: "The tool loads the list."
+      - trigger: "you're not sure which flag/list a tool wants"
+        cause: "Each tool differs."
+        fix: "Open the tool in this app's Tools tab and use the quick-build form or 'Walk this flow' — it fills the right flag for you. Only run against authorized targets."
+        check: "You get a correct command to copy."

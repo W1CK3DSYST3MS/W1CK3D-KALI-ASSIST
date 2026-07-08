@@ -1,0 +1,21 @@
+terms:
+  - term: tarball
+    definition: "A .tar (often .tar.gz / .tgz) archive that bundles many files/folders into one. Created with tar -czf, listed with -tzf, extracted with -xzf."
+  - term: gzip
+    definition: "A compressor for a SINGLE file (file -> file.gz), removing the original unless -k is given. Reverse with gunzip. tar's z flag applies gzip to a whole bundle."
+  - term: archive_vs_compress
+    definition: "Archiving (tar) bundles many files into one; compressing (gzip/xz) shrinks data. tar -czf does both; gzip alone only compresses one file."
+  - term: zip_archive
+    definition: "A .zip file that both bundles and compresses, and that Windows reads natively. zip -r creates, unzip extracts, unzip -l lists."
+  - term: extract
+    definition: "Unpacking an archive back into files (tar -x, unzip). List contents first (tar -tzf / unzip -l) to see where files will land."
+  - term: checksum
+    definition: "A hash (e.g. sha256sum) that fingerprints a file. Matching the source's published checksum proves the download is intact and untampered."
+  - term: scp_cmd
+    definition: "Secure copy over SSH: `scp file user@host:/path/`. -r for directories, -P for a non-default port (capital P)."
+  - term: rsync_cmd
+    definition: "Efficient copy/sync that transfers only differences: `rsync -av src/ dest/`. A trailing slash on src means 'its contents'; no slash means 'the folder itself'."
+  - term: download_tool
+    definition: "wget and curl fetch files over HTTP(S). `wget URL` saves by remote name; `curl -O URL` too, and `curl -L -o name URL` follows redirects and names output."
+  - term: ssh_remote
+    definition: "A host you reach over SSH (user@host). scp and rsync ride SSH, so if `ssh user@host` works, so do they."

@@ -1,0 +1,17 @@
+module_id: fundamentals.users_groups
+name: "Users, Groups & Root"
+version: "1.0.0"
+type: lesson
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: [fundamentals.permissions]
+provides:
+  lessons: [lesson.users_groups]
+  glossary_terms: [uid, gid, root, passwd_file, su_cmd, sudo_cmd, supplementary_group, primary_group, home_directory, login_shell]
+content:
+  lesson: lesson.yaml
+  glossary: glossary.yaml
+source: "authored; verified against id/whoami/su/sudo/adduser/usermod/getent man pages"
+license: "project-proprietary lesson text"
+checksum: ""

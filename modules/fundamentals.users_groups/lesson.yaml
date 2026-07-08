@@ -1,0 +1,209 @@
+lesson_id: lesson.users_groups
+title: "Users, Groups & Root"
+topic_tags: [fundamentals, users, groups, root, sudo]
+audience: beginner
+os_profile: kali
+goal: >
+  Understand who you are on a Linux system: user and group ids, the difference between root
+  and a normal user, when to use sudo versus su, how to read the user database, and how to
+  create users and manage group membership. This underpins permissions, service accounts, and
+  safe day-to-day operation.
+intro: >
+  Linux is multi-user at its core. Every process runs as some user, in some groups, and those
+  ids decide what it can touch. This lesson is mostly read-only inspection; the couple of
+  steps that create a user are clearly marked and reversible. Run each command, compare to
+  EXPECTED, then answer Yes/No.
+completion_criteria: "learner can read their ids/groups, use sudo vs su correctly, and add a user to a group"
+next_suggestions:
+  - "Permissions & Ownership (fundamentals)"
+  - "Permissions & Filesystem troubleshooter"
+steps:
+  - step_id: ug1
+    title: "Who am I? (whoami, id, groups)"
+    slot_target: null
+    glossary_refs: [uid, gid, supplementary_group]
+    explanation:
+      what: "`whoami` prints your username; `id` prints your numeric uid, primary gid and all groups; `groups` lists just the group names."
+      why: "Your groups decide what you can access (e.g. sudo, adm, wireshark). This is the first thing to check when something is 'permission denied'."
+      where: "Read-only."
+    try_this: "whoami; id; groups"
+    success_criteria: "You see your username, uid=1000-ish, and your group memberships."
+    expected_output: |
+      kali
+      uid=1000(kali) gid=1000(kali) groups=1000(kali),27(sudo),4(adm),20(dialout)
+      kali sudo adm dialout
+    alternatives:
+      - trigger: "you're uid=0 / whoami says root"
+        cause: "You're operating as root (a root shell or su -)."
+        fix: "For daily work, drop back to your normal user; use root only when a task requires it. Exit the root shell with `exit`."
+        check: "whoami shows your normal user."
+      - trigger: "you expected to be in a group (e.g. wireshark) but aren't"
+        cause: "Group membership was added but this session started before it."
+        fix: "Log out and back in (group changes apply at login), or start a fresh login with `newgrp <group>`."
+        check: "`id` now lists the group."
+  - step_id: ug2
+    title: "The user database (/etc/passwd, getent)"
+    slot_target: null
+    glossary_refs: [passwd_file, home_directory, login_shell, uid]
+    explanation:
+      what: "Each line of /etc/passwd is name:x:uid:gid:comment:home:shell. `getent passwd <user>` looks up one entry. Passwords are NOT here — they're hashed in /etc/shadow (root-only)."
+      why: "This tells you a user's uid, home directory and login shell — useful for auditing accounts and spotting service users."
+      where: "Read-only; world-readable."
+    try_this: "getent passwd $USER; grep -c : /etc/passwd"
+    success_criteria: "Your account line prints, and you see how many accounts exist."
+    expected_output: |
+      kali:x:1000:1000:Kali,,,:/home/kali:/usr/bin/zsh
+      45
+    alternatives:
+      - trigger: "there are far more accounts than people"
+        cause: "Most are SYSTEM/service accounts (uid < 1000) like www-data, sshd — normal."
+        fix: "Filter to human accounts: `getent passwd | awk -F: '$3>=1000 && $3<65534'`."
+        check: "Only real login users remain."
+      - trigger: "you want a user's password hash"
+        cause: "Hashes live in /etc/shadow, readable only by root."
+        fix: "Use `sudo getent shadow <user>` — and never share hashes outside authorized work."
+        check: "You understand passwd vs shadow."
+  - step_id: ug3
+    title: "Root: the all-powerful user (uid 0)"
+    slot_target: null
+    glossary_refs: [root, uid]
+    explanation:
+      what: "Root is uid 0 and bypasses permission checks. `sudo whoami` runs one command as root; `id -u` prints your numeric uid (0 means root)."
+      why: "Understanding that root ignores file permissions explains both why sudo is needed and why running as root is risky."
+      where: "sudo escalates a single command."
+    try_this: "id -u; sudo id -u"
+    success_criteria: "Your own uid prints (e.g. 1000), then 0 for the sudo'd command."
+    expected_output: |
+      1000
+      [sudo] password for kali:
+      0
+    alternatives:
+      - trigger: "kali is not in the sudoers file"
+        cause: "Your user isn't allowed to use sudo."
+        fix: "As root (`su -`), run `usermod -aG sudo <youruser>`, then log out and back in."
+        check: "`sudo id -u` returns 0."
+      - trigger: "sudo doesn't ask for a password"
+        cause: "A valid sudo timestamp is cached from a recent sudo (a few minutes)."
+        fix: "Nothing wrong; clear it with `sudo -k` if you want the prompt back."
+        check: "sudo works as expected."
+  - step_id: ug4
+    title: "sudo vs su — escalate the right way"
+    slot_target: null
+    glossary_refs: [sudo_cmd, su_cmd, login_shell]
+    explanation:
+      what: "`sudo CMD` runs one command as root using YOUR password. `su - <user>` switches to a full login shell as that user using THEIR password. `sudo -i` gives a root login shell via sudo."
+      why: "Prefer sudo for single tasks (audited, no root password needed). Use su -/sudo -i only when you need a sustained root session."
+      where: "sudo = per-command; su -/sudo -i = interactive session."
+    try_this: "sudo -i whoami; echo 'back as' $USER"
+    success_criteria: "The first command reports root; you remain your normal user afterwards."
+    expected_output: |
+      root
+      back as kali
+    alternatives:
+      - trigger: "su root asks for a password you never set"
+        cause: "Kali's root account is often locked by default; there's no root password to enter."
+        fix: "Use `sudo -i` (your password) instead of `su`. To set a root password: `sudo passwd root`."
+        check: "You get a root shell via sudo -i."
+      - trigger: "su user (without the dash) gives a weird half-environment"
+        cause: "Plain `su` keeps your old environment; PATH/HOME may be wrong."
+        fix: "Use the dash for a full login: `su - <user>`."
+        check: "`echo $HOME` matches the target user."
+  - step_id: ug5
+    title: "Create a user (adduser)"
+    slot_target: null
+    glossary_refs: [home_directory, login_shell, primary_group]
+    explanation:
+      what: "`sudo adduser bob` (Debian/Kali) interactively creates the user bob, their home directory, a primary group, and prompts for a password. It's the friendly wrapper around the low-level `useradd`."
+      why: "You'll create accounts for separation of duties or lab practice; adduser sets sane defaults so you don't have to."
+      where: "Administrative; needs sudo. Reversible with deluser."
+    try_this: "sudo adduser labuser"
+    success_criteria: "It creates the home dir and group, then prompts for a password and details."
+    expected_output: |
+      info: Adding user `labuser' ...
+      info: Adding new group `labuser' (1001) ...
+      info: Adding new user `labuser' (1001) with group `labuser (1001)' ...
+      info: Creating home directory `/home/labuser' ...
+      New password:
+    alternatives:
+      - trigger: "adduser: Only root may add a user"
+        cause: "You forgot sudo."
+        fix: "Run `sudo adduser labuser`."
+        check: "The account is created."
+      - trigger: "you meant to add a SYSTEM account (no login/home)"
+        cause: "Service accounts differ from human ones."
+        fix: "Use `sudo adduser --system --no-create-home svcname`."
+        check: "A system user with uid < 1000 is created."
+      - trigger: "you want to undo it"
+        cause: "You created a test account."
+        fix: "Remove it (and its home): `sudo deluser --remove-home labuser`."
+        check: "getent passwd labuser returns nothing."
+  - step_id: ug6
+    title: "Groups: add a user to one (usermod -aG)"
+    slot_target: null
+    glossary_refs: [supplementary_group, primary_group, gid]
+    explanation:
+      what: "`sudo usermod -aG sudo bob` ADDS bob to the sudo group. The -a (append) is critical — without it, -G REPLACES all of bob's groups."
+      why: "Group membership grants capabilities (sudo, wireshark to capture, docker, etc.). Getting -aG right avoids wiping someone's existing groups."
+      where: "Administrative; takes effect at the user's next login."
+    try_this: "sudo usermod -aG sudo labuser; groups labuser"
+    success_criteria: "labuser now lists the sudo group."
+    expected_output: |
+      labuser : labuser sudo
+    alternatives:
+      - trigger: "you ran usermod -G (no -a) and the user lost their other groups"
+        cause: "-G alone REPLACES the supplementary group list."
+        fix: "Re-add the needed groups all at once: `sudo usermod -aG group1,group2 user`. Always include -a."
+        check: "`groups user` lists every intended group."
+      - trigger: "the user still can't sudo after being added"
+        cause: "Group changes apply at LOGIN; their current session predates the change."
+        fix: "Have them log out/in, or run `newgrp sudo` in their shell."
+        check: "The new group appears in their `id`."
+  - step_id: ug7
+    title: "What am I allowed to run as root? (sudo -l)"
+    slot_target: null
+    glossary_refs: [sudo_cmd]
+    explanation:
+      what: "`sudo -l` lists the commands your user may run via sudo, per the sudoers policy."
+      why: "On hardened or shared systems you may only be permitted specific commands — this tells you exactly what, without trial and error."
+      where: "Read-only query of the sudo policy."
+    try_this: "sudo -l"
+    success_criteria: "It shows your allowed commands (often '(ALL : ALL) ALL' on a personal Kali)."
+    expected_output: |
+      Matching Defaults entries for kali on kali:
+          env_reset, mail_badpass, secure_path=...
+      User kali may run the following commands on kali:
+          (ALL : ALL) ALL
+    alternatives:
+      - trigger: "it lists only specific commands, not ALL"
+        cause: "A restricted sudoers policy (common on shared/CTF boxes)."
+        fix: "You can only run what's listed. In security testing, a too-permissive entry (e.g. a NOPASSWD editor) is often the privilege-escalation path."
+        check: "You know your exact allowed commands."
+      - trigger: "kali is not allowed to run sudo on kali"
+        cause: "Not in sudo group / no sudoers entry."
+        fix: "Add via root as in step ug3, or ask an admin."
+        check: "sudo -l shows entries."
+  - step_id: ug8
+    title: "Clean up a test account (deluser)"
+    slot_target: null
+    glossary_refs: [home_directory]
+    explanation:
+      what: "`sudo deluser --remove-home labuser` deletes the account and its home directory. Without --remove-home the files are left behind (now owned by an orphan uid)."
+      why: "Tidy up practice accounts, and understand that deleting a user can strand files they owned across the system."
+      where: "Administrative and destructive; needs sudo."
+    try_this: "sudo deluser --remove-home labuser; getent passwd labuser || echo 'gone'"
+    success_criteria: "The account is removed and the lookup reports it's gone."
+    expected_output: |
+      info: Removing user `labuser' ...
+      info: Backing up files to be removed to /var/backups ...
+      gone
+    destructive: true
+    recovery: "Deleting a user removes their home and can leave files elsewhere owned by a now-unused uid (they'll show as a number in ls -l). Only delete accounts you created; on a real system, audit for files owned by that uid first with `find / -uid <id> 2>/dev/null`."
+    alternatives:
+      - trigger: "deluser: Only root may remove a user"
+        cause: "Missing sudo."
+        fix: "Run `sudo deluser --remove-home labuser`."
+        check: "The account is removed."
+      - trigger: "later you see files owned by a number, not a name"
+        cause: "Those files belonged to the deleted user's uid."
+        fix: "Reassign them to a real owner with `sudo chown <user> <path>` or remove them if unwanted."
+        check: "ls -l shows a named owner."
