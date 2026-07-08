@@ -84,35 +84,56 @@ class ToolPage(QWidget):
             gl.addWidget(gt)
             lv.addWidget(gate)
 
-        form = QFormLayout()
+        # --- Choose a task -------------------------------------------------- #
+        pick = QLabel("Choose what you want to do:")
+        pick.setObjectName("H2")
+        lv.addWidget(pick)
         self._flow = QComboBox()
         for f in self._tool.flows:
             self._flow.addItem(f.title, f.flow_id)
-        form.addRow("Flow", self._flow)
+        self._flow.currentIndexChanged.connect(self._on_flow_changed)
+        lv.addWidget(self._flow)
 
+        # Short description of the selected task (its goal).
+        self._flow_goal = QLabel("")
+        self._flow_goal.setObjectName("Muted")
+        self._flow_goal.setWordWrap(True)
+        lv.addWidget(self._flow_goal)
+
+        # --- PRIMARY: the guided walk-through (the teaching path) ----------- #
+        walk = QPushButton("▶  Walk me through it — step by step")
+        walk.setObjectName("Primary")
+        walk.clicked.connect(self._walk)
+        lv.addWidget(walk)
+        walk_hint = QLabel(
+            "New here? This explains every step: what to type, how to find the "
+            "info you need, and what each part of the command does."
+        )
+        walk_hint.setObjectName("Faint")
+        walk_hint.setWordWrap(True)
+        lv.addWidget(walk_hint)
+
+        # --- SECONDARY: quick build for people who know the flags ----------- #
         qb = self._tool.quick_build
         if qb and qb.fields:
+            sep = QLabel("— or, if you already know the flags, quick-build a command —")
+            sep.setObjectName("Faint")
+            sep.setWordWrap(True)
+            lv.addWidget(sep)
+
+            form = QFormLayout()
             for fs in qb.fields:
                 widget = self._make_widget(fs)
                 self._fields[fs.field_id] = (fs, widget)
                 form.addRow(fs.label, widget)
-        lv.addLayout(form)
+            lv.addLayout(form)
 
-        if qb and qb.fields:
-            build = QPushButton("BUILD COMMAND")
-            build.setObjectName("Primary")
+            build = QPushButton("Quick-build command")
             build.clicked.connect(self._build_command)
             lv.addWidget(build)
-        else:
-            hint = QLabel("Use the adaptive stepper below for guided, correct commands.")
-            hint.setObjectName("Muted")
-            hint.setWordWrap(True)
-            lv.addWidget(hint)
 
-        walk = QPushButton("Walk this flow (adaptive stepper)")
-        walk.clicked.connect(self._walk)
-        lv.addWidget(walk)
         lv.addStretch(1)
+        self._on_flow_changed()  # seed the goal text
 
         self._preview = CommandPreview()
         root.addWidget(left, 2)
@@ -165,6 +186,10 @@ class ToolPage(QWidget):
             if f.flow_id == flow_id:
                 return f
         return self._tool.flows[0]
+
+    def _on_flow_changed(self, *_) -> None:
+        flow = self._selected_flow()
+        self._flow_goal.setText(flow.goal or "")
 
     # ----------------------------------------------------------------- inputs
     def _collect_inputs(self) -> dict[str, object]:
