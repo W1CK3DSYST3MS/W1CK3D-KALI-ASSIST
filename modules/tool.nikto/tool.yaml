@@ -182,3 +182,29 @@ flows:
             cause: "Signature match without real vulnerability (false positive)."
             fix: "Manually verify before reporting; cross-check the path/response."
             check: "Reproduce the issue by hand."
+
+quick_build:
+  builder: nikto
+  title: "Quick scan"
+  fields:
+    - field_id: host
+      label: "Target host"
+      type: string
+      required: true
+      placeholder: "http://host  or  10.0.0.5"
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      default: quick
+      choices: [quick, https, tuned, reported]
+    - field_id: port
+      label: "Port"
+      type: int
+      placeholder: "80"
+    - field_id: ssl
+      label: "Force SSL (-ssl)"
+      type: bool
+    - field_id: output
+      label: "Output file"
+      type: path
+      placeholder: "report.html  (optional)"

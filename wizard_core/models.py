@@ -46,6 +46,20 @@ class FieldSchema(_Strict):
     help: str = ""
 
 
+class QuickBuild(_Strict):
+    """A tool's one-screen quick-BUILD form (Tools tab).
+
+    ``builder`` is the registered builder id the collected inputs are fed to;
+    ``fields`` are rendered top-to-bottom, and each field's ``field_id`` must
+    match the input key that builder reads. Purely for the fast on-ramp — the
+    adaptive stepper remains the guided path.
+    """
+
+    builder: str
+    title: str = "Quick build"
+    fields: list[FieldSchema] = Field(default_factory=list)
+
+
 class StepAlternative(_Strict):
     """A 'No' branch for a step: a likely cause + the fix to retry + what to check."""
 
@@ -154,6 +168,7 @@ class ToolSpec(_Strict):
     authorization_gate: bool = False
     authorization_text: str = ""
     flows: list[FlowSpec] = Field(default_factory=list)
+    quick_build: QuickBuild | None = None
 
 
 # --------------------------------------------------------------------------- #

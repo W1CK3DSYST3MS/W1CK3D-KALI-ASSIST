@@ -1,8 +1,9 @@
-"""Tool page — profile + inputs on the left, live command preview on the right.
+"""Tool page — a per-tool quick-build form on the left, live preview on the right.
 
-Builds commands via the engine's registered builder (generate-only). Honors the
-tool's authorization_gate before showing any built command. A "Walk this flow"
-button opens the adaptive stepper for the selected flow.
+The form is rendered dynamically from the tool's ``quick_build`` spec (field
+list authored in each tool.yaml), and the collected inputs are fed to that
+tool's registered builder (generate-only). Honors the tool's authorization_gate
+before showing any built command. "Walk this flow" opens the adaptive stepper.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QFrame,
@@ -22,14 +24,12 @@ from PySide6.QtWidgets import (
 )
 
 from wizard_core.builders import assemble, get_builder
-from wizard_core.models import ToolSpec
+from wizard_core.models import FieldSchema, ToolSpec
 
 from .auth_gate import confirm_authorization
 from .command_preview import CommandPreview
 
-# Builder-input presets per profile are inside the builder; here we only collect
-# the simple on-ramp fields (profile + targets + output) plus a couple toggles.
-_NMAP_PROFILES = ["quick", "standard", "thorough", "quiet"]
+_NONE_LABEL = "(none)"
 
 
 class ToolPage(QWidget):
@@ -47,13 +47,15 @@ class ToolPage(QWidget):
         self._on_auth_ack = on_auth_ack
         self._on_walk_flow = on_walk_flow
         self._authorized = not tool.authorization_gate
+        # field_id -> (FieldSchema, widget)
+        self._fields: dict[str, tuple[FieldSchema, QWidget]] = {}
         self._build()
 
+    # ------------------------------------------------------------------ build
     def _build(self) -> None:
         root = QHBoxLayout(self)
         root.setSpacing(16)
 
-        # left: controls
         left = QFrame()
         left.setObjectName("Card")
         lv = QVBoxLayout(left)
@@ -88,45 +90,65 @@ class ToolPage(QWidget):
             self._flow.addItem(f.title, f.flow_id)
         form.addRow("Flow", self._flow)
 
-        self._profile = QComboBox()
-        self._profile.addItem("(none)", None)
-        # Profiles are tool-specific; only nmap's simple form is wired into BUILD.
-        # Other tools are built via "Walk this flow" until per-tool forms land (M4).
-        if self._tool.tool_id == "nmap":
-            for p in _NMAP_PROFILES:
-                self._profile.addItem(p, p)
-            self._profile.setCurrentText("standard")
-        form.addRow("Profile", self._profile)
-
-        self._targets = QLineEdit()
-        self._targets.setPlaceholderText("scanme.nmap.org  or  192.168.1.0/24")
-        form.addRow("Targets", self._targets)
-
-        self._ports = QLineEdit()
-        self._ports.setPlaceholderText("22,80,443  (optional)")
-        form.addRow("Ports", self._ports)
-
-        self._out = QLineEdit()
-        self._out.setPlaceholderText("./out/scan  (optional)")
-        form.addRow("Output base", self._out)
+        qb = self._tool.quick_build
+        if qb and qb.fields:
+            for fs in qb.fields:
+                widget = self._make_widget(fs)
+                self._fields[fs.field_id] = (fs, widget)
+                form.addRow(fs.label, widget)
         lv.addLayout(form)
 
-        build = QPushButton("BUILD COMMAND")
-        build.setObjectName("Primary")
-        build.clicked.connect(self._build_command)
-        lv.addWidget(build)
+        if qb and qb.fields:
+            build = QPushButton("BUILD COMMAND")
+            build.setObjectName("Primary")
+            build.clicked.connect(self._build_command)
+            lv.addWidget(build)
+        else:
+            hint = QLabel("Use the adaptive stepper below for guided, correct commands.")
+            hint.setObjectName("Muted")
+            hint.setWordWrap(True)
+            lv.addWidget(hint)
 
         walk = QPushButton("Walk this flow (adaptive stepper)")
         walk.clicked.connect(self._walk)
         lv.addWidget(walk)
         lv.addStretch(1)
 
-        # right: preview
         self._preview = CommandPreview()
-
         root.addWidget(left, 2)
         root.addWidget(self._preview, 3)
 
+    def _make_widget(self, fs: FieldSchema) -> QWidget:
+        if fs.type == "bool":
+            cb = QCheckBox()
+            cb.setChecked(bool(fs.default))
+            if fs.help:
+                cb.setToolTip(fs.help)
+            return cb
+        if fs.type == "choice":
+            combo = QComboBox()
+            if not fs.required:
+                combo.addItem(_NONE_LABEL, None)
+            for c in fs.choices:
+                combo.addItem(c, c)
+            if fs.default is not None:
+                idx = combo.findData(fs.default)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+            if fs.help:
+                combo.setToolTip(fs.help)
+            return combo
+        # string / int / path / list / range -> line edit
+        line = QLineEdit()
+        if fs.default not in (None, ""):
+            line.setText(str(fs.default))
+        if fs.placeholder:
+            line.setPlaceholderText(fs.placeholder)
+        if fs.help:
+            line.setToolTip(fs.help)
+        return line
+
+    # -------------------------------------------------------------- authorize
     def _ensure_authorized(self) -> bool:
         if self._authorized:
             return True
@@ -144,28 +166,35 @@ class ToolPage(QWidget):
                 return f
         return self._tool.flows[0]
 
+    # ----------------------------------------------------------------- inputs
+    def _collect_inputs(self) -> dict[str, object]:
+        inputs: dict[str, object] = {}
+        for field_id, (fs, widget) in self._fields.items():
+            if isinstance(widget, QCheckBox):
+                if widget.isChecked():
+                    inputs[field_id] = True
+            elif isinstance(widget, QComboBox):
+                val = widget.currentData()
+                if val is not None:
+                    inputs[field_id] = val
+            else:  # QLineEdit
+                text = widget.text().strip()
+                if text:
+                    inputs[field_id] = text
+        return inputs
+
     def _build_command(self) -> None:
         if not self._ensure_authorized():
             return
         flow = self._selected_flow()
-        target = self._targets.text().strip()
-        out = self._out.text().strip()
-        # The simple form is nmap-shaped; pass the target under the common keys other
-        # builders read (each ignores keys it doesn't use). Full per-tool forms: M4.
-        inputs: dict[str, object] = {
-            "profile": self._profile.currentData(),
-            "targets": target, "target": target, "url": target, "host": target,
-            "output_format": "all" if out else None,
-            "output_path": out or None,
-            "output": out or None,
-        }
-        if self._ports.text().strip():
-            inputs["ports"] = self._ports.text().strip()
+        qb = self._tool.quick_build
+        builder_id = qb.builder if qb else flow.command_builder_id
+        inputs = self._collect_inputs()
         try:
-            plan = get_builder(flow.command_builder_id)(inputs)
+            plan = get_builder(builder_id)(inputs)
         except Exception as exc:  # builder validation (fail-loudly) -> show, don't crash
             plan = assemble(self._tool.tool_id, {}, notes=[
-                f"Could not build from the simple form: {exc}",
+                f"Could not build from the quick form: {exc}",
                 "Use 'Walk this flow (adaptive stepper)' for guided, correct commands.",
             ])
         self._preview.set_plan(plan)

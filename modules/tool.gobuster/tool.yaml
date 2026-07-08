@@ -186,3 +186,31 @@ flows:
             cause: "Output directory not writable."
             fix: "Pick a writable path (e.g. your home dir)."
             check: "Confirm the directory is writable."
+
+quick_build:
+  builder: gobuster
+  title: "Quick brute"
+  fields:
+    - field_id: mode
+      label: "Mode"
+      type: choice
+      required: true
+      default: dir
+      choices: [dir, dns, vhost, fuzz]
+    - field_id: target
+      label: "Target (URL or domain)"
+      type: string
+      required: true
+      placeholder: "http://host  or  example.com"
+    - field_id: wordlist
+      label: "Wordlist"
+      type: path
+      placeholder: "/usr/share/wordlists/dirb/common.txt"
+    - field_id: extensions
+      label: "Extensions (dir mode)"
+      type: string
+      placeholder: "php,html,txt"
+    - field_id: threads
+      label: "Threads"
+      type: int
+      placeholder: "40"

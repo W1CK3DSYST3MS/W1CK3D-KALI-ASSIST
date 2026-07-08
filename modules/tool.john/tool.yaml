@@ -160,3 +160,29 @@ flows:
             cause: "Slow hash on CPU."
             fix: "This is where hashcat + GPU wins."
             check: "Switch engine to hashcat."
+
+quick_build:
+  builder: john
+  title: "Quick crack"
+  fields:
+    - field_id: hashfile
+      label: "Hash file"
+      type: path
+      required: true
+      placeholder: "hashes.txt"
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      default: auto
+      choices: [auto, wordlist, targeted, brute]
+    - field_id: wordlist
+      label: "Wordlist"
+      type: path
+      placeholder: "/usr/share/wordlists/rockyou.txt"
+    - field_id: rules
+      label: "Apply mangling rules (--rules)"
+      type: bool
+    - field_id: format
+      label: "Hash format (--format=)"
+      type: string
+      placeholder: "e.g. raw-md5, nt, sha512crypt"

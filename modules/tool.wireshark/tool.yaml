@@ -219,3 +219,28 @@ flows:
             cause: "Wrong/missing key material."
             fix: "Modern PFS ciphers need the key log, not just a server key."
             check: "Confirm SSLKEYLOGFILE captured the session keys."
+
+quick_build:
+  builder: tshark
+  title: "Quick capture"
+  fields:
+    - field_id: source_iface
+      label: "Capture interface"
+      type: string
+      placeholder: "eth0"
+    - field_id: read_file
+      label: "Read from file (-r)"
+      type: path
+      placeholder: "capture.pcap  (instead of live)"
+    - field_id: display_filter
+      label: "Display filter (-Y)"
+      type: string
+      placeholder: "http  or  tcp.port==443"
+    - field_id: capture_filter
+      label: "Capture filter (-f)"
+      type: string
+      placeholder: "tcp port 80"
+    - field_id: count
+      label: "Stop after N packets (-c)"
+      type: int
+      placeholder: "100"

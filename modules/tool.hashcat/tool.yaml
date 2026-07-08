@@ -180,3 +180,33 @@ flows:
             cause: "Capture lacks a valid handshake/PMKID."
             fix: "Capture a valid handshake first (aircrack-ng, authorized networks only)."
             check: "Validate the capture before cracking."
+
+quick_build:
+  builder: hashcat
+  title: "Quick crack"
+  fields:
+    - field_id: hashfile
+      label: "Hash file"
+      type: path
+      required: true
+      placeholder: "hashes.txt"
+    - field_id: hash_mode
+      label: "Hash mode (-m)"
+      type: int
+      required: true
+      placeholder: "0 = MD5, 1000 = NTLM, 22000 = WPA"
+    - field_id: attack_mode
+      label: "Attack mode (-a)"
+      type: choice
+      required: true
+      default: "0"
+      choices: ["0", "3"]
+      help: "0 = wordlist, 3 = mask/brute-force."
+    - field_id: wordlist
+      label: "Wordlist (attack 0)"
+      type: path
+      placeholder: "/usr/share/wordlists/rockyou.txt"
+    - field_id: mask
+      label: "Mask (attack 3)"
+      type: string
+      placeholder: "?a?a?a?a?a?a"

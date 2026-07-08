@@ -188,3 +188,33 @@ flows:
             cause: "DBMS/privileges/stacked queries don't support it."
             fix: "Confirm DBA rights and stacked-query support; otherwise not possible."
             check: "Review --is-dba and DBMS capabilities."
+
+quick_build:
+  builder: sqlmap
+  title: "Quick test"
+  fields:
+    - field_id: url
+      label: "Target URL"
+      type: string
+      required: true
+      placeholder: "http://host/page.php?id=1"
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      default: detect
+      choices: [detect, map, dump, thorough]
+    - field_id: dbs
+      label: "Enumerate databases (--dbs)"
+      type: bool
+    - field_id: level
+      label: "Level (1-5)"
+      type: int
+      placeholder: "1"
+    - field_id: risk
+      label: "Risk (1-3)"
+      type: int
+      placeholder: "1"
+    - field_id: batch
+      label: "Non-interactive (--batch)"
+      type: bool
+      default: true

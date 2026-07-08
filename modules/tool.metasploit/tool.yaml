@@ -257,3 +257,29 @@ flows:
             cause: "Package/keyring issues."
             fix: "See the Packages/keys/certs troubleshooter."
             check: "Resolve apt first, then retry."
+
+quick_build:
+  builder: msfvenom
+  title: "Generate payload"
+  fields:
+    - field_id: payload
+      label: "Payload"
+      type: string
+      required: true
+      placeholder: "windows/x64/meterpreter/reverse_tcp"
+    - field_id: lhost
+      label: "LHOST"
+      type: string
+      placeholder: "10.0.0.5"
+    - field_id: lport
+      label: "LPORT"
+      type: int
+      placeholder: "4444"
+    - field_id: format
+      label: "Format (-f)"
+      type: string
+      placeholder: "exe, elf, raw, python"
+    - field_id: outfile
+      label: "Output file (-o)"
+      type: path
+      placeholder: "payload.exe"

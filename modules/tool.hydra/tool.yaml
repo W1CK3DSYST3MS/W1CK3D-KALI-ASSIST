@@ -164,3 +164,35 @@ flows:
             cause: "Many hosts × high -t."
             fix: "Lower -t and consider batching the target list."
             check: "Reduce parallelism."
+
+quick_build:
+  builder: hydra
+  title: "Quick attack"
+  fields:
+    - field_id: target
+      label: "Target host"
+      type: string
+      required: true
+      placeholder: "10.0.0.5"
+    - field_id: service
+      label: "Service"
+      type: choice
+      required: true
+      default: ssh
+      choices: [ssh, ftp, smb, rdp, mysql, http-post-form]
+    - field_id: login
+      label: "Username (single)"
+      type: string
+      placeholder: "admin"
+    - field_id: login_list
+      label: "Username list"
+      type: path
+      placeholder: "users.txt  (instead of single)"
+    - field_id: password_list
+      label: "Password list"
+      type: path
+      placeholder: "/usr/share/wordlists/rockyou.txt"
+    - field_id: tasks
+      label: "Parallel tasks (-t)"
+      type: int
+      placeholder: "4"

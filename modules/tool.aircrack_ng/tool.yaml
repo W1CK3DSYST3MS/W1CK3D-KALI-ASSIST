@@ -187,3 +187,38 @@ flows:
             cause: "Rare legacy equipment."
             fix: "Collect IVs with airodump then aircrack-ng the .cap; consult the suite docs."
             check: "Confirm it's genuinely WEP, not WPA."
+
+quick_build:
+  builder: aircrack-ng
+  title: "Quick step"
+  fields:
+    - field_id: binary
+      label: "Sub-tool"
+      type: choice
+      required: true
+      default: airodump-ng
+      choices: [airmon-ng, airodump-ng, aireplay-ng, aircrack-ng]
+    - field_id: iface
+      label: "Interface"
+      type: string
+      placeholder: "wlan0  (or wlan0mon)"
+    - field_id: ifacemon
+      label: "Monitor interface"
+      type: string
+      placeholder: "wlan0mon"
+    - field_id: bssid
+      label: "BSSID (AP MAC)"
+      type: string
+      placeholder: "AA:BB:CC:DD:EE:FF"
+    - field_id: channel
+      label: "Channel"
+      type: int
+      placeholder: "6"
+    - field_id: wordlist
+      label: "Wordlist (aircrack-ng)"
+      type: path
+      placeholder: "/usr/share/wordlists/rockyou.txt"
+    - field_id: capture
+      label: "Capture file (.cap)"
+      type: path
+      placeholder: "capture-01.cap"

@@ -226,3 +226,32 @@ flows:
             cause: "One of version/OS/NSE failed within -A."
             fix: "Route to whichever sub-flow failed (service_version / os_detect / nse)."
             check: "Re-run that single behavior in isolation."
+
+quick_build:
+  builder: nmap
+  title: "Quick scan"
+  fields:
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      default: standard
+      choices: [quick, standard, thorough, quiet]
+      help: "Preset scan intensity (timing + scan type)."
+    - field_id: targets
+      label: "Targets"
+      type: string
+      required: true
+      placeholder: "scanme.nmap.org  or  192.168.1.0/24"
+    - field_id: ports
+      label: "Ports"
+      type: string
+      placeholder: "22,80,443  (optional)"
+    - field_id: output_format
+      label: "Save output as"
+      type: choice
+      choices: [normal, xml, grep, all]
+      help: "Write results in this format (optional)."
+    - field_id: output_path
+      label: "Output base"
+      type: path
+      placeholder: "./out/scan  (optional)"
