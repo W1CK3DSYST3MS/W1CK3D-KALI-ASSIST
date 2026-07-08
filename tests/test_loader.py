@@ -28,12 +28,13 @@ def test_loads_all_three_module_types():
     assert "troubleshoot.networking" in reg.troubleshooters
 
 
-def test_nmap_tool_has_nine_flows_and_auth_gate():
+def test_nmap_tool_has_flows_and_auth_gate():
     reg = load_modules(MODULES)
     tool = reg.tools["nmap"]
     assert tool.authorization_gate is True
-    assert len(tool.flows) == 9
-    assert {f.flow_id for f in tool.flows} >= {"discovery", "portscan", "full"}
+    assert len(tool.flows) >= 9
+    # includes the beginner walk-through plus the capability reference flows
+    assert {f.flow_id for f in tool.flows} >= {"guided", "discovery", "portscan", "full"}
 
 
 def test_glossary_merged_across_modules():

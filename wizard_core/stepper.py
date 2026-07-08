@@ -37,6 +37,8 @@ class StepView:
     what: str
     why: str
     where: str
+    find_it: str
+    command_anatomy: tuple
     try_this: str
     success_criteria: str
     expected_output: str
@@ -138,6 +140,8 @@ class StepperSession:
             what=step.explanation.what,
             why=step.explanation.why,
             where=step.explanation.where,
+            find_it=step.find_it,
+            command_anatomy=tuple(step.command_anatomy),
             try_this=step.try_this,
             success_criteria=step.success_criteria,
             expected_output=step.expected_output,

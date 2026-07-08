@@ -69,6 +69,20 @@ class StepperView(QWidget):
         self._where = self._wrapped(ex, "Where")
         self._root.addWidget(self._explain)
 
+        # Beginner walk-through: how/where to obtain the input this step needs.
+        self._find = QFrame()
+        self._find.setObjectName("Card")
+        fl = QVBoxLayout(self._find)
+        fl.setContentsMargins(14, 12, 14, 12)
+        self._find_cap = QLabel("HOW TO GET WHAT YOU NEED")
+        self._find_cap.setObjectName("Faint")
+        fl.addWidget(self._find_cap)
+        self._find_body = QLabel("")
+        self._find_body.setObjectName("Body")
+        self._find_body.setWordWrap(True)
+        fl.addWidget(self._find_body)
+        self._root.addWidget(self._find)
+
         self._alt = QFrame()
         self._alt.setObjectName("Warning")
         al = QVBoxLayout(self._alt)
@@ -89,6 +103,21 @@ class StepperView(QWidget):
         self._try.setWordWrap(True)
         self._try.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self._root.addWidget(self._try)
+
+        # Beginner walk-through: break the command into parts and say what each does.
+        self._anatomy = QFrame()
+        self._anatomy.setObjectName("Card")
+        anl = QVBoxLayout(self._anatomy)
+        anl.setContentsMargins(14, 12, 14, 12)
+        self._anatomy_cap = QLabel("WHAT EACH PART DOES")
+        self._anatomy_cap.setObjectName("Faint")
+        anl.addWidget(self._anatomy_cap)
+        self._anatomy_body = QLabel("")
+        self._anatomy_body.setObjectName("Body")
+        self._anatomy_body.setWordWrap(True)
+        self._anatomy_body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        anl.addWidget(self._anatomy_body)
+        self._root.addWidget(self._anatomy)
 
         self._success = QLabel("")
         self._success.setObjectName("Muted")
@@ -160,6 +189,19 @@ class StepperView(QWidget):
         self._why.setText(v.why)
         self._where.setText(v.where or "—")
         self._try.setText(v.try_this or "(no command for this step)")
+
+        has_find = bool(v.find_it.strip())
+        self._find.setVisible(has_find)
+        if has_find:
+            self._find_body.setText(v.find_it)
+
+        has_anatomy = bool(v.command_anatomy)
+        self._anatomy.setVisible(has_anatomy)
+        if has_anatomy:
+            self._anatomy_body.setText(
+                "\n".join(f"{a.token}   —   {a.does}" for a in v.command_anatomy)
+            )
+
         self._success.setText(f"Success looks like: {v.success_criteria}" if v.success_criteria else "")
 
         has_expected = bool(v.expected_output.strip())
@@ -199,8 +241,8 @@ class StepperView(QWidget):
             self._glossary_box.hide()
 
     def _render_final(self) -> None:
-        for w in (self._explain, self._alt, self._try, self._try_label,
-                  self._success, self._expected_cap, self._expected,
+        for w in (self._explain, self._find, self._alt, self._try, self._try_label,
+                  self._anatomy, self._success, self._expected_cap, self._expected,
                   self._gate_host, self._glossary_box):
             w.hide()
         self._final.show()

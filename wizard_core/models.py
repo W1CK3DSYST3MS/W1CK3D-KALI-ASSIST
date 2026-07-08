@@ -60,6 +60,13 @@ class QuickBuild(_Strict):
     fields: list[FieldSchema] = Field(default_factory=list)
 
 
+class ArgSpec(_Strict):
+    """One piece of a command explained in plain language (the 'anatomy' breakdown)."""
+
+    token: str = Field(..., description="A literal flag or <placeholder> as it appears in the command, e.g. '-sV' or '<target>'.")
+    does: str = Field(..., description="Plain-language meaning of this part of the command.")
+
+
 class StepAlternative(_Strict):
     """A 'No' branch for a step: a likely cause + the fix to retry + what to check."""
 
@@ -80,6 +87,14 @@ class StepSpec(_Strict):
     field_schema: list[FieldSchema] = Field(default_factory=list)
     explanation: Explanation
     required: bool = True
+    find_it: str = Field(
+        "", description="Beginner guidance: how/where to obtain the input(s) this step "
+        "needs (e.g. how to find your target's IP, where a wordlist lives)."
+    )
+    command_anatomy: list[ArgSpec] = Field(
+        default_factory=list,
+        description="Per-argument breakdown of the try_this command (token -> what it does)."
+    )
     try_this: str = Field("", description="Exact command the learner runs in their terminal.")
     success_criteria: str = Field("", description="What success looks like.")
     expected_output: str = Field(
