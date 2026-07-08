@@ -10,8 +10,147 @@ authorization_text: >
   networks you don't own or aren't authorized to monitor. Capture only your own traffic, your
   own lab, or with explicit permission. Continue?
 flows:
+  - flow_id: guided
+    title: "Guided first capture (START HERE)"
+    goal: "From listing interfaces to reading filtered traffic from a saved file — inputs explained."
+    command_builder_id: tshark
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "See your network interfaces"
+        slot_target: ENV_INTERFACE
+        glossary_refs: [interface, promiscuous]
+        explanation:
+          what: "`tshark -D` lists the interfaces you can capture on, numbered. Capturing needs privilege (sudo, or membership of the 'wireshark' group)."
+          why: "You must capture on the RIGHT interface — the one carrying the traffic you care about (your ethernet or Wi-Fi)."
+          where: "The interface name/number goes after -i in later steps."
+        find_it: >
+          Only capture your own traffic / lab / authorized network. If -D says you lack
+          permission, either run with sudo, or add yourself to the wireshark group:
+          `sudo dpkg-reconfigure wireshark-common` (choose Yes) then
+          `sudo usermod -aG wireshark $USER` and log out/in.
+        command_anatomy:
+          - {token: "tshark", does: "the command-line Wireshark"}
+          - {token: "-D", does: "list available capture interfaces"}
+        try_this: "tshark -D"
+        success_criteria: "Your interfaces list, e.g. 1. eth0, 2. wlan0, 3. lo."
+        expected_output: |
+          1. eth0
+          2. wlan0
+          3. any
+          4. lo (Loopback)
+        alternatives:
+          - trigger: "you don't have permission to capture"
+            cause: "Your user isn't in the wireshark group."
+            fix: "Add yourself (see 'How to get what you need' above) and re-login, or just prefix commands with sudo."
+            check: "tshark -D lists interfaces without a permission error."
+      - step_id: g2
+        title: "Capture a few live packets"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [packet, promiscuous]
+        explanation:
+          what: "`-i <iface>` captures live; `-c 20` stops after 20 packets so it doesn't run forever; `-n` skips slow DNS name lookups."
+          why: "A small, bounded capture proves you're on the right interface before you record a big file."
+          where: "-i in TARGET_PIVOT; -c/-n are options."
+        find_it: "Use an interface from step 1 that has traffic (your eth0/wlan0, not lo). Generate some traffic (open a webpage) while it runs."
+        command_anatomy:
+          - {token: "sudo tshark", does: "run with capture privilege"}
+          - {token: "-i eth0", does: "capture on the eth0 interface"}
+          - {token: "-c 20", does: "stop after 20 packets"}
+          - {token: "-n", does: "don't resolve names (faster)"}
+        try_this: "sudo tshark -i eth0 -c 20 -n"
+        success_criteria: "20 packet summary lines scroll past, then it stops."
+        expected_output: |
+          1 0.000000 192.168.1.24 → 93.184.216.34 TCP 74 51524 → 443 [SYN]
+          2 0.012000 93.184.216.34 → 192.168.1.24 TCP 74 443 → 51524 [SYN, ACK]
+          3 0.012100 192.168.1.24 → 93.184.216.34 TCP 66 51524 → 443 [ACK]
+        alternatives:
+          - trigger: "nothing shows up"
+            cause: "Wrong interface, or no traffic on it."
+            fix: "Confirm the active interface with `ip a` / `tshark -D`, and generate traffic (browse a site)."
+            check: "Packets appear on the busy interface."
+      - step_id: g3
+        title: "Save a capture to a file"
+        slot_target: OUTPUT_OPTIONS
+        glossary_refs: [pcap]
+        explanation:
+          what: "`-w cap.pcap` writes packets to a file instead of the screen; `-a duration:30` auto-stops after 30 seconds."
+          why: "You analyse offline from a saved .pcap — you can filter and re-filter it as many times as you like without re-capturing."
+          where: "-w in OUTPUT_OPTIONS; -a duration bounds the run."
+        find_it: "Pick a writable filename (your home). 30 seconds of everyday traffic is plenty to practise on."
+        command_anatomy:
+          - {token: "sudo tshark -i eth0", does: "capture on eth0"}
+          - {token: "-a duration:30", does: "automatically stop after 30 seconds"}
+          - {token: "-w ~/cap.pcap", does: "write the packets to this file"}
+        try_this: "sudo tshark -i eth0 -a duration:30 -w ~/cap.pcap && capinfos ~/cap.pcap"
+        success_criteria: "~/cap.pcap is written; capinfos shows a packet count."
+        expected_output: |
+          File name:           /home/kali/cap.pcap
+          Number of packets:   842
+          Capture duration:    30.0 seconds
+        alternatives:
+          - trigger: "Permission denied writing the file"
+            cause: "Not a writable location."
+            fix: "Write under your home, e.g. `-w ~/cap.pcap`."
+            check: "The file is created."
+      - step_id: g4
+        title: "Read it back and filter (display filter -Y)"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [display_filter, capture_filter]
+        explanation:
+          what: "`-r <file>` reads a saved capture; `-Y \"<filter>\"` shows only matching packets. This is the WIRESHARK display-filter language: http, dns, ip.addr==x, tcp.port==443."
+          why: "This is where the analysis happens. Reading a file needs no capture privilege, so you can study captures from anywhere."
+          where: "-r in TARGET_PIVOT; -Y is the display filter."
+        find_it: >
+          Key concept: a CAPTURE filter (-f, e.g. \"tcp port 80\", BPF language) drops packets
+          BEFORE saving; a DISPLAY filter (-Y, e.g. \"http.request\", Wireshark language) hides
+          them AFTER. Most 'my filter doesn't work' problems are the wrong language in the wrong
+          place. Here we use -Y on the saved file.
+        command_anatomy:
+          - {token: "tshark", does: "the program (no sudo needed to read a file)"}
+          - {token: "-r ~/cap.pcap", does: "read from the saved capture"}
+          - {token: "-Y \"http.request\"", does: "show only HTTP request packets (display filter)"}
+          - {token: "-n", does: "skip name resolution"}
+        try_this: "tshark -r ~/cap.pcap -Y \"http.request\" -n"
+        success_criteria: "Only HTTP request packets print (or another protocol you filter for)."
+        expected_output: |
+          42 3.101 192.168.1.24 → 93.184.216.34 HTTP GET /index.html HTTP/1.1
+          58 4.552 192.168.1.24 → 93.184.216.34 HTTP GET /style.css HTTP/1.1
+        alternatives:
+          - trigger: "-Y finds nothing"
+            cause: "Wrong field name, or that traffic isn't in the capture (e.g. all HTTPS, no plain HTTP)."
+            fix: "Use correct field names (`ip.addr`, not `ip`); try a broader filter like `tcp` or `dns` to confirm packets exist."
+            check: "A broad filter shows packets; then narrow it."
+          - trigger: "you put the Wireshark filter after -f and it was rejected"
+            cause: "-f uses the BPF language, not Wireshark's."
+            fix: "Use -f \"tcp port 80\" at capture, or -Y \"http\" when reading. Don't mix them."
+            check: "The filter is accepted."
+      - step_id: g5
+        title: "Extract fields into a table"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-T fields -e <field> -e <field> -E header=y -E separator=,` prints chosen fields as CSV-style columns instead of full packet summaries."
+          why: "For analysis you often want just a few columns (who talked to whom, which URLs) that you can sort, count, or open in a spreadsheet."
+          where: "ACTION_OPTIONS; -T/-e select fields, -E sets formatting."
+        find_it: "Pick the fields you want. Common ones: ip.src, ip.dst, http.host, http.request.uri, dns.qry.name. Field names come from Wireshark's display-filter reference."
+        command_anatomy:
+          - {token: "-r ~/cap.pcap -Y \"http.request\"", does: "read the file, keep HTTP requests"}
+          - {token: "-T fields", does: "output selected fields (not full summaries)"}
+          - {token: "-e ip.src -e http.host -e http.request.uri", does: "the columns to print"}
+          - {token: "-E header=y -E separator=,", does: "add a header row, comma-separate (CSV)"}
+        try_this: "tshark -r ~/cap.pcap -Y \"http.request\" -T fields -e ip.src -e http.host -e http.request.uri -E header=y -E separator=,"
+        success_criteria: "A header plus comma-separated columns of the requested fields print."
+        expected_output: |
+          ip.src,http.host,http.request.uri
+          192.168.1.24,example.com,/index.html
+          192.168.1.24,example.com,/style.css
+        alternatives:
+          - trigger: "columns are empty"
+            cause: "A field name typo, or those fields aren't in the matched packets."
+            fix: "Test one -e field at a time; confirm the packets actually carry that field."
+            check: "Each field prints a value."
   - flow_id: setup_caps
-    title: "Capture privileges & list interfaces"
+    title: "Capture privileges & list interfaces (reference)"
     goal: "Be able to capture, and see your interfaces."
     command_builder_id: tshark
     slots: [PROGRAM, ENV_INTERFACE]
@@ -24,15 +163,21 @@ flows:
           what: "`tshark -D` lists interfaces. Non-root capture: dpkg-reconfigure wireshark-common -> usermod -aG wireshark $USER -> re-login; else use sudo."
           why: "Capturing needs privilege; you need the right interface number/name."
           where: "ENV_INTERFACE (-D)."
+        find_it: "Just run it; if denied, add yourself to the wireshark group or use sudo."
+        command_anatomy:
+          - {token: "tshark -D", does: "list capture interfaces"}
         try_this: "tshark -D"
         success_criteria: "Your interfaces list (e.g. 1. eth0, 2. wlan0)."
+        expected_output: |
+          1. eth0
+          2. wlan0
         alternatives:
           - trigger: "you don't have permission to capture"
             cause: "User not in the wireshark group."
             fix: "Add yourself to the wireshark group (and re-login), or run with sudo."
             check: "Re-run tshark -D after re-login."
   - flow_id: live_capture
-    title: "Live capture basics"
+    title: "Live capture basics (reference)"
     goal: "Capture live packets, optionally to a file."
     command_builder_id: tshark
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, OUTPUT_OPTIONS]
@@ -45,15 +190,22 @@ flows:
           what: "`-i <iface>`; limit with -c <count> and/or -a duration:<s>; save with -w; -n skips slow DNS."
           why: "Bound the capture so it doesn't run forever; save for offline analysis."
           where: "-i in TARGET_PIVOT; -w in OUTPUT_OPTIONS."
+        find_it: "An active interface from -D; decide on a packet count or duration."
+        command_anatomy:
+          - {token: "-i eth0", does: "capture on eth0"}
+          - {token: "-c 50", does: "stop after 50 packets"}
+          - {token: "-a duration:60 -w cap.pcap", does: "or run 60s and save to a file"}
         try_this: "tshark -i eth0 -c 50 -n   # save: tshark -i eth0 -a duration:60 -w cap.pcap"
         success_criteria: "Packets scroll (or a file is written)."
+        expected_output: |
+          1 0.000 192.168.1.24 → 1.1.1.1 DNS Standard query A example.com
         alternatives:
           - trigger: "nothing shown"
             cause: "Wrong interface or no traffic on it."
             fix: "Confirm with -D; generate some traffic."
             check: "Pick the active interface."
   - flow_id: filters
-    title: "Capture vs display filters (the key concept)"
+    title: "Capture vs display filters (reference)"
     goal: "Use the right filter language in the right place."
     command_builder_id: tshark
     slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
@@ -66,8 +218,14 @@ flows:
           what: "Capture filter `-f \"tcp port 80\"` (BPF, drops before saving) vs display filter `-Y \"http.request\"` (Wireshark, hides after)."
           why: "Most 'why isn't my filter working?' issues are the wrong language in the wrong place."
           where: "ACTION_OPTIONS (-f and -Y)."
+        find_it: "Decide: reduce what you SAVE (-f, BPF) or what you SEE from a file (-Y, Wireshark)."
+        command_anatomy:
+          - {token: "-f \"tcp port 80\"", does: "capture filter (BPF) — drops non-matching before saving"}
+          - {token: "-Y \"http.request\"", does: "display filter (Wireshark) — hides after capture"}
         try_this: "tshark -i eth0 -f \"tcp port 80\"   # or: tshark -r cap.pcap -Y \"http.request\""
         success_criteria: "Only the intended packets are captured/shown."
+        expected_output: |
+          (only port-80 / only http.request packets appear)
         alternatives:
           - trigger: "filter rejected at capture"
             cause: "Wireshark syntax used with -f."
@@ -78,7 +236,7 @@ flows:
             fix: "Use ip.addr (not ip); confirm the traffic exists."
             check: "Verify the field names."
   - flow_id: read_pcap
-    title: "Read & filter a saved pcap"
+    title: "Read & filter a saved pcap (reference)"
     goal: "Analyze a capture without capture rights."
     command_builder_id: tshark
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -90,15 +248,21 @@ flows:
           what: "`-r <file>` reads a pcap; `-Y \"<display filter>\"` selects packets; -n speeds it up."
           why: "No capture rights needed — great for captures from elsewhere (e.g. aircrack-ng)."
           where: "-r in TARGET_PIVOT."
+        find_it: "A .pcap file path you can read."
+        command_anatomy:
+          - {token: "-r cap.pcap", does: "read this capture file"}
+          - {token: "-Y \"dns\"", does: "show only DNS packets"}
         try_this: "tshark -r cap.pcap -Y \"dns\" -n"
         success_criteria: "Only matching packets print."
+        expected_output: |
+          12 1.20 192.168.1.24 → 1.1.1.1 DNS Standard query A example.com
         alternatives:
           - trigger: "file not found / cannot read"
             cause: "Wrong path or unreadable file."
             fix: "Check the path and permissions."
             check: "ls the file first."
   - flow_id: fields_csv
-    title: "Extract specific fields (CSV-style)"
+    title: "Extract specific fields (reference)"
     goal: "Produce tabular output for analysis."
     command_builder_id: tshark
     slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
@@ -110,15 +274,23 @@ flows:
           what: "`-T fields -e <field> -e <field> -E header=y -E separator=,` makes CSV-ish output."
           why: "Pipe specific fields to a file or analysis tool."
           where: "fields in ACTION_OPTIONS; -E formatting in OUTPUT_OPTIONS."
+        find_it: "Choose field names (ip.src, http.host, http.request.uri) from Wireshark's filter reference."
+        command_anatomy:
+          - {token: "-T fields", does: "output chosen fields as columns"}
+          - {token: "-e ip.src -e http.host -e http.request.uri", does: "the fields to print"}
+          - {token: "-E header=y -E separator=,", does: "header row + CSV"}
         try_this: "tshark -r cap.pcap -Y \"http.request\" -T fields -e ip.src -e http.host -e http.request.uri -E header=y -E separator=,"
         success_criteria: "Columns of the requested fields print with a header."
+        expected_output: |
+          ip.src,http.host,http.request.uri
+          192.168.1.24,example.com,/index.html
         alternatives:
           - trigger: "empty columns"
             cause: "Field name typo, or those fields aren't in matched packets."
             fix: "Verify the field names; confirm the packets carry them."
             check: "Test with one field at a time."
   - flow_id: stats
-    title: "Statistics (what's in this traffic?)"
+    title: "Statistics (reference)"
     goal: "Summarize a capture."
     command_builder_id: tshark
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -131,15 +303,25 @@ flows:
           what: "`-q -z io,phs` protocol hierarchy; `-z conv,tcp` conversations; `-z endpoints,ip` talkers; `-z http,tree`."
           why: "Quickly understand what protocols/hosts dominate a capture."
           where: "ACTION_OPTIONS (-z); -q in GLOBAL_OPTIONS."
+        find_it: "A saved capture; pick the -z report you want (phs, conv,tcp, endpoints,ip)."
+        command_anatomy:
+          - {token: "-q", does: "quiet — only print the stats, not packets"}
+          - {token: "-z io,phs", does: "protocol hierarchy statistics"}
         try_this: "tshark -r cap.pcap -q -z io,phs"
         success_criteria: "A protocol breakdown prints."
+        expected_output: |
+          Protocol Hierarchy Statistics
+          eth  frames:842 bytes:512000
+            ip  frames:840 ...
+              tcp  frames:600 ...
+                http frames:120 ...
         alternatives:
           - trigger: "no stats output"
             cause: "Missing -q, or empty capture."
             fix: "Add -q; confirm the capture has packets."
             check: "capinfos the file."
   - flow_id: follow_stream
-    title: "Follow / reassemble a stream"
+    title: "Follow / reassemble a stream (reference)"
     goal: "Read one conversation end to end."
     command_builder_id: tshark
     slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
@@ -152,15 +334,24 @@ flows:
           what: "`-q -z follow,tcp,ascii,<stream#>` reassembles one TCP conversation."
           why: "Read an HTTP exchange or similar in order; find stream numbers via tcp.stream."
           where: "ACTION_OPTIONS (-z follow)."
+        find_it: "Find a stream number first: `tshark -r cap.pcap -Y http -T fields -e tcp.stream`."
+        command_anatomy:
+          - {token: "-z follow,tcp,ascii,0", does: "reassemble TCP stream number 0 as text"}
         try_this: "tshark -r cap.pcap -q -z follow,tcp,ascii,0"
         success_criteria: "The reassembled conversation prints."
+        expected_output: |
+          ===================================================================
+          GET /index.html HTTP/1.1
+          Host: example.com
+          HTTP/1.1 200 OK
+          ===================================================================
         alternatives:
           - trigger: "wrong/empty stream"
             cause: "Stream number doesn't exist."
             fix: "List tcp.stream values to find valid numbers."
             check: "Filter -Y \"tcp.stream==N\"."
   - flow_id: file_utils
-    title: "File utilities (the rest of the suite)"
+    title: "File utilities (reference)"
     goal: "Inspect/trim/merge captures."
     command_builder_id: tshark
     slots: [PROGRAM, TARGET_PIVOT]
@@ -172,15 +363,22 @@ flows:
           what: "`capinfos cap.pcap` summary; `editcap -c 1000 big.pcap part.pcap` split; `mergecap -w all.pcap a b`; `dumpcap -i eth0 -w cap.pcap` low-overhead capture."
           why: "The suite handles long captures and file wrangling better than tshark alone."
           where: "Separate binaries; same pcap files."
+        find_it: "A .pcap file to inspect; these are separate commands in the same suite."
+        command_anatomy:
+          - {token: "capinfos cap.pcap", does: "summary: packet count, duration, size"}
+          - {token: "editcap / mergecap / dumpcap", does: "split / merge / low-overhead capture"}
         try_this: "capinfos cap.pcap"
         success_criteria: "A summary (packet count, duration, size) prints."
+        expected_output: |
+          Number of packets:   842
+          Capture duration:    30.0 seconds
         alternatives:
           - trigger: "command not found"
             cause: "Suite tool not installed."
             fix: "Install wireshark/tshark suite (apt)."
             check: "which capinfos."
   - flow_id: gui
-    title: "Wireshark GUI (when visual is better)"
+    title: "Wireshark GUI (reference)"
     goal: "Use the GUI for deep manual analysis."
     command_builder_id: tshark
     slots: [PROGRAM, TARGET_PIVOT]
@@ -192,15 +390,20 @@ flows:
           what: "`wireshark cap.pcap` opens the file; same display-filter syntax, color rules, Follow Stream, Statistics menus."
           why: "Skills transfer both ways — tshark and Wireshark share the filter language."
           where: "GUI launch (concept)."
+        find_it: "A capture file and a desktop session (not headless/SSH)."
+        command_anatomy:
+          - {token: "wireshark cap.pcap", does: "open the capture in the graphical Wireshark"}
         try_this: "wireshark cap.pcap"
         success_criteria: "The capture opens in the GUI for visual analysis."
+        expected_output: |
+          (Wireshark window opens with the packets loaded)
         alternatives:
           - trigger: "no display / headless"
             cause: "No GUI available (server/SSH)."
             fix: "Stick with tshark on the CLI."
             check: "Use the read/stats flows instead."
   - flow_id: tls
-    title: "TLS decryption (advanced, your own keys)"
+    title: "TLS decryption (reference, your own keys)"
     goal: "Decrypt HTTPS you legitimately hold keys for."
     command_builder_id: tshark
     slots: [PROGRAM, TARGET_PIVOT, EXTRA_FILES]
@@ -212,8 +415,14 @@ flows:
           what: "Point tshark/Wireshark at an SSLKEYLOGFILE (set in your own browser) or a server key you own."
           why: "HTTPS is encrypted; you can only decrypt traffic you legitimately have keys for. Authorized/own traffic only."
           where: "key material in EXTRA_FILES."
+        find_it: "Set SSLKEYLOGFILE=~/keys.log in your own browser's environment before browsing, so it records the session keys."
+        command_anatomy:
+          - {token: "-o tls.keylog_file:keys.log", does: "use this TLS key log to decrypt"}
+          - {token: "-Y http2", does: "then show the now-readable HTTP/2 traffic"}
         try_this: "tshark -r cap.pcap -o tls.keylog_file:keys.log -Y http2"
         success_criteria: "Previously encrypted traffic is readable."
+        expected_output: |
+          10 2.5 192.168.1.24 → 93.184.216.34 HTTP2 GET /api/data
         alternatives:
           - trigger: "still encrypted"
             cause: "Wrong/missing key material."
