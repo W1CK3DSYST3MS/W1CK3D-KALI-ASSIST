@@ -1,0 +1,16 @@
+module_id: tool.rfcat
+name: "RfCat — sub-GHz RF transceiver"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: rfcat
+  flows: [guided, shell]
+content:
+  tool: tool.yaml
+source: "authored; verified against rfcat/RfCat usage (YARD Stick One / CC1111)"
+license: "project-proprietary lesson text; rfcat is BSD (referenced, not bundled)"
+checksum: ""

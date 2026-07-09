@@ -1,0 +1,155 @@
+tool_id: rfcat
+display_name: "RfCat"
+binary_candidates: [rfcat]
+categories: [sdr, wireless, radio]
+os_profile: kali
+one_liner: "Interactive shell to receive and transmit sub-GHz RF with a CC1111 dongle (e.g. YARD Stick One)."
+authorization_gate: true
+authorization_text: >
+  RfCat can TRANSMIT radio. Transmitting without a licence, on the wrong frequency, or at the
+  wrong power is illegal almost everywhere and can interfere with safety-critical systems.
+  Only receive bands you're permitted to, and only transmit under a licence or inside a proper
+  RF-shielded test setup. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first session (START HERE)"
+    goal: "Connect the dongle, open the RfCat shell, tune, and observe RF — safely."
+    command_builder_id: rfcat
+    slots: [PROGRAM, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Connect a compatible dongle and confirm the OS sees it"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "RfCat drives CC1111-based radios — most commonly a YARD Stick One (USB ID 1d50:605b). `lsusb` confirms the OS enumerated it."
+          why: "Without the dongle detected, RfCat can't open a radio. Confirm the hardware first."
+          where: "This is the device RfCat will attach to."
+        find_it: >
+          Plug in the YARD Stick One (or CC1111 dongle). Install RfCat with `sudo apt install
+          rfcat` if missing. Reminder: receiving is usually fine on permitted bands, but
+          TRANSMITTING needs a licence or a shielded lab — treat every TX step as regulated.
+        command_anatomy:
+          - {token: "lsusb", does: "list USB devices"}
+          - {token: "grep -i 1d50", does: "filter for Great Scott Gadgets (YARD Stick One vendor)"}
+        try_this: "lsusb | grep -i 1d50"
+        success_criteria: "The YARD Stick One shows up (ID 1d50:605b)."
+        expected_output: |
+          Bus 001 Device 005: ID 1d50:605b OpenMoko, Inc. YARD Stick One
+        alternatives:
+          - trigger: "nothing matches"
+            cause: "Dongle not plugged in, or a different vendor/ID."
+            fix: "Re-seat the USB; run plain `lsusb` and look for your specific dongle; check `dmesg | tail` after plugging in."
+            check: "The dongle appears in lsusb."
+      - step_id: g2
+        title: "Open the RfCat research shell"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`rfcat -r` opens an interactive Python shell with a radio object called `d` already connected. You drive the radio by calling methods on `d`."
+          why: "RfCat is used interactively — you set parameters and receive/transmit from this shell."
+          where: "ACTION_OPTIONS (-r for the research shell)."
+        find_it: "No extra input. Inside, `d` is your radio; type `d.ping()` to confirm it responds, and Ctrl-D to exit."
+        command_anatomy:
+          - {token: "rfcat", does: "the tool"}
+          - {token: "-r", does: "open the interactive research shell (radio bound to 'd')"}
+        try_this: "rfcat -r"
+        success_criteria: "A Python prompt appears and `d.ping()` returns an OK response."
+        expected_output: |
+          'RfCat, the greatest thing since sliced bread!'
+          research mode: enjoy the raw power of rflib
+          currently your environment has an object called "d" for dongle
+          In [1]: d.ping()
+          Out[1]: PING: 30 bytes transmitted, response: ...
+        alternatives:
+          - trigger: "could not find radio / usb error"
+            cause: "Dongle not detected or claimed by another process."
+            fix: "Confirm step 1; unplug/replug; close other programs using it. As a last resort `rfcat_bootloader` firmware issues need re-flashing."
+            check: "d.ping() succeeds."
+      - step_id: g3
+        title: "Set frequency and modulation"
+        slot_target: null
+        explanation:
+          what: "In the shell you configure the radio: `d.setFreq(433920000)` sets 433.92 MHz (a common ISM band), `d.setMdmModulation(MOD_ASK_OOK)` picks OOK/ASK, `d.setMdmDRate(4800)` sets the data rate."
+          why: "The radio only hears/sends what it's tuned and modulated for. These three settings match most simple remotes/sensors on the 433 MHz ISM band."
+          where: "Methods called on the `d` object inside the RfCat shell."
+        find_it: "433.92 MHz is a licence-free ISM band in many regions (check yours). Match modulation/data-rate to the device you're studying (OOK is typical for cheap remotes)."
+        command_anatomy:
+          - {token: "d.setFreq(433920000)", does: "tune to 433.92 MHz (in Hz)"}
+          - {token: "d.setMdmModulation(MOD_ASK_OOK)", does: "use ASK/OOK modulation"}
+          - {token: "d.setMdmDRate(4800)", does: "set the symbol/data rate"}
+        try_this: "# in RfCat:  d.setFreq(433920000); d.setMdmModulation(MOD_ASK_OOK); d.setMdmDRate(4800)"
+        success_criteria: "The commands return without error (the radio is configured)."
+        expected_output: |
+          In [2]: d.setFreq(433920000)
+          In [3]: d.setMdmModulation(MOD_ASK_OOK)
+          In [4]: d.setMdmDRate(4800)
+          (no errors — settings applied)
+        alternatives:
+          - trigger: "a frequency error / out of range"
+            cause: "The CC1111 only covers certain sub-GHz ranges (300-928 MHz-ish)."
+            fix: "Stay within the supported band, and one you're legally allowed to use."
+            check: "setFreq returns without error."
+      - step_id: g4
+        title: "Receive/observe RF (transmit only if licensed)"
+        slot_target: null
+        explanation:
+          what: "`d.RFlisten()` prints raw packets it hears — a safe, receive-only way to observe. `d.RFxmit(b'...')` TRANSMITS and is regulated. Press Ctrl-C to stop listening."
+          why: "Receiving lets you study a signal legally. Transmitting replays/injects RF and must only be done under a licence or in a shielded lab."
+          where: "Methods on `d`; RFlisten receives, RFxmit transmits."
+        find_it: "Trigger a device you own (e.g. press your own 433 MHz remote) while RFlisten runs. Do NOT transmit on open air without authorization."
+        command_anatomy:
+          - {token: "d.RFlisten()", does: "receive and print incoming RF (safe, RX only)"}
+          - {token: "d.RFxmit(b'\\x01\\x02')", does: "TRANSMIT bytes — regulated, licence/shielded lab only"}
+        try_this: "# in RfCat:  d.RFlisten()    (then trigger your own device; Ctrl-C to stop)"
+        success_criteria: "Raw received frames print when a nearby permitted transmitter is active."
+        expected_output: |
+          In [5]: d.RFlisten()
+          Entering RFlisten mode... press Enter to stop
+          (0000) 1ac1 55aa 55aa ...  | received frame
+        alternatives:
+          - trigger: "RFlisten shows nothing"
+            cause: "Wrong frequency/modulation/rate, or nothing is transmitting."
+            fix: "Re-check step 3's settings against the target device; trigger a device you own on that band."
+            check: "Frames appear when your device transmits."
+          - trigger: "you want to transmit/replay"
+            cause: "TX is powerful and regulated."
+            fix: "Only with a licence or in an RF-shielded enclosure. Confirm the legal band/power first; keep bursts short."
+            check: "You have authorization/shielding before any RFxmit."
+  - flow_id: shell
+    title: "Open the shell (reference)"
+    goal: "Just launch the interactive research shell."
+    command_builder_id: rfcat
+    slots: [PROGRAM, ACTION_OPTIONS]
+    steps:
+      - step_id: rf1
+        title: "rfcat -r"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`rfcat -r` opens the shell with radio object `d`."
+          why: "Entry point for all interactive work."
+          where: "ACTION_OPTIONS."
+        find_it: "Dongle connected (see the guided flow)."
+        command_anatomy:
+          - {token: "rfcat -r", does: "interactive research shell"}
+        try_this: "rfcat -r"
+        success_criteria: "The RfCat prompt appears with `d` available."
+        expected_output: |
+          currently your environment has an object called "d" for dongle
+        alternatives:
+          - trigger: "no radio found"
+            cause: "Dongle not detected."
+            fix: "See the guided flow's device steps."
+            check: "d.ping() works."
+
+quick_build:
+  builder: rfcat
+  title: "Launch"
+  fields:
+    - field_id: interactive
+      label: "Research shell (-r)"
+      type: bool
+      default: true
+    - field_id: index
+      label: "Dongle index (-i)"
+      type: int
+      placeholder: "0  (if multiple dongles)"

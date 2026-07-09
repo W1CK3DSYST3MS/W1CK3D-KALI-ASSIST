@@ -1,0 +1,16 @@
+module_id: tool.photon
+name: "Photon — fast web crawler for OSINT"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: photon
+  flows: [guided, tune]
+content:
+  tool: tool.yaml
+source: "authored; verified against Photon (s0md3v) usage (-u/-l/-t/-d/-o/--wayback)"
+license: "project-proprietary lesson text; Photon is GPL (referenced, not bundled)"
+checksum: ""

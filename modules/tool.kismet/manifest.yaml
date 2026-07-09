@@ -1,0 +1,16 @@
+module_id: tool.kismet
+name: "Kismet — wireless detector & sniffer"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: kismet
+  flows: [guided, source]
+content:
+  tool: tool.yaml
+source: "authored; verified against kismet usage (-c source; web UI :2501; .kismet logs)"
+license: "project-proprietary lesson text; Kismet is GPL (referenced, not bundled)"
+checksum: ""

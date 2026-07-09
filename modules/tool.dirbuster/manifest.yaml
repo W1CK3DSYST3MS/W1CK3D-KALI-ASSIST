@@ -1,0 +1,16 @@
+module_id: tool.dirbuster
+name: "DirBuster — web content brute-forcer (GUI)"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: dirbuster
+  flows: [guided, headless]
+content:
+  tool: tool.yaml
+source: "authored; verified against OWASP DirBuster usage (GUI + -H headless -u/-l/-e/-r)"
+license: "project-proprietary lesson text; DirBuster is LGPL (referenced, not bundled)"
+checksum: ""

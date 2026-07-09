@@ -1,0 +1,16 @@
+module_id: tool.gqrx
+name: "Gqrx SDR — software-defined radio receiver"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: gqrx
+  flows: [guided, devices]
+content:
+  tool: tool.yaml
+source: "authored; verified against gqrx usage + rtl-sdr device prep"
+license: "project-proprietary lesson text; gqrx is GPL (referenced, not bundled)"
+checksum: ""

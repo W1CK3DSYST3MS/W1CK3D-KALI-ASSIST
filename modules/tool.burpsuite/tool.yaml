@@ -1,0 +1,145 @@
+tool_id: burpsuite
+display_name: "Burp Suite"
+binary_candidates: [burpsuite]
+categories: [web_app, proxy]
+os_profile: kali
+one_liner: "An intercepting web proxy and toolkit for manually testing web applications."
+authorization_gate: true
+authorization_text: >
+  Burp Suite intercepts and modifies real web traffic and can actively attack web apps. Using it
+  against sites you don't own or aren't authorized to test is illegal. Continue only for
+  authorized targets or your own labs (DVWA / Juice Shop / PortSwigger Web Security Academy).
+  Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first intercept (START HERE)"
+    goal: "Launch Burp, route a browser through it, trust its CA, and intercept a request."
+    command_builder_id: burpsuite
+    slots: [PROGRAM, GLOBAL_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Launch Burp Suite and start a temporary project"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "`burpsuite` opens the GUI. Choose 'Temporary project' → 'Use Burp defaults' → Start Burp. The Proxy runs on 127.0.0.1:8080 by default."
+          why: "Burp is a platform you drive through its GUI; the temporary project is the quickest way in for learning."
+          where: "GUI startup dialog; the proxy listener is the key piece."
+        find_it: >
+          Install with `sudo apt install burpsuite` if missing. Only test authorized targets — the
+          PortSwigger Web Security Academy labs and DVWA/Juice Shop are free and legal to practise on.
+        command_anatomy:
+          - {token: "burpsuite", does: "launch the Burp Suite GUI"}
+          - {token: "(GUI) Temporary project → Use Burp defaults", does: "quickest way to start"}
+        try_this: "burpsuite"
+        success_criteria: "Burp opens; under Proxy → Proxy settings you see a listener on 127.0.0.1:8080."
+        expected_output: |
+          (Burp Suite window opens with the Dashboard, Target, Proxy, Repeater...
+           tabs. Proxy listener: 127.0.0.1:8080.)
+        alternatives:
+          - trigger: "Burp won't start (Java error)"
+            cause: "Java runtime issue."
+            fix: "Ensure a JRE is installed (`sudo apt install default-jre`); reinstall burpsuite via apt."
+            check: "The Burp window opens."
+      - step_id: g2
+        title: "Point a browser at the proxy"
+        slot_target: null
+        explanation:
+          what: "Configure a browser to use the HTTP proxy 127.0.0.1:8080. The easiest path is Burp's built-in browser (Proxy → Intercept → Open Browser), which is pre-configured."
+          why: "Burp only sees traffic that flows THROUGH it. The browser must send requests to Burp's proxy."
+          where: "Browser proxy settings, or Burp's embedded browser."
+        find_it: "Simplest: use Burp's own browser (Proxy tab → 'Open Browser'). Otherwise set your browser's manual proxy to 127.0.0.1 port 8080 (e.g. via FoxyProxy)."
+        command_anatomy:
+          - {token: "(GUI) Proxy → Open Browser", does: "launch Burp's pre-proxied Chromium"}
+          - {token: "(browser) HTTP proxy 127.0.0.1:8080", does: "manual setting if using your own browser"}
+        try_this: "# in Burp: Proxy tab -> 'Open Browser'  (or set your browser proxy to 127.0.0.1:8080)"
+        success_criteria: "Browsing a site makes entries appear in Burp's Proxy → HTTP history."
+        expected_output: |
+          (Proxy > HTTP history fills with the requests/responses your browser makes.)
+        alternatives:
+          - trigger: "no traffic in HTTP history"
+            cause: "Browser isn't actually using the proxy."
+            fix: "Use Burp's built-in browser, or double-check the manual proxy host/port."
+            check: "Requests show in HTTP history."
+      - step_id: g3
+        title: "Trust Burp's CA certificate (for HTTPS)"
+        slot_target: null
+        explanation:
+          what: "To read HTTPS, the browser must trust Burp's CA. Visit http://burp in the proxied browser, download the CA cert, and import it into the browser's certificate store."
+          why: "Without trusting Burp's CA, HTTPS sites show certificate errors and Burp can't cleanly intercept them."
+          where: "http://burp → 'CA Certificate'; then the browser's cert settings."
+        find_it: "In the proxied browser go to http://burp and click 'CA Certificate' to download cacert.der, then import it as a trusted authority."
+        command_anatomy:
+          - {token: "(browser) http://burp", does: "Burp's page to download its CA certificate"}
+          - {token: "(browser) import CA", does: "trust it so HTTPS intercepts cleanly"}
+        try_this: "# in the proxied browser: visit http://burp -> download CA Certificate -> import it as trusted"
+        success_criteria: "HTTPS sites load without certificate warnings while proxied."
+        expected_output: |
+          (http://burp shows a 'CA Certificate' download button; after importing,
+           HTTPS pages load normally through Burp.)
+        alternatives:
+          - trigger: "still getting certificate errors"
+            cause: "CA not imported into the right store, or imported as the wrong type."
+            fix: "Import it under 'Authorities' (Firefox) / system trusted roots; restart the browser."
+            check: "HTTPS sites load cleanly."
+      - step_id: g4
+        title: "Intercept a request and send it to Repeater"
+        slot_target: null
+        explanation:
+          what: "Turn Proxy → Intercept ON, submit a form, and Burp pauses the request so you can edit it. Right-click → 'Send to Repeater' to replay/modify it repeatedly."
+          why: "Intercept + Repeater is the core manual-testing loop: change a parameter, resend, observe the response."
+          where: "GUI: Proxy → Intercept, and the Repeater tab."
+        find_it: "Only tamper with requests to an authorized target. Use a lab form (e.g. a DVWA login) to practise."
+        command_anatomy:
+          - {token: "(GUI) Proxy → Intercept is on", does: "pause requests so you can read/edit them"}
+          - {token: "(GUI) Forward / Drop", does: "let the request through, or discard it"}
+          - {token: "(GUI) Send to Repeater", does: "replay and tweak the request in Repeater"}
+        try_this: "# in Burp: Proxy -> Intercept ON, submit a form, then right-click -> Send to Repeater"
+        success_criteria: "You can view/modify the raw request and resend it from Repeater to see the response change."
+        expected_output: |
+          (The intercepted raw HTTP request appears; in Repeater you edit a
+           parameter, click Send, and see the server's response update.)
+        alternatives:
+          - trigger: "intercept never catches anything"
+            cause: "Intercept is off, or traffic isn't going through Burp."
+            fix: "Toggle Intercept ON; confirm HTTP history is filling (step 2)."
+            check: "A request pauses under Intercept."
+  - flow_id: launch
+    title: "Launch with a project/config (reference)"
+    goal: "Open Burp with a saved project or config."
+    command_builder_id: burpsuite
+    slots: [PROGRAM, GLOBAL_OPTIONS]
+    steps:
+      - step_id: bp1
+        title: "burpsuite --project-file / --config-file"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`burpsuite --project-file=proj.burp` opens/creates a saved project; `--config-file=cfg.json` loads a saved configuration."
+          why: "Reopen an engagement where you left off, or start with consistent settings."
+          where: "GLOBAL_OPTIONS (--project-file=, --config-file=)."
+        find_it: "A project file path (created on first save) and/or an exported config JSON."
+        command_anatomy:
+          - {token: "--project-file=~/engagement.burp", does: "open/create this project (Pro; CE is temporary-only)"}
+          - {token: "--config-file=~/burp-config.json", does: "load saved settings"}
+        try_this: "burpsuite --project-file=~/engagement.burp"
+        success_criteria: "Burp opens with that project/config."
+        expected_output: |
+          (Burp starts and loads the named project/config.)
+        alternatives:
+          - trigger: "project files not supported"
+            cause: "Community Edition only allows temporary projects."
+            fix: "In CE, start a Temporary project; saved project files need Burp Pro."
+            check: "Burp opens (temporary project in CE)."
+
+quick_build:
+  builder: burpsuite
+  title: "Launch"
+  fields:
+    - field_id: project_file
+      label: "Project file (--project-file)"
+      type: path
+      placeholder: "~/engagement.burp  (Pro)"
+    - field_id: config_file
+      label: "Config file (--config-file)"
+      type: path
+      placeholder: "~/burp-config.json  (optional)"

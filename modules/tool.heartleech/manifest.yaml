@@ -1,0 +1,16 @@
+module_id: tool.heartleech
+name: "heartleech — Heartbleed scanner/exploiter"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: heartleech
+  flows: [guided, scan]
+content:
+  tool: tool.yaml
+source: "authored; verified against heartleech usage (CVE-2014-0160; --scan/--dump/-p)"
+license: "project-proprietary lesson text; heartleech is BSD (referenced, not bundled)"
+checksum: ""

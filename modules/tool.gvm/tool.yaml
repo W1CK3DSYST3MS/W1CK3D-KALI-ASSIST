@@ -1,0 +1,159 @@
+tool_id: gvm
+display_name: "Greenbone / OpenVAS (gvm-start)"
+binary_candidates: [gvm-start, gvm-stop, gvm-setup, gvm-check-setup, gvm-feed-update]
+categories: [vulnerability_scanning]
+os_profile: kali
+one_liner: "Starts and manages the Greenbone/OpenVAS vulnerability scanner and its web UI."
+authorization_gate: false
+authorization_text: >
+  gvm-start only launches YOUR scanner services — that part is safe. But running an actual
+  vulnerability scan against a host is intrusive and must only target systems you own or are
+  explicitly authorized to test. Scan authorized targets only.
+flows:
+  - flow_id: guided
+    title: "Guided setup & first start (START HERE)"
+    goal: "Check the install, start the services, log into the web UI, and update feeds."
+    command_builder_id: gvm
+    slots: [PROGRAM]
+    steps:
+      - step_id: g1
+        title: "Check the GVM installation"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "GVM (Greenbone Vulnerability Management, formerly OpenVAS) is a large scanner made of several services + a database of vulnerability tests. `gvm-check-setup` verifies everything is installed and configured."
+          why: "GVM has many moving parts; the check tells you exactly what (if anything) still needs setup before it will run."
+          where: "System check; needs root."
+        find_it: >
+          First time on Kali? Install and initialise: `sudo apt install gvm` then
+          `sudo gvm-setup` (this downloads the vulnerability feeds and can take a while, plus a
+          lot of disk). gvm-setup prints the admin password — save it. Then run this check.
+        command_anatomy:
+          - {token: "sudo", does: "root (GVM services need it)"}
+          - {token: "gvm-check-setup", does: "verify the GVM installation and report any gaps"}
+        try_this: "sudo gvm-check-setup"
+        success_criteria: "It ends with a line like 'It seems like your GVM-… installation is OK.'"
+        expected_output: |
+          Step 1: Checking OpenVAS (Scanner) ... OK
+          Step 2: Checking GVMD (Manager) ... OK
+          ...
+          It seems like your GVM-22.4 installation is OK.
+        alternatives:
+          - trigger: "it reports something is not OK / FIX suggestions"
+            cause: "Setup incomplete (feeds not synced, service not running, DB not initialised)."
+            fix: "Run the FIX command it prints, or re-run `sudo gvm-setup`. Feed syncs must finish before scanning."
+            check: "gvm-check-setup ends with 'installation is OK'."
+          - trigger: "gvm-check-setup: command not found"
+            cause: "GVM isn't installed."
+            fix: "`sudo apt update && sudo apt install gvm`, then `sudo gvm-setup`."
+            check: "The command exists and runs."
+      - step_id: g2
+        title: "Start the GVM services"
+        slot_target: null
+        explanation:
+          what: "`gvm-start` brings up the scanner, the manager, and the web front-end (Greenbone Security Assistant), then usually opens the UI at https://127.0.0.1:9392."
+          why: "The web UI is how you actually configure targets and launch scans — it needs these services running."
+          where: "Starts the service stack; needs root."
+        find_it: "No input. After it starts, browse to https://127.0.0.1:9392 (accept the self-signed certificate warning)."
+        command_anatomy:
+          - {token: "sudo", does: "root"}
+          - {token: "gvm-start", does: "start the GVM services + open the web UI"}
+        try_this: "sudo gvm-start"
+        success_criteria: "Services start and the web UI is reachable at https://127.0.0.1:9392."
+        expected_output: |
+          [*] Please wait for the GVM services to start.
+          [*] Web UI (Greenbone Security Assistant): https://127.0.0.1:9392
+        alternatives:
+          - trigger: "a service fails to start"
+            cause: "PostgreSQL down, or a redis/ospd socket issue."
+            fix: "`sudo gvm-check-setup` to pinpoint it; start PostgreSQL (see the Services troubleshooter); then `sudo gvm-start` again."
+            check: "The UI loads at :9392."
+      - step_id: g3
+        title: "Log into the web UI"
+        slot_target: null
+        explanation:
+          what: "Open https://127.0.0.1:9392 and log in as the admin user with the password gvm-setup generated. If you lost it, reset it with gvmd."
+          why: "Everything else — targets, scan configs, running scans, reading reports — happens in this UI."
+          where: "Browser; the password came from gvm-setup."
+        find_it: >
+          Lost the admin password? Reset it:
+          `sudo runuser -u _gvm -- gvmd --user=admin --new-password='NewStrongPass'`.
+          Then log in as 'admin'.
+        command_anatomy:
+          - {token: "(browser) https://127.0.0.1:9392", does: "the Greenbone Security Assistant UI"}
+          - {token: "gvmd --user=admin --new-password=...", does: "(if needed) reset the admin password"}
+        try_this: "# open https://127.0.0.1:9392 in a browser and log in as admin"
+        success_criteria: "You reach the Greenbone dashboard after logging in."
+        expected_output: |
+          (Browser shows the Greenbone Security Assistant dashboard:
+           Scans, Assets, Configuration menus.)
+        alternatives:
+          - trigger: "login fails / forgot password"
+            cause: "Wrong or lost admin password."
+            fix: "Reset it with the gvmd command in 'How to get what you need', then log in."
+            check: "You reach the dashboard."
+          - trigger: "browser refuses the connection"
+            cause: "Services still starting, or wrong URL/port."
+            fix: "Wait a minute after gvm-start; confirm the URL is https://127.0.0.1:9392."
+            check: "The login page loads."
+      - step_id: g4
+        title: "Update the vulnerability feeds"
+        slot_target: null
+        explanation:
+          what: "`gvm-feed-update` downloads the latest NVTs (network vulnerability tests), SCAP and CERT data. Scans are only as good as these feeds."
+          why: "Out-of-date feeds miss recent vulnerabilities. Refresh them before an important scan."
+          where: "Feed sync; needs root; can take a while."
+        find_it: "Needs internet. First-ever sync is large; later updates are incremental. Do it when you can leave it running."
+        command_anatomy:
+          - {token: "sudo", does: "root"}
+          - {token: "gvm-feed-update", does: "sync the latest vulnerability test + SCAP/CERT feeds"}
+        try_this: "sudo gvm-feed-update"
+        success_criteria: "The feeds sync without error; the UI's Feed Status shows current dates."
+        expected_output: |
+          Updating: NVT feed ...
+          Updating: SCAP feed ...
+          Updating: CERT feed ...
+          (rsync progress; completes)
+        alternatives:
+          - trigger: "feed sync is very slow / rate-limited"
+            cause: "Greenbone's community feed throttles connections."
+            fix: "Be patient and let it finish; don't run several syncs at once. Retry later if it stalls."
+            check: "Feed Status in the UI shows recent dates."
+  - flow_id: manage
+    title: "Start / stop / check (reference)"
+    goal: "Control the service stack."
+    command_builder_id: gvm
+    slots: [PROGRAM]
+    steps:
+      - step_id: gv1
+        title: "start / stop / check-setup / feed-update"
+        slot_target: null
+        explanation:
+          what: "`gvm-start` and `gvm-stop` control the services; `gvm-check-setup` verifies health; `gvm-feed-update` refreshes data."
+          why: "Day-to-day control of the scanner without the web UI."
+          where: "Each is a separate gvm-* command (pick via the quick-build action)."
+        find_it: "Choose the action for what you need (start to use it, stop to free resources)."
+        command_anatomy:
+          - {token: "gvm-start / gvm-stop", does: "bring the services up / down"}
+          - {token: "gvm-check-setup", does: "health check"}
+          - {token: "gvm-feed-update", does: "refresh feeds"}
+        try_this: "sudo gvm-stop"
+        success_criteria: "The chosen action completes (services stop, in this example)."
+        expected_output: |
+          [*] Please wait while the GVM services stop.
+        alternatives:
+          - trigger: "action has no effect"
+            cause: "Services already in that state."
+            fix: "Check with `sudo gvm-check-setup` or `systemctl status gvmd`."
+            check: "The service state matches what you intended."
+
+quick_build:
+  builder: gvm
+  title: "Manage GVM"
+  fields:
+    - field_id: action
+      label: "Action"
+      type: choice
+      required: true
+      default: start
+      choices: [start, stop, check-setup, setup, feed-update]

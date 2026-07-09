@@ -1,0 +1,167 @@
+tool_id: photon
+display_name: "Photon"
+binary_candidates: [photon]
+categories: [osint, reconnaissance]
+os_profile: kali
+one_liner: "A fast web crawler that harvests URLs, emails, files, and secrets from a target site."
+authorization_gate: true
+authorization_text: >
+  Photon actively crawls a website — many automated requests that appear in the target's logs
+  and can stress a small server. Crawl only sites you own or are authorized to assess. Continue
+  only for authorized targets or your own apps. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first crawl (START HERE)"
+    goal: "Crawl a site into an output folder, then read the harvested URLs and data."
+    command_builder_id: photon
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm Photon and pick an authorized site"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "Photon takes a start URL and follows links, collecting internal/external URLs, emails, files (pdf, docs), and things that look like secrets/keys."
+          why: "It's OSINT/recon that hits the target directly, so you confirm the tool and your authorization before crawling."
+          where: "The site URL is passed with -u."
+        find_it: >
+          Only crawl sites you own or are authorized to assess. Not installed? On Kali try
+          `sudo apt install photon`, or `pipx install photon` / clone
+          https://github.com/s0md3v/Photon. The URL includes the scheme: https://example.com.
+        command_anatomy:
+          - {token: "photon --help", does: "show Photon's options"}
+          - {token: "| head", does: "just the first lines (confirms it runs)"}
+        try_this: "photon --help | head"
+        success_criteria: "Photon's usage/help prints — it's installed and runnable."
+        expected_output: |
+          usage: photon.py [-h] [-u ROOT] [-l LEVEL] [-t THREADS] [-d DELAY] ...
+          Photon - a lightning fast web crawler
+        alternatives:
+          - trigger: "command not found"
+            cause: "Not installed / installed under a different name."
+            fix: "Try `sudo apt install photon`, or `pipx install photon`; some setups run it as `photon.py`."
+            check: "The help text prints."
+      - step_id: g2
+        title: "Run a basic crawl into an output folder"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`photon -u https://example.com -o <dir>` crawls the site from that URL and saves categorised results (internal URLs, external URLs, emails, files...) into the output directory."
+          why: "This is the core action — a structured harvest of everything the site links to."
+          where: "-u is the start URL; -o is the output directory."
+        find_it: "Use your authorized site's URL and a writable output folder (your home). Start shallow to keep it quick."
+        command_anatomy:
+          - {token: "photon", does: "the crawler"}
+          - {token: "-u https://example.com", does: "the start URL to crawl"}
+          - {token: "-o ~/photon_example", does: "save results into this directory"}
+        try_this: "photon -u https://example.com -o ~/photon_example"
+        success_criteria: "It crawls and reports counts, and ~/photon_example is created with result files."
+        expected_output: |
+          ┌─ Photon ─┐
+          [~] Level 1: 42 URLs
+          [+] Crawling complete
+          [+] Total requests made: 51
+          [+] Results saved in ~/photon_example
+        alternatives:
+          - trigger: "0 URLs / it stops immediately"
+            cause: "The start URL redirects elsewhere, blocks bots, or needs a scheme."
+            fix: "Include https://; try the exact canonical URL; some sites block crawlers via robots/WAF."
+            check: "It reports URLs found."
+      - step_id: g3
+        title: "Go deeper and pull in archived URLs"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-l <n>` sets crawl depth, `-t <n>` threads (speed), `-d <s>` a delay between requests, and `--wayback` seeds the crawl with URLs from the Internet Archive."
+          why: "Depth + wayback find far more; a delay keeps you polite to smaller servers."
+          where: "ACTION_OPTIONS; -o still names the output."
+        find_it: "Depth 2-3 is a good balance. Keep threads modest and add -d on fragile targets. --wayback needs internet."
+        command_anatomy:
+          - {token: "-l 3", does: "crawl up to 3 links deep"}
+          - {token: "-t 10", does: "use 10 threads"}
+          - {token: "--wayback", does: "also seed from archived (Wayback Machine) URLs"}
+          - {token: "-o ~/photon_example", does: "output directory"}
+        try_this: "photon -u https://example.com -l 3 -t 10 --wayback -o ~/photon_example"
+        success_criteria: "More URLs are found, including historical/archived ones."
+        expected_output: |
+          [~] Pulling URLs from Wayback Machine
+          [~] Level 1: 42 URLs
+          [~] Level 2: 118 URLs
+          [+] Total URLs: 160
+        alternatives:
+          - trigger: "it's slow or the server complains"
+            cause: "Too many threads / no delay for a small target."
+            fix: "Lower -t and add `-d 1` (a 1-second delay). Be a good neighbour."
+            check: "It completes without hammering the server."
+      - step_id: g4
+        title: "Read the harvested results"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "Photon splits results into files in the output directory: internal.txt, external.txt, and (when found) emails, files, and other categories."
+          why: "These lists feed the next steps — internal URLs into gobuster/nikto, emails into OSINT, files for review."
+          where: "The output directory from -o."
+        find_it: "List the output directory and open the files that matter (internal.txt is usually the richest)."
+        command_anatomy:
+          - {token: "ls ~/photon_example", does: "see the categorised result files"}
+          - {token: "head ~/photon_example/internal.txt", does: "preview the internal URLs found"}
+        try_this: "ls ~/photon_example && head ~/photon_example/internal.txt"
+        success_criteria: "Result files list the URLs/emails/files Photon collected."
+        expected_output: |
+          external.txt  internal.txt  robots.txt  scripts.txt
+          https://example.com/
+          https://example.com/about
+          https://example.com/login
+        alternatives:
+          - trigger: "files are empty"
+            cause: "The crawl found little (shallow depth or a small/blocking site)."
+            fix: "Increase -l, add --wayback, and confirm the site actually links internally."
+            check: "internal.txt has URLs."
+  - flow_id: tune
+    title: "Depth / speed / wayback (reference)"
+    goal: "Control crawl behaviour."
+    command_builder_id: photon
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: ph1
+        title: "-l depth, -t threads, -d delay, --wayback"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-l` depth, `-t` threads, `-d` delay (seconds), `--wayback` archived URLs."
+          why: "Trade coverage vs speed vs politeness."
+          where: "ACTION_OPTIONS."
+        find_it: "Pick depth for coverage, threads/delay for pacing."
+        command_anatomy:
+          - {token: "-l 3 -t 10 -d 1", does: "depth 3, 10 threads, 1s delay"}
+          - {token: "--wayback", does: "include archived URLs"}
+        try_this: "photon -u https://example.com -l 3 -t 10 -d 1 --wayback -o ~/photon_example"
+        success_criteria: "The crawl runs with the chosen pacing/coverage."
+        expected_output: |
+          [+] Total URLs: 160
+        alternatives:
+          - trigger: "rate-limited/blocked"
+            cause: "Too aggressive."
+            fix: "Lower -t, raise -d."
+            check: "The crawl completes cleanly."
+
+quick_build:
+  builder: photon
+  title: "Quick crawl"
+  fields:
+    - field_id: url
+      label: "Start URL (-u)"
+      type: string
+      required: true
+      placeholder: "https://example.com"
+    - field_id: depth
+      label: "Crawl depth (-l)"
+      type: int
+      placeholder: "2"
+    - field_id: threads
+      label: "Threads (-t)"
+      type: int
+      placeholder: "10"
+    - field_id: wayback
+      label: "Include archived URLs (--wayback)"
+      type: bool
+    - field_id: output
+      label: "Output directory (-o)"
+      type: path
+      placeholder: "~/photon_out  (optional)"

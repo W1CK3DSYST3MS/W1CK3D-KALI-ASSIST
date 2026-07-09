@@ -1,0 +1,165 @@
+tool_id: dirb
+display_name: "dirb"
+binary_candidates: [dirb]
+categories: [web_app, reconnaissance]
+os_profile: kali
+one_liner: "Brute-forces hidden web directories and files from a wordlist (a classic dir scanner)."
+authorization_gate: true
+authorization_text: >
+  Brute-forcing web content on servers you don't own or aren't authorized to test is illegal
+  and noisy (it floods logs and can stress the server). Continue only for authorized targets or
+  your own apps (DVWA / Juice Shop / HTB / THM). Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "From a web URL to a saved list of discovered paths — inputs explained."
+    command_builder_id: dirb
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm you have a web target"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "dirb scans a WEB server, so you need a base URL like http://10.0.0.20/ that serves pages. It tries each word in a list as a path and reports what exists."
+          why: "If the target isn't a web server (or wrong port), every request fails. Confirm it responds first."
+          where: "The base URL is dirb's first argument."
+        find_it: >
+          Find web ports with nmap (80=http, 443=https, sometimes 8080). The base URL ends with a
+          slash: http://HOST/. Only test hosts you own or are authorized to. Install with
+          `sudo apt install dirb` if missing.
+        command_anatomy:
+          - {token: "curl -sI", does: "fetch just the headers, silently"}
+          - {token: "http://TARGET/", does: "the base URL to confirm"}
+        try_this: "curl -sI http://TARGET/"
+        success_criteria: "An HTTP response line prints (200/301/403) — it's a web server."
+        expected_output: |
+          HTTP/1.1 200 OK
+          Server: Apache/2.4.41 (Ubuntu)
+        alternatives:
+          - trigger: "connection refused"
+            cause: "No web service on that port."
+            fix: "Find the real web port with `nmap -p- TARGET` and use http://TARGET:PORT/."
+            check: "curl returns an HTTP line."
+      - step_id: g2
+        title: "Run a basic scan (built-in wordlist)"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "`dirb <url>` uses dirb's default common.txt wordlist and prints each path that exists, plus recursively scans found directories."
+          why: "Zero-setup first pass — good for quickly surfacing obvious paths like /admin, /uploads."
+          where: "The URL is the first argument."
+        find_it: "Use the base URL from step 1. dirb recurses into directories it finds by default."
+        command_anatomy:
+          - {token: "dirb", does: "the program"}
+          - {token: "http://TARGET/", does: "the base URL (must be first)"}
+        try_this: "dirb http://TARGET/"
+        success_criteria: "Found paths print with + and their HTTP codes."
+        expected_output: |
+          -----------------
+          DIRB v2.22
+          URL_BASE: http://TARGET/
+          WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+          -----------------
+          + http://TARGET/index.html (CODE:200|SIZE:10701)
+          ==> DIRECTORY: http://TARGET/admin/
+          + http://TARGET/robots.txt (CODE:200|SIZE:122)
+        alternatives:
+          - trigger: "everything is CODE:403 or CODE:200 same size"
+            cause: "Server blocks the scanner UA, or returns a soft-404 page."
+            fix: "Set a browser agent with `-a \"Mozilla/5.0\"`; note a constant size and ignore it."
+            check: "You see varied, real results."
+      - step_id: g3
+        title: "Use a bigger wordlist and hunt files by extension"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "Pass a wordlist as the SECOND argument to swap the default; `-X .php,.txt,.bak` also tries each word with those file extensions."
+          why: "A larger list finds more, and extensions catch files (config.php, backup.bak) not just folders."
+          where: "URL then wordlist are positional (in that order); -X is an option."
+        find_it: "Bigger lists: /usr/share/dirb/wordlists/big.txt, or SecLists. Pick extensions matching the app (.php for PHP)."
+        command_anatomy:
+          - {token: "dirb http://TARGET/", does: "the target"}
+          - {token: "/usr/share/dirb/wordlists/big.txt", does: "the wordlist (second positional)"}
+          - {token: "-X .php,.txt,.bak", does: "also try each word with these extensions"}
+        try_this: "dirb http://TARGET/ /usr/share/dirb/wordlists/big.txt -X .php,.txt,.bak"
+        success_criteria: "More paths and specific files (e.g. /config.php) are found."
+        expected_output: |
+          + http://TARGET/config.php (CODE:200|SIZE:0)
+          + http://TARGET/backup.bak (CODE:200|SIZE:20481)
+        alternatives:
+          - trigger: "wordlist not found"
+            cause: "Wrong path."
+            fix: "List available lists with `ls /usr/share/dirb/wordlists/`; install SecLists for more."
+            check: "The wordlist path exists."
+      - step_id: g4
+        title: "Save the results"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o <file>` writes all found URLs to a file you can keep or feed into nikto/nmap."
+          why: "You'll want the discovered paths recorded for the next tool and the report."
+          where: "OUTPUT_OPTIONS; -o names the file."
+        find_it: "Choose a writable path (your home)."
+        command_anatomy:
+          - {token: "dirb http://TARGET/ <wordlist>", does: "the scan"}
+          - {token: "-o ~/dirb.txt", does: "save the found URLs to this file"}
+        try_this: "dirb http://TARGET/ /usr/share/dirb/wordlists/common.txt -o ~/dirb.txt"
+        success_criteria: "The scan runs and ~/dirb.txt lists the found URLs (check with `cat`)."
+        expected_output: |
+          (results also written to:)
+          $ cat ~/dirb.txt
+          + http://TARGET/admin/ (CODE:301)
+        alternatives:
+          - trigger: "Permission denied"
+            cause: "Unwritable location."
+            fix: "Save under your home: `-o ~/dirb.txt`."
+            check: "The file is created."
+  - flow_id: wordlist_ext
+    title: "Wordlist + extensions (reference)"
+    goal: "Custom list and file extensions."
+    command_builder_id: dirb
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: db1
+        title: "dirb url wordlist -X"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "`dirb <url> <wordlist> -X .php,.txt` — url + wordlist positional, extensions via -X."
+          why: "Targeted content discovery."
+          where: "TARGET_PIVOT (url+wordlist); -X in ACTION_OPTIONS."
+        find_it: "A URL, a wordlist path, and relevant extensions."
+        command_anatomy:
+          - {token: "http://TARGET/ big.txt", does: "url + wordlist (order matters)"}
+          - {token: "-X .php,.txt", does: "file extensions to append"}
+        try_this: "dirb http://TARGET/ /usr/share/dirb/wordlists/big.txt -X .php,.txt"
+        success_criteria: "Files with those extensions appear."
+        expected_output: |
+          + http://TARGET/login.php (CODE:200)
+        alternatives:
+          - trigger: "no files found"
+            cause: "Wrong extensions for the stack."
+            fix: "Match extensions to the app (.asp, .aspx, .jsp...)."
+            check: "Relevant files appear."
+
+quick_build:
+  builder: dirb
+  title: "Quick scan"
+  fields:
+    - field_id: url
+      label: "Base URL"
+      type: string
+      required: true
+      placeholder: "http://host/"
+    - field_id: wordlist
+      label: "Wordlist"
+      type: path
+      placeholder: "/usr/share/dirb/wordlists/common.txt"
+    - field_id: extensions
+      label: "Extensions (-X)"
+      type: string
+      placeholder: ".php,.txt,.bak"
+    - field_id: output
+      label: "Save results (-o)"
+      type: path
+      placeholder: "~/dirb.txt  (optional)"
+    - field_id: no_recursion
+      label: "Don't recurse (-r)"
+      type: bool

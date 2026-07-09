@@ -1,0 +1,16 @@
+module_id: tool.burpsuite
+name: "Burp Suite — web proxy / testing platform"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: burpsuite
+  flows: [guided, launch]
+content:
+  tool: tool.yaml
+source: "authored; verified against Burp Suite CE launch/proxy workflow"
+license: "project-proprietary lesson text; Burp Suite is PortSwigger proprietary (referenced, not bundled)"
+checksum: ""

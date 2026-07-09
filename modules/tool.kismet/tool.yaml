@@ -1,0 +1,150 @@
+tool_id: kismet
+display_name: "Kismet"
+binary_candidates: [kismet]
+categories: [wireless]
+os_profile: kali
+one_liner: "Passively detects and logs Wi-Fi (and other) networks and devices, viewed via a web UI."
+authorization_gate: true
+authorization_text: >
+  Kismet passively captures wireless traffic, which can include other people's device/network
+  data and may breach privacy or law where you don't own or aren't authorized to monitor the
+  spectrum. Monitor only your own networks or an authorized environment. Needs a monitor-capable
+  adapter. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first capture (START HERE)"
+    goal: "From a monitor-capable adapter to a live map of nearby Wi-Fi in the web UI."
+    command_builder_id: kismet
+    slots: [PROGRAM, ENV_INTERFACE]
+    steps:
+      - step_id: g1
+        title: "Confirm a monitor-capable Wi-Fi adapter"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "Kismet needs a Wi-Fi adapter that supports monitor mode (like the aircrack-ng tools). Kismet can switch the adapter into monitor mode itself, so you don't have to do it first."
+          why: "Without monitor mode, the adapter only sees traffic for its own connection, not the surrounding networks Kismet is built to map."
+          where: "This adapter becomes Kismet's capture source (-c)."
+        find_it: >
+          Check support with `iw list` (look for '* monitor'). Many USB adapters (Atheros/Ralink/
+          MediaTek) work; lots of built-in cards don't. Only monitor networks you own or are
+          authorized to. Install with `sudo apt install kismet` if missing.
+        command_anatomy:
+          - {token: "iw list", does: "show the wireless hardware's capabilities"}
+          - {token: "grep -A8 'Supported interface modes'", does: "show the supported modes"}
+        try_this: "iw list | grep -A8 'Supported interface modes'"
+        success_criteria: "The list includes '* monitor'."
+        expected_output: |
+          Supported interface modes:
+                   * managed
+                   * monitor
+        alternatives:
+          - trigger: "no '* monitor'"
+            cause: "Adapter/driver can't do monitor mode."
+            fix: "Use a compatible USB adapter (see the Networking troubleshooter's monitor-mode symptom)."
+            check: "iw list shows monitor on the adapter."
+      - step_id: g2
+        title: "Start Kismet on your interface"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`sudo kismet -c wlan0` starts Kismet using wlan0 as the capture source and launches its web server (default http://localhost:2501). Kismet puts the adapter into monitor mode for you."
+          why: "This begins capturing; everything else is viewed and controlled from the web UI."
+          where: "-c names the capture source; sudo provides the needed privilege."
+        find_it: "Use your adapter name from `iw dev` (e.g. wlan0). Kismet will create a wlanXmon-style monitor interface automatically."
+        command_anatomy:
+          - {token: "sudo", does: "root (needed to capture and set monitor mode)"}
+          - {token: "kismet", does: "the sensor/server"}
+          - {token: "-c wlan0", does: "use wlan0 as the capture source"}
+        try_this: "sudo kismet -c wlan0"
+        success_criteria: "Kismet starts, reports the web server on port 2501, and begins capturing."
+        expected_output: |
+          INFO: Starting Kismet web server on port 2501
+          INFO: Data source 'wlan0' launched successfully
+          INFO: Detected new 802.11 Wi-Fi access point ...
+        alternatives:
+          - trigger: "source failed to launch"
+            cause: "Wrong interface name, or it's busy with NetworkManager."
+            fix: "Confirm the name with `iw dev`; stop interfering processes (like the aircrack `airmon-ng check kill` step) if needed."
+            check: "Kismet reports the data source launched."
+      - step_id: g3
+        title: "Open the web UI and create the admin login"
+        slot_target: null
+        explanation:
+          what: "Browse to http://localhost:2501. On first run Kismet asks you to create an admin username/password. After that you see the live dashboard of detected networks and devices."
+          why: "The web UI is the whole interface — network list, signal graphs, client lists, alerts — Kismet has no curses UI anymore."
+          where: "Browser at http://localhost:2501."
+        find_it: "First run only: pick an admin user/password when prompted (stored in ~/.kismet/kismet_httpd.conf)."
+        command_anatomy:
+          - {token: "(browser) http://localhost:2501", does: "Kismet's web dashboard"}
+          - {token: "(first run) create admin user", does: "set the login it will use from now on"}
+        try_this: "# open http://localhost:2501 in a browser and create the admin login"
+        success_criteria: "The dashboard loads and lists nearby Wi-Fi networks as they're detected."
+        expected_output: |
+          (Kismet dashboard: a table of SSIDs with BSSID, channel, signal,
+           encryption, and connected client counts, updating live.)
+        alternatives:
+          - trigger: "page won't load"
+            cause: "Kismet still starting, or a firewall blocks 2501."
+            fix: "Wait a few seconds; confirm Kismet is running in its terminal; try http://127.0.0.1:2501."
+            check: "The dashboard appears."
+      - step_id: g4
+        title: "Find where the capture logs are saved"
+        slot_target: null
+        explanation:
+          what: "Kismet writes a timestamped `.kismet` log (a SQLite database) into the directory you started it from. Tools like `kismetdb_to_pcap` convert it for Wireshark."
+          why: "The logs are your evidence and let you re-analyse a capture offline (e.g. in tshark/Wireshark)."
+          where: "Files created in the working directory; conversion via kismetdb_* tools."
+        find_it: "List the current directory for Kismet-*.kismet. Convert to pcap with `kismetdb_to_pcap --in <file>.kismet --out cap.pcap`."
+        command_anatomy:
+          - {token: "ls -t *.kismet", does: "list Kismet log databases, newest first"}
+          - {token: "kismetdb_to_pcap", does: "convert a .kismet log to a pcap for Wireshark/tshark"}
+        try_this: "ls -t *.kismet | head"
+        success_criteria: "A Kismet-YYYYMMDD-...kismet log file is listed."
+        expected_output: |
+          Kismet-20260709-18-40-00-1.kismet
+        alternatives:
+          - trigger: "no .kismet file"
+            cause: "Started from a different directory, or no data captured yet."
+            fix: "Look in the directory you launched Kismet from; let it run and capture some traffic."
+            check: "A .kismet log exists."
+  - flow_id: source
+    title: "Start with a source (reference)"
+    goal: "Launch Kismet against a capture source."
+    command_builder_id: kismet
+    slots: [PROGRAM, ENV_INTERFACE]
+    steps:
+      - step_id: km1
+        title: "kismet -c <source>"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`sudo kismet -c wlan0` sets the capture source; add more -c for several adapters."
+          why: "The source is what Kismet listens on."
+          where: "ENV_INTERFACE (-c)."
+        find_it: "A monitor-capable interface name."
+        command_anatomy:
+          - {token: "-c wlan0", does: "capture from wlan0"}
+        try_this: "sudo kismet -c wlan0"
+        success_criteria: "Kismet launches with that source."
+        expected_output: |
+          INFO: Data source 'wlan0' launched successfully
+        alternatives:
+          - trigger: "source error"
+            cause: "Bad interface name / busy."
+            fix: "Check `iw dev`; free the interface."
+            check: "The source launches."
+
+quick_build:
+  builder: kismet
+  title: "Quick start"
+  fields:
+    - field_id: source
+      label: "Capture source (-c)"
+      type: string
+      placeholder: "wlan0"
+    - field_id: no_ncurses
+      label: "No console UI (--no-ncurses)"
+      type: bool
+    - field_id: log_prefix
+      label: "Log directory (--log-prefix)"
+      type: path
+      placeholder: "~/kismet-logs  (optional)"

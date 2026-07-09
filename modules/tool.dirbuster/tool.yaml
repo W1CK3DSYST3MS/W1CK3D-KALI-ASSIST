@@ -1,0 +1,162 @@
+tool_id: dirbuster
+display_name: "DirBuster"
+binary_candidates: [dirbuster]
+categories: [web_app, reconnaissance]
+os_profile: kali
+one_liner: "OWASP's multi-threaded GUI tool for brute-forcing web directories and files."
+authorization_gate: true
+authorization_text: >
+  Brute-forcing web content on servers you don't own or aren't authorized to test is illegal
+  and noisy. DirBuster is fast and multi-threaded — it can hammer a server. Continue only for
+  authorized targets or your own apps. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "Launch DirBuster, point it at a target with a wordlist, and read the results."
+    command_builder_id: dirbuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, ENV_INTERFACE, EXTRA_FILES]
+    steps:
+      - step_id: g1
+        title: "Confirm the web target and choose a wordlist"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "DirBuster brute-forces paths on a WEB server using a wordlist. You need a target URL (with the port) and a list file."
+          why: "Same idea as dirb/gobuster but with a GUI and heavy threading — confirm the target first so you don't waste a big run."
+          where: "You'll enter the URL and wordlist in the GUI (or via -u/-l headless)."
+        find_it: >
+          Find the web port with nmap; the target URL looks like http://TARGET:80/. Wordlists ship
+          in /usr/share/dirbuster/wordlists/ (e.g. directory-list-2.3-medium.txt) and
+          /usr/share/wordlists/. Authorized targets only. Install with `sudo apt install dirbuster`.
+        command_anatomy:
+          - {token: "curl -sI http://TARGET/", does: "confirm the web server responds"}
+          - {token: "ls /usr/share/dirbuster/wordlists/", does: "see DirBuster's bundled wordlists"}
+        try_this: "curl -sI http://TARGET/ && ls /usr/share/dirbuster/wordlists/"
+        success_criteria: "The server responds and you can see the available wordlists."
+        expected_output: |
+          HTTP/1.1 200 OK
+          apache-user-enum-1.0.txt  directory-list-2.3-medium.txt  directory-list-lowercase-2.3-small.txt
+        alternatives:
+          - trigger: "no wordlists directory"
+            cause: "dirbuster package not installed."
+            fix: "`sudo apt install dirbuster`; or use lists from /usr/share/wordlists/ or SecLists."
+            check: "A wordlist path exists."
+      - step_id: g2
+        title: "Launch DirBuster and fill in the scan"
+        slot_target: null
+        explanation:
+          what: "`dirbuster` opens the GUI. Enter the Target URL, browse to a wordlist under 'File with list of dirs/files', tick 'Auto Switch (HEAD and GET)', then click Start."
+          why: "The GUI is the normal way to drive DirBuster; these few fields are all you need for a first scan."
+          where: "GUI fields: Target URL, wordlist file, Start button."
+        find_it: "Use the URL and wordlist from step 1. Leave threads modest (e.g. 20-50) to avoid hammering the server."
+        command_anatomy:
+          - {token: "dirbuster", does: "launch the GUI"}
+          - {token: "(GUI) Target URL", does: "e.g. http://TARGET:80/"}
+          - {token: "(GUI) File with list of dirs/files", does: "browse to your wordlist"}
+          - {token: "(GUI) Start", does: "begin the scan"}
+        try_this: "dirbuster"
+        success_criteria: "The GUI opens; after Start, requests begin and results populate."
+        expected_output: |
+          (DirBuster window: Target URL box, wordlist selector, threads slider,
+           and a Start button. After Start, the status shows requests/sec.)
+        alternatives:
+          - trigger: "GUI won't launch (headless/SSH)"
+            cause: "No graphical display."
+            fix: "Use the headless reference flow (`dirbuster -H -u ... -l ...`), or use dirb/gobuster on the CLI instead."
+            check: "Either the GUI opens or you switch to headless."
+      - step_id: g3
+        title: "Read the results (list and tree)"
+        slot_target: null
+        explanation:
+          what: "The 'Results - List View' shows found paths with response codes; 'Results - Tree View' shows the discovered site structure. Right-click an item to open it in a browser."
+          why: "This is where you find the interesting endpoints (/admin, /backup, hidden files) to investigate."
+          where: "GUI: the Results tabs."
+        find_it: "Watch for 200/301/403 codes on unexpected paths. Let the scan finish or stop it once you've seen enough."
+        command_anatomy:
+          - {token: "(GUI) Results - List View", does: "flat list of found paths + codes"}
+          - {token: "(GUI) Results - Tree View", does: "the discovered directory structure"}
+        try_this: "# in DirBuster: open the 'Results - List View' tab as the scan runs"
+        success_criteria: "Found directories/files appear with their response codes."
+        expected_output: |
+          Type  Found                     Response
+          Dir   /admin/                   403
+          File  /login.php                200
+          Dir   /uploads/                 301
+        alternatives:
+          - trigger: "flood of 200s all the same size"
+            cause: "Soft-404 (server returns 200 for missing pages)."
+            fix: "In Options, set a custom 'not found' detection, or sort by size and ignore the common one."
+            check: "Only genuine paths stand out."
+      - step_id: g4
+        title: "Export the report"
+        slot_target: null
+        explanation:
+          what: "Report → Generate Report saves the findings (text/CSV/XML) so you can keep them and feed nikto/nmap."
+          why: "You want the discovered paths recorded outside the GUI session."
+          where: "GUI: Report menu."
+        find_it: "Choose a writable location and a format (plain text or CSV is easiest to reuse)."
+        command_anatomy:
+          - {token: "(GUI) Report menu", does: "generate/save a report of the findings"}
+        try_this: "# in DirBuster: Report -> Generate Report -> save as text/CSV"
+        success_criteria: "A report file with the found paths is written."
+        expected_output: |
+          (A saved report listing every found directory/file and its code.)
+        alternatives:
+          - trigger: "you prefer a scriptable output"
+            cause: "GUI reports are manual."
+            fix: "Use the headless flow with `-r report.txt`, or use dirb `-o` / gobuster `-o`."
+            check: "You have a saved results file."
+  - flow_id: headless
+    title: "Headless mode (reference)"
+    goal: "Run without the GUI for scripting."
+    command_builder_id: dirbuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, ENV_INTERFACE, OUTPUT_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: dbu1
+        title: "dirbuster -H -u <url> -l <wordlist>"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`-H` runs headless; `-u` the URL, `-l` the wordlist, `-e` extensions, `-r` the report file."
+          why: "Automate DirBuster on servers without a display."
+          where: "GLOBAL_OPTIONS (-H); -u in ENV; -l in EXTRA; -r in OUTPUT."
+        find_it: "A URL, a wordlist path, and a writable report path."
+        command_anatomy:
+          - {token: "-H", does: "headless (no GUI)"}
+          - {token: "-u http://TARGET:80/", does: "the target URL"}
+          - {token: "-l .../directory-list-2.3-medium.txt", does: "the wordlist"}
+          - {token: "-r ~/dirbuster.txt", does: "write the report here"}
+        try_this: "dirbuster -H -u http://TARGET:80/ -l /usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt -r ~/dirbuster.txt"
+        success_criteria: "It runs without a GUI and writes the report file."
+        expected_output: |
+          Starting OWASP DirBuster 1.0-RC1 (headless)
+          Dir found: /admin/ - 403
+          Report written to ~/dirbuster.txt
+        alternatives:
+          - trigger: "headless mode errors / flaky"
+            cause: "DirBuster's CLI is dated."
+            fix: "Prefer gobuster or dirb for reliable CLI scanning; use DirBuster's GUI for interactive work."
+            check: "Switch tools if the CLI misbehaves."
+
+quick_build:
+  builder: dirbuster
+  title: "Launch / headless"
+  fields:
+    - field_id: url
+      label: "Target URL (-u)"
+      type: string
+      placeholder: "http://host:80/"
+    - field_id: wordlist
+      label: "Wordlist (-l)"
+      type: path
+      placeholder: "/usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt"
+    - field_id: headless
+      label: "Headless, no GUI (-H)"
+      type: bool
+    - field_id: extensions
+      label: "Extensions (-e)"
+      type: string
+      placeholder: "php,txt  (optional)"
+    - field_id: report
+      label: "Report file (-r)"
+      type: path
+      placeholder: "~/dirbuster.txt  (optional)"

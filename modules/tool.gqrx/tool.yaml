@@ -1,0 +1,163 @@
+tool_id: gqrx
+display_name: "Gqrx SDR"
+binary_candidates: [gqrx]
+categories: [sdr, wireless, radio]
+os_profile: kali
+one_liner: "A software-defined-radio receiver: tune, listen, and watch the RF spectrum from an SDR dongle."
+authorization_gate: false
+authorization_text: >
+  Gqrx only RECEIVES radio — it never transmits. Even so, monitoring or decoding some
+  frequencies (e.g. private/encrypted comms, cellular, pagers) is restricted or illegal in
+  many countries. Listen only to bands you are legally permitted to. Respect local radio law.
+flows:
+  - flow_id: guided
+    title: "Guided first listen (START HERE)"
+    goal: "From plugging in an SDR to hearing an FM station and reading the spectrum."
+    command_builder_id: gqrx
+    slots: [PROGRAM, GLOBAL_OPTIONS, ENV_INTERFACE]
+    steps:
+      - step_id: g1
+        title: "Plug in your SDR and confirm the OS sees it"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "Gqrx needs an SDR device — most commonly a cheap RTL-SDR USB dongle, or a HackRF/Airspy. `rtl_test` proves an RTL-SDR is detected and working."
+          why: "If the OS can't see the dongle, Gqrx won't either. Confirm the hardware first."
+          where: "This identifies the device string you'll pick inside Gqrx."
+        find_it: >
+          Plug the SDR into a USB port. For an RTL-SDR: `rtl_test -t` (install with
+          `sudo apt install rtl-sdr gqrx-sdr` if missing). If another program grabbed the dongle,
+          you may need to blacklist the default DVB driver (dvb_usb_rtl28xxu).
+        command_anatomy:
+          - {token: "rtl_test", does: "test utility for RTL-SDR dongles"}
+          - {token: "-t", does: "run the tuner test then exit"}
+        try_this: "rtl_test -t"
+        success_criteria: "It reports a found device (e.g. 'Found 1 device(s): Realtek RTL2838')."
+        expected_output: |
+          Found 1 device(s):
+            0:  Realtek, RTL2838UHIDIR, SN: 00000001
+          Found Rafael Micro R820T tuner
+        alternatives:
+          - trigger: "No supported devices found"
+            cause: "Dongle not plugged in, or the DVB kernel driver claimed it."
+            fix: "Re-seat the USB; blacklist the DVB driver: `echo 'blacklist dvb_usb_rtl28xxu' | sudo tee /etc/modprobe.d/blacklist-rtl.conf` then unplug/replug."
+            check: "rtl_test finds the device."
+          - trigger: "usb_claim_interface error -6 (device busy)"
+            cause: "Another SDR app is using the dongle."
+            fix: "Close other SDR programs, then retry."
+            check: "rtl_test completes."
+      - step_id: g2
+        title: "Launch Gqrx and select the device"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`gqrx` opens the GUI. On first run it shows a Configure I/O Devices dialog — pick your SDR from the Device dropdown and click OK."
+          why: "Gqrx must be told which SDR to use and at what sample rate before it can tune."
+          where: "The GUI device dialog; -d preselects a device on the command line."
+        find_it: "In the dialog, choose your dongle (e.g. 'Realtek RTL2838...'). Leave the input rate at the default (e.g. 2.4 Msps) to start."
+        command_anatomy:
+          - {token: "gqrx", does: "launch the receiver GUI"}
+          - {token: "(GUI) Device dropdown", does: "select your SDR"}
+          - {token: "(GUI) Input rate", does: "samples/second — the default is fine to begin"}
+        try_this: "gqrx"
+        success_criteria: "Gqrx opens; after selecting the device you see the main window with a spectrum/waterfall area."
+        expected_output: |
+          (Gqrx window opens: a spectrum display on top, a waterfall below,
+           and a frequency readout you can edit.)
+        alternatives:
+          - trigger: "the device isn't in the dropdown"
+            cause: "Driver not installed or dongle not detected."
+            fix: "Fix detection first (step 1); ensure gqrx-sdr and the SDR's driver package are installed."
+            check: "The device appears and Gqrx starts."
+      - step_id: g3
+        title: "Tune to a broadcast FM station"
+        slot_target: null
+        explanation:
+          what: "Set the frequency to a local FM station (e.g. 100.3 MHz) and the demodulator Mode to WFM (wide FM). Click the power (play) button to start the DSP."
+          why: "Broadcast FM is strong, legal to receive everywhere, and gives instant audio — the perfect confidence check that the whole chain works."
+          where: "GUI: the frequency readout, the Mode selector, and the start/stop button."
+        find_it: "Pick any FM station you know. Type its frequency in MHz into the readout. Set Mode to 'WFM (mono)'. Press the start button (top-left) if audio doesn't play."
+        command_anatomy:
+          - {token: "(GUI) frequency readout", does: "type the station frequency, e.g. 100.300.000 Hz"}
+          - {token: "(GUI) Mode = WFM", does: "wide FM demodulator for broadcast radio"}
+          - {token: "(GUI) start button", does: "begin receiving/demodulating"}
+        try_this: "# in Gqrx: set frequency to a local FM station, Mode = WFM (mono), press Start"
+        success_criteria: "You hear the station and see a signal peak in the spectrum/waterfall."
+        expected_output: |
+          (A strong peak appears at the tuned frequency; audio plays; the
+           waterfall shows the station's bandwidth.)
+        alternatives:
+          - trigger: "no audio but you see a signal"
+            cause: "Audio output muted, or the demodulator is off."
+            fix: "Press the Start button, raise the AF gain/volume slider, and check your system audio output."
+            check: "Audio plays."
+          - trigger: "no signal at all"
+            cause: "Wrong Mode, weak antenna, or no gain."
+            fix: "Set Mode to WFM, increase RF gain in the Input Controls, and attach/extend the antenna."
+            check: "A peak appears when tuned to a known station."
+      - step_id: g4
+        title: "Read the waterfall and bookmark a frequency"
+        slot_target: null
+        explanation:
+          what: "The waterfall shows signal strength over time across a band. Click a bright vertical line to jump to that signal; use Bookmarks to save interesting frequencies."
+          why: "The waterfall is how you FIND signals visually instead of guessing frequencies — the core SDR skill."
+          where: "GUI: the waterfall display and the Bookmarks panel."
+        find_it: "Scroll/zoom the spectrum. Legal, easy targets to spot: FM broadcast (88-108 MHz), airband AM (118-137 MHz, AM mode), NOAA/weather. Avoid restricted bands."
+        command_anatomy:
+          - {token: "(GUI) waterfall", does: "signal strength vs time — bright lines are active transmissions"}
+          - {token: "(GUI) click a line", does: "tune straight to that signal"}
+          - {token: "(GUI) Bookmarks", does: "save a frequency + mode to return to"}
+        try_this: "# in Gqrx: click a bright line in the waterfall to tune it; add it to Bookmarks"
+        success_criteria: "Clicking a signal tunes to it; you can save and recall a bookmark."
+        expected_output: |
+          (Clicking a waterfall trace moves the tuner to it; the Bookmarks
+           list stores the frequency and demodulation mode.)
+        alternatives:
+          - trigger: "the waterfall is blank/flat"
+            cause: "DSP stopped, or gain too low."
+            fix: "Press Start, raise RF gain, and make sure an antenna is connected."
+            check: "Signals appear as coloured traces."
+  - flow_id: devices
+    title: "List detectable devices (reference)"
+    goal: "See what SDRs Gqrx can use."
+    command_builder_id: gqrx
+    slots: [PROGRAM, GLOBAL_OPTIONS]
+    steps:
+      - step_id: gq1
+        title: "List devices"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`gqrx -l` prints the SDR devices the SoapySDR/gr-osmosdr backends can see."
+          why: "Confirms Gqrx's own view of your hardware, separate from rtl_test."
+          where: "GLOBAL_OPTIONS."
+        find_it: "Just run it with the dongle plugged in."
+        command_anatomy:
+          - {token: "gqrx -l", does: "list detectable SDR devices and exit"}
+        try_this: "gqrx -l"
+        success_criteria: "Your SDR appears in the device list."
+        expected_output: |
+          Available devices:
+            rtl=0  (Realtek RTL2838UHIDIR)
+        alternatives:
+          - trigger: "empty list"
+            cause: "Driver/detection issue."
+            fix: "Fix detection (guided step 1) and install the SDR's driver package."
+            check: "The device is listed."
+
+quick_build:
+  builder: gqrx
+  title: "Launch options"
+  fields:
+    - field_id: device
+      label: "Device string (-d)"
+      type: string
+      placeholder: "rtl=0  (optional)"
+    - field_id: config
+      label: "Config file (-c)"
+      type: path
+      placeholder: "~/.config/gqrx/default.conf  (optional)"
+    - field_id: list_devices
+      label: "List devices then exit (-l)"
+      type: bool
+    - field_id: reset
+      label: "Reset settings (-r)"
+      type: bool

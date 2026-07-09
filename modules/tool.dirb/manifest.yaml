@@ -1,0 +1,16 @@
+module_id: tool.dirb
+name: "dirb — web content scanner"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: dirb
+  flows: [guided, wordlist_ext]
+content:
+  tool: tool.yaml
+source: "authored; verified against dirb usage (dirb <url> [wordlist] [options])"
+license: "project-proprietary lesson text; dirb is GPL (referenced, not bundled)"
+checksum: ""

