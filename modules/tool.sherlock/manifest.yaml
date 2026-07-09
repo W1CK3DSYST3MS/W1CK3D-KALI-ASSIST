@@ -1,0 +1,16 @@
+module_id: tool.sherlock
+name: "Sherlock — username OSINT"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: sherlock
+  flows: [guided, single_search, output, anonymize]
+content:
+  tool: tool.yaml
+source: "authored; verified against sherlock-project usage/options"
+license: "project-proprietary lesson text; sherlock is MIT (referenced, not bundled)"
+checksum: ""

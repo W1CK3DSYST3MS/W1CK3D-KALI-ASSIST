@@ -1,0 +1,153 @@
+tool_id: btscanner
+display_name: "btscanner"
+binary_candidates: [btscanner]
+categories: [bluetooth, reconnaissance]
+os_profile: kali
+one_liner: "Interactively discovers nearby Bluetooth devices and reads their info without pairing."
+authorization_gate: true
+authorization_text: >
+  Scanning Bluetooth devices around you can capture other people's device names/addresses and
+  may breach privacy or local law. Scan only your own devices or an environment where you are
+  authorized to. btscanner is an old, interactive (ncurses) tool. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "Bring up Bluetooth, launch btscanner, and discover nearby devices — inputs explained."
+    command_builder_id: btscanner
+    slots: [PROGRAM, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Power on the Bluetooth adapter"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "btscanner needs a working Bluetooth adapter that's powered up. `rfkill` unblocks the radio, the bluetooth service must run, and `hciconfig` shows the adapter (usually hci0) UP."
+          why: "If the adapter is soft-blocked or down, btscanner sees nothing. Get it running first."
+          where: "This prepares the adapter btscanner will use."
+        find_it: >
+          Only scan where you're authorized. Not installed? `sudo apt install btscanner`. Your
+          adapter is usually hci0; `hciconfig` lists them. If `hciconfig` is missing, install
+          `sudo apt install bluez`.
+        command_anatomy:
+          - {token: "rfkill unblock bluetooth", does: "remove any soft-block on the Bluetooth radio"}
+          - {token: "sudo systemctl start bluetooth", does: "start the Bluetooth service"}
+          - {token: "sudo hciconfig hci0 up", does: "bring the adapter up"}
+          - {token: "hciconfig", does: "show the adapter's state"}
+        try_this: "rfkill unblock bluetooth && sudo systemctl start bluetooth && sudo hciconfig hci0 up && hciconfig"
+        success_criteria: "hciconfig shows hci0 with 'UP RUNNING'."
+        expected_output: |
+          hci0:   Type: Primary  Bus: USB
+                  BD Address: AA:BB:CC:DD:EE:FF  ACL MTU: 310:10
+                  UP RUNNING
+        alternatives:
+          - trigger: "no hci0 / no adapter listed"
+            cause: "No Bluetooth adapter, or the driver isn't loaded."
+            fix: "Use a supported USB Bluetooth adapter; check `dmesg | tail` after plugging it in."
+            check: "hciconfig lists an adapter."
+          - trigger: "adapter is DOWN or blocked"
+            cause: "Soft/hard rfkill block."
+            fix: "`rfkill list` then `rfkill unblock bluetooth`; a hard block is a physical switch."
+            check: "hciconfig shows UP RUNNING."
+      - step_id: g2
+        title: "Launch btscanner"
+        slot_target: null
+        explanation:
+          what: "`sudo btscanner` opens a full-screen (ncurses) interface. It's keyboard-driven — not a one-shot command."
+          why: "btscanner works interactively: you start scans and open devices from inside its UI."
+          where: "Run it with sudo so it can use the adapter."
+        find_it: "No arguments needed to start. Inside: 'i' = inquiry scan, Enter = device detail, 'q' = quit."
+        command_anatomy:
+          - {token: "sudo", does: "privilege to access the Bluetooth adapter"}
+          - {token: "btscanner", does: "launch the interactive scanner"}
+        try_this: "sudo btscanner"
+        success_criteria: "A full-screen interface opens with an empty device list and a menu bar."
+        expected_output: |
+          btscanner
+          ┌ time      address            clk off  class    name ─────────┐
+          │                                                              │
+          └ [i]nquiry  [b]runforce  [enter]details  [q]uit ──────────────┘
+        alternatives:
+          - trigger: "it exits immediately / can't open device"
+            cause: "Adapter not up, or not run as root."
+            fix: "Re-run step 1 (bring hci0 up), and launch with sudo."
+            check: "The interface stays open."
+      - step_id: g3
+        title: "Run an inquiry scan to find devices"
+        slot_target: null
+        explanation:
+          what: "Inside btscanner, pressing 'i' starts an INQUIRY scan — it actively asks nearby discoverable devices to announce themselves. Discovered devices appear in the list with their address, class, and name."
+          why: "This is the discovery step: it populates the device list you can then inspect."
+          where: "A keypress inside the running btscanner UI, not a shell command."
+        find_it: "Make a device of yours discoverable (e.g. put a phone in Bluetooth pairing mode) so there's something to find. Only your own/authorized devices."
+        command_anatomy:
+          - {token: "i", does: "(keypress) start an inquiry scan"}
+          - {token: "Enter", does: "(keypress) open the highlighted device's details"}
+          - {token: "q", does: "(keypress) quit btscanner"}
+        try_this: "# inside btscanner, press:  i    (then wait for devices to appear)"
+        success_criteria: "One or more devices appear in the list with a BD address and name."
+        expected_output: |
+          ┌ time      address            clk off  class    name ─────────┐
+          │ 10:32:01  11:22:33:44:55:66  0x1a2b   0x5a020c MyPhone       │
+          └──────────────────────────────────────────────────────────────┘
+        alternatives:
+          - trigger: "no devices found"
+            cause: "Nearby devices aren't in discoverable mode (most aren't by default)."
+            fix: "Put one of YOUR devices into pairing/discoverable mode and re-run the inquiry."
+            check: "Your test device shows in the list."
+      - step_id: g4
+        title: "Save device dumps to a folder"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o <dir>` tells btscanner to write per-device info dumps into a directory as it discovers them."
+          why: "Keeps a record of what you found (addresses, names, classes) for later review."
+          where: "OUTPUT_OPTIONS; -o names the directory."
+        find_it: "Choose a writable folder (your home). Create it first with mkdir -p."
+        command_anatomy:
+          - {token: "sudo btscanner", does: "launch the scanner"}
+          - {token: "-o ~/btscan", does: "save device dumps into this directory"}
+        try_this: "mkdir -p ~/btscan && sudo btscanner -o ~/btscan"
+        success_criteria: "As you scan, per-device files appear under ~/btscan."
+        expected_output: |
+          (after scanning and quitting)
+          $ ls ~/btscan
+          11:22:33:44:55:66
+        alternatives:
+          - trigger: "nothing written"
+            cause: "No devices discovered, or the directory isn't writable."
+            fix: "Discover at least one device first; use a writable path under your home."
+            check: "Files appear under the output directory."
+  - flow_id: prepare
+    title: "Prepare the adapter (reference)"
+    goal: "Get Bluetooth up before scanning."
+    command_builder_id: btscanner
+    slots: [PROGRAM]
+    steps:
+      - step_id: bt1
+        title: "Unblock + bring up hci0"
+        slot_target: null
+        explanation:
+          what: "`rfkill unblock bluetooth`, `systemctl start bluetooth`, `hciconfig hci0 up`."
+          why: "btscanner can't scan through a blocked/down adapter."
+          where: "System prep."
+        find_it: "Your adapter id from `hciconfig` (usually hci0)."
+        command_anatomy:
+          - {token: "rfkill unblock bluetooth", does: "clear a soft block"}
+          - {token: "hciconfig hci0 up", does: "bring the adapter up"}
+        try_this: "rfkill unblock bluetooth && sudo hciconfig hci0 up && hciconfig"
+        success_criteria: "hci0 shows UP RUNNING."
+        expected_output: |
+          hci0:   ...  UP RUNNING
+        alternatives:
+          - trigger: "still down"
+            cause: "Hard block or missing driver."
+            fix: "Check `rfkill list` and `dmesg`; use a supported adapter."
+            check: "hciconfig shows UP RUNNING."
+
+quick_build:
+  builder: btscanner
+  title: "Quick scan"
+  fields:
+    - field_id: output_dir
+      label: "Save dumps to (-o)"
+      type: path
+      placeholder: "~/btscan  (optional)"

@@ -1,0 +1,16 @@
+module_id: tool.dnsmap
+name: "dnsmap — DNS subdomain brute-forcer"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: dnsmap
+  flows: [guided, basic, tuning]
+content:
+  tool: tool.yaml
+source: "authored; verified against dnsmap usage (domain-first argument, -w/-r/-c/-d/-i)"
+license: "project-proprietary lesson text; dnsmap is GPL (referenced, not bundled)"
+checksum: ""

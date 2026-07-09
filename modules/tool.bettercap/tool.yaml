@@ -1,0 +1,201 @@
+tool_id: bettercap
+display_name: "bettercap"
+binary_candidates: [bettercap]
+categories: [network, mitm, exploitation]
+os_profile: kali
+one_liner: "A network attack framework: recon, ARP/DNS spoofing, sniffing and MITM on a LAN."
+authorization_gate: true
+authorization_text: >
+  bettercap performs ACTIVE attacks — ARP/DNS spoofing and man-in-the-middle intercept real
+  traffic and disrupt other devices. Using it on a network you don't own or aren't authorized
+  to test is illegal. Continue only on your own lab/LAN with permission. The ARP-spoof/MITM
+  step needs a SECOND confirmation. Runs as root. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first session (START HERE)"
+    goal: "From your interface to recon and (authorized) MITM — each stage explained."
+    command_builder_id: bettercap
+    slots: [PROGRAM, GLOBAL_OPTIONS, ENV_INTERFACE, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Pick the interface on YOUR network"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "bettercap operates on one network interface (eth0, wlan0). Everything it does happens on that LAN."
+          why: "You must run this only on a network you own or are authorized to test — bettercap actively interferes with other devices. Pick the right interface first."
+          where: "The interface name goes after -iface."
+        find_it: >
+          List interfaces and their IPs with `ip -brief addr`. Pick the one connected to your
+          lab LAN (its inet address is your LAN IP, e.g. 192.168.x). Not installed?
+          `sudo apt install bettercap`. This is a lab-only exercise — never a network you don't
+          control.
+        command_anatomy:
+          - {token: "ip -brief addr", does: "list interfaces with their state and IP in one line each"}
+        try_this: "ip -brief addr"
+        success_criteria: "You can identify your LAN interface (UP, with a 192.168/10.x address)."
+        expected_output: |
+          lo               UNKNOWN        127.0.0.1/8
+          eth0             UP             192.168.1.24/24
+          wlan0            DOWN
+        alternatives:
+          - trigger: "no interface has a LAN IP"
+            cause: "Not connected to the lab network."
+            fix: "Connect to your lab LAN first, then re-run `ip -brief addr`."
+            check: "An interface shows UP with a private IP."
+      - step_id: g2
+        title: "Launch bettercap on that interface"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`sudo bettercap -iface eth0` opens the interactive console (a `» ` prompt). Root is required for raw sockets. `help` lists modules."
+          why: "The console is where you run modules. Confirming it starts cleanly proves your interface and privileges are right."
+          where: "-iface selects the interface; sudo provides privilege."
+        find_it: "Use your interface from step 1. Inside, type `help` to see modules and `quit` to exit."
+        command_anatomy:
+          - {token: "sudo", does: "run as root (required)"}
+          - {token: "bettercap", does: "the framework"}
+          - {token: "-iface eth0", does: "operate on the eth0 interface"}
+        try_this: "sudo bettercap -iface eth0"
+        success_criteria: "The bettercap banner prints and you get a `» ` prompt."
+        expected_output: |
+          bettercap v2.32.0 (built for linux amd64) [type 'help' for a list of commands]
+          192.168.1.0/24 > 192.168.1.24  »
+        alternatives:
+          - trigger: "error: could not find interface"
+            cause: "Wrong interface name."
+            fix: "Re-check the name from `ip -brief addr` and pass that exact name to -iface."
+            check: "bettercap starts on the correct interface."
+          - trigger: "permission denied / needs root"
+            cause: "Not run with sudo."
+            fix: "Prefix with sudo: `sudo bettercap -iface eth0`."
+            check: "The console opens."
+      - step_id: g3
+        title: "Discover the devices on the LAN"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`net.probe on` actively finds hosts; `net.recon on` watches ARP; `net.show` prints the table. `-eval \"...\"` runs these automatically at startup so you don't type them."
+          why: "You need to see what's on the network (and each device's IP/MAC) before you can target anything."
+          where: "ACTION_OPTIONS; -eval runs a semicolon-separated list of console commands."
+        find_it: "No new input. -eval takes bettercap console commands as one quoted string, separated by semicolons."
+        command_anatomy:
+          - {token: "sudo bettercap -iface eth0", does: "launch on your interface"}
+          - {token: "-eval \"net.probe on; net.recon on\"", does: "auto-run discovery when it starts"}
+        try_this: "sudo bettercap -iface eth0 -eval \"net.probe on; net.recon on\""
+        success_criteria: "Hosts appear (type `net.show` for the table of IP/MAC/vendor)."
+        expected_output: |
+          » [sys.log] [inf] net.probe starting net.recon as a requirement for net.probe
+          ┌ 192.168.1.1    (Router)      00:11:22:33:44:55  ...
+          │ 192.168.1.24   (this device) aa:bb:cc:dd:ee:ff  ...
+          └ 192.168.1.50   (Target-PC)   99:88:77:66:55:44  ...
+        alternatives:
+          - trigger: "no hosts show up"
+            cause: "Quiet network, or wrong interface."
+            fix: "Generate some traffic on the LAN; confirm the interface is the LAN one; wait a few seconds for net.recon."
+            check: "net.show lists devices."
+      - step_id: g4
+        title: "(Authorized MITM) ARP-spoof a target and sniff"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: >
+          ARP spoofing MITMs a real device — it intercepts and can disrupt that device's
+          traffic. Do this ONLY on your own lab against a device you control. Stop it cleanly
+          with `arp.spoof off` (and bettercap restores ARP tables on exit). Never on a network
+          you don't own.
+        explanation:
+          what: "`set arp.spoof.targets <IP>` picks the victim; `arp.spoof on` makes it route through you; `net.sniff on` shows the intercepted traffic."
+          why: "This is the classic man-in-the-middle: the target's traffic flows through your machine so you can observe it — powerful and intrusive."
+          where: "ACTION_OPTIONS; set the target then enable the modules."
+        find_it: "The target IP is a device YOU control from step 3's list (e.g. a second VM). Never a device that isn't yours."
+        command_anatomy:
+          - {token: "sudo bettercap -iface eth0", does: "launch on your interface"}
+          - {token: "set arp.spoof.targets 192.168.1.50", does: "choose the victim IP (your own test device)"}
+          - {token: "arp.spoof on", does: "start ARP spoofing — traffic now routes through you"}
+          - {token: "net.sniff on", does: "display the intercepted packets"}
+        try_this: "sudo bettercap -iface eth0 -eval \"set arp.spoof.targets 192.168.1.50; arp.spoof on; net.sniff on\""
+        success_criteria: "bettercap reports spoofing the target and starts printing sniffed traffic."
+        expected_output: |
+          » [arp.spoof] enabling forwarding
+          » [arp.spoof] arp spoofer started, probing 1 targets.
+          » [net.sniff] sniffer started
+          [net.sniff] 192.168.1.50 → example.com GET /
+        alternatives:
+          - trigger: "the target loses connectivity"
+            cause: "IP forwarding off, or the spoof is disrupting rather than relaying."
+            fix: "Ensure forwarding is on (bettercap enables it); stop cleanly with `arp.spoof off`. Keep sessions short."
+            check: "The target still reaches the internet while you observe."
+          - trigger: "no traffic sniffed"
+            cause: "Target idle, or HTTPS (encrypted)."
+            fix: "Generate traffic on the target; remember HTTPS payloads are encrypted — you'll see destinations, not contents, without further (authorized) TLS work."
+            check: "Some packets appear in net.sniff."
+  - flow_id: recon
+    title: "Network recon (reference)"
+    goal: "Map hosts on the LAN."
+    command_builder_id: bettercap
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS]
+    steps:
+      - step_id: bc1
+        title: "net.probe / net.recon / net.show"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`net.probe on` + `net.recon on` discover hosts; `net.show` lists them."
+          why: "Know the network before acting on it."
+          where: "ACTION_OPTIONS (-eval)."
+        find_it: "Your LAN interface; no other input."
+        command_anatomy:
+          - {token: "-eval \"net.probe on\"", does: "auto-start host discovery"}
+        try_this: "sudo bettercap -iface eth0 -eval \"net.probe on\""
+        success_criteria: "The host table fills in."
+        expected_output: |
+          192.168.1.50  (Target-PC)  99:88:77:66:55:44
+        alternatives:
+          - trigger: "empty table"
+            cause: "Quiet LAN / wrong iface."
+            fix: "Generate traffic; confirm the interface."
+            check: "net.show lists devices."
+  - flow_id: caplets
+    title: "Caplets (scripts) (reference)"
+    goal: "Automate a sequence with a caplet."
+    command_builder_id: bettercap
+    slots: [PROGRAM, ENV_INTERFACE, EXTRA_FILES]
+    steps:
+      - step_id: bc2
+        title: "Load a caplet with -caplet"
+        slot_target: EXTRA_FILES
+        explanation:
+          what: "`-caplet <file.cap>` runs a saved script of console commands; bettercap ships caplets (e.g. in /usr/share/bettercap/caplets)."
+          why: "Repeatable engagements without typing the same module commands each time."
+          where: "EXTRA_FILES (-caplet)."
+        find_it: "Browse bundled caplets in /usr/share/bettercap/caplets, or write your own .cap file."
+        command_anatomy:
+          - {token: "-caplet /usr/share/bettercap/caplets/net-probe/net-probe.cap", does: "run this caplet script on start"}
+        try_this: "sudo bettercap -iface eth0 -caplet net-probe"
+        success_criteria: "The caplet's commands run automatically."
+        expected_output: |
+          » [caplets] loading caplet net-probe
+          » net.probe on
+        alternatives:
+          - trigger: "caplet not found"
+            cause: "Wrong name/path."
+            fix: "List caplets with `caplets.show` inside bettercap, or give the full path."
+            check: "The caplet loads."
+
+quick_build:
+  builder: bettercap
+  title: "Quick session"
+  fields:
+    - field_id: iface
+      label: "Interface"
+      type: string
+      required: true
+      placeholder: "eth0"
+    - field_id: eval
+      label: "Startup commands (-eval)"
+      type: string
+      placeholder: "net.probe on; net.recon on"
+    - field_id: caplet
+      label: "Caplet script (-caplet)"
+      type: path
+      placeholder: "net-probe  (optional)"
+    - field_id: silent
+      label: "Silent (-silent)"
+      type: bool

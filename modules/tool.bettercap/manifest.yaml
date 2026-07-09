@@ -1,0 +1,16 @@
+module_id: tool.bettercap
+name: "bettercap — network attack framework"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: bettercap
+  flows: [guided, recon, caplets]
+content:
+  tool: tool.yaml
+source: "authored; verified against bettercap v2 usage (-iface/-eval/-caplet/-silent)"
+license: "project-proprietary lesson text; bettercap is GPL (referenced, not bundled)"
+checksum: ""

@@ -1,0 +1,162 @@
+tool_id: blueranger
+display_name: "BlueRanger"
+binary_candidates: [blueranger]
+categories: [bluetooth, reconnaissance]
+os_profile: kali
+one_liner: "Estimates how close a specific Bluetooth device is by measuring its link quality."
+authorization_gate: true
+authorization_text: >
+  Locating a Bluetooth device by its address can track a person's belongings and may breach
+  privacy or local law. Use only on devices you own or are explicitly authorized to locate.
+  BlueRanger sends l2ping packets to the target and needs root. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided device-locate (START HERE)"
+    goal: "Find a device's MAC, confirm it responds, then home in on it — inputs explained."
+    command_builder_id: blueranger
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Find the target device's Bluetooth address"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "BlueRanger needs the target's BD_ADDR (a Bluetooth MAC like AA:BB:CC:DD:EE:FF). A quick scan lists nearby discoverable devices and their addresses."
+          why: "You can't locate a device without its address. This also confirms which adapter (hci0) you'll use."
+          where: "The address becomes the second argument to blueranger."
+        find_it: >
+          Only locate devices you own or are authorized to. Make your target device discoverable,
+          then scan: `sudo hcitool scan` (classic) or use `bluetoothctl` (scan on). Copy the
+          AA:BB:CC:DD:EE:FF address. Missing tools? `sudo apt install bluez blueranger`.
+        command_anatomy:
+          - {token: "sudo hcitool scan", does: "scan for nearby discoverable Bluetooth devices"}
+        try_this: "sudo hcitool scan"
+        success_criteria: "Your target device is listed with its BD address and name."
+        expected_output: |
+          Scanning ...
+                  11:22:33:44:55:66       MyPhone
+                  99:88:77:66:55:44       Headphones
+        alternatives:
+          - trigger: "no devices found"
+            cause: "The target isn't in discoverable mode."
+            fix: "Put YOUR device into pairing/discoverable mode and re-scan. hcitool scan only sees discoverable devices."
+            check: "Your device appears with an address."
+          - trigger: "hcitool: command not found"
+            cause: "bluez tools not installed."
+            fix: "`sudo apt install bluez`; or use `bluetoothctl` then `scan on`."
+            check: "A scan lists devices."
+      - step_id: g2
+        title: "Bring your adapter up"
+        slot_target: null
+        explanation:
+          what: "Your local adapter (hci0) must be powered up for BlueRanger's l2ping probes to go out. `hciconfig hci0 up` does that."
+          why: "A down/blocked adapter can't send the pings BlueRanger relies on."
+          where: "Prepares the interface named in the blueranger command (hci0)."
+        find_it: "Your adapter id from `hciconfig` (usually hci0). Unblock with rfkill if needed."
+        command_anatomy:
+          - {token: "rfkill unblock bluetooth", does: "clear any soft block"}
+          - {token: "sudo hciconfig hci0 up", does: "power the adapter up"}
+          - {token: "hciconfig", does: "confirm it's UP RUNNING"}
+        try_this: "rfkill unblock bluetooth && sudo hciconfig hci0 up && hciconfig"
+        success_criteria: "hci0 shows UP RUNNING."
+        expected_output: |
+          hci0:   Type: Primary  Bus: USB
+                  UP RUNNING
+        alternatives:
+          - trigger: "adapter stays DOWN"
+            cause: "Hard rfkill block or missing driver."
+            fix: "Check `rfkill list` and `dmesg`; use a supported USB adapter."
+            check: "hciconfig shows UP RUNNING."
+      - step_id: g3
+        title: "Confirm the device is reachable (l2ping)"
+        slot_target: null
+        explanation:
+          what: "`l2ping -c 3 <MAC>` sends 3 Bluetooth pings to the target. Replies confirm it's in range and responding — exactly what BlueRanger needs to work."
+          why: "If the device doesn't answer l2ping, BlueRanger has nothing to measure. This proves the link before you start homing in."
+          where: "Uses the target address from step 1 and the adapter from step 2."
+        find_it: "Use the BD address you copied in step 1. The device must be powered on and in range."
+        command_anatomy:
+          - {token: "sudo l2ping", does: "send Bluetooth L2CAP echo requests (a Bluetooth 'ping')"}
+          - {token: "-c 3", does: "send just 3 pings"}
+          - {token: "11:22:33:44:55:66", does: "the target's Bluetooth address"}
+        try_this: "sudo l2ping -c 3 11:22:33:44:55:66"
+        success_criteria: "You get replies with byte counts and times (the device is reachable)."
+        expected_output: |
+          Ping: 11:22:33:44:55:66 from AA:BB:CC:DD:EE:FF (data size 44) ...
+          44 bytes from 11:22:33:44:55:66 id 0 time 38.21ms
+          44 bytes from 11:22:33:44:55:66 id 1 time 25.02ms
+          3 sent, 3 received, 0% loss
+        alternatives:
+          - trigger: "Host is down / can't connect"
+            cause: "Out of range, powered off, or not accepting connections."
+            fix: "Move closer, ensure the device is on/discoverable, and that your adapter is up (step 2)."
+            check: "l2ping gets replies."
+      - step_id: g4
+        title: "Home in on the device with BlueRanger"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`blueranger <hci#> <MAC>` continuously pings the target and shows a link-quality/range readout. As you move your adapter, rising link quality means you're getting CLOSER."
+          why: "Link quality roughly tracks proximity, so you can walk toward the device by watching the numbers climb — a simple direction-finding technique."
+          where: "POSITIONAL_ARGS: the interface first, then the target address. Ctrl+C stops it."
+        find_it: "Use hci0 (or your adapter from step 2) and the confirmed address from step 3. Move the antenna slowly and watch the readout."
+        command_anatomy:
+          - {token: "sudo", does: "root (l2ping needs privilege)"}
+          - {token: "blueranger", does: "the locate script"}
+          - {token: "hci0", does: "your local Bluetooth adapter"}
+          - {token: "11:22:33:44:55:66", does: "the target device's address"}
+        try_this: "sudo blueranger hci0 11:22:33:44:55:66"
+        success_criteria: "A live readout of link quality/range prints; the bar rises as you move closer."
+        expected_output: |
+          BlueRanger by JP Dunning (.ronin)
+          Locating: MyPhone (11:22:33:44:55:66)
+          Range:  #############          70%   (getting closer...)
+          Ping count: 42
+        alternatives:
+          - trigger: "link quality never changes"
+            cause: "Some adapters report a fixed value, limiting resolution."
+            fix: "Try a different adapter; use larger movements; combine with the l2ping RTT as a rough gauge."
+            check: "The readout varies as you move."
+          - trigger: "it stops with a connection error"
+            cause: "The device dropped out of range or refused the connection."
+            fix: "Re-confirm with l2ping (step 3), move closer, and restart blueranger."
+            check: "blueranger runs continuously again."
+  - flow_id: locate
+    title: "Locate a device (reference)"
+    goal: "Run BlueRanger against a known MAC."
+    command_builder_id: blueranger
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: br1
+        title: "blueranger <hci#> <MAC>"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`blueranger hci0 <MAC>` pings the target and shows a proximity readout."
+          why: "Direction-find a device by link quality."
+          where: "POSITIONAL_ARGS (interface then address)."
+        find_it: "Adapter id (hci0) and the target BD address."
+        command_anatomy:
+          - {token: "blueranger hci0 11:22:33:44:55:66", does: "locate this device via the hci0 adapter"}
+        try_this: "sudo blueranger hci0 11:22:33:44:55:66"
+        success_criteria: "A live proximity readout prints."
+        expected_output: |
+          Range:  ##########   50%
+        alternatives:
+          - trigger: "connection error"
+            cause: "Out of range / device off."
+            fix: "Confirm reachability with `l2ping -c 3 <MAC>` first."
+            check: "l2ping replies, then retry."
+
+quick_build:
+  builder: blueranger
+  title: "Quick locate"
+  fields:
+    - field_id: iface
+      label: "Adapter"
+      type: string
+      default: hci0
+      placeholder: "hci0"
+    - field_id: bdaddr
+      label: "Target Bluetooth address"
+      type: string
+      required: true
+      placeholder: "11:22:33:44:55:66"

@@ -1,0 +1,16 @@
+module_id: tool.btscanner
+name: "btscanner — Bluetooth device scanner"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: btscanner
+  flows: [guided, prepare]
+content:
+  tool: tool.yaml
+source: "authored; verified against btscanner usage (interactive ncurses; -o output dir) + bluez adapter prep"
+license: "project-proprietary lesson text; btscanner is GPL (referenced, not bundled)"
+checksum: ""

@@ -1,0 +1,16 @@
+module_id: tool.blueranger
+name: "BlueRanger — Bluetooth proximity locator"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: blueranger
+  flows: [guided, locate]
+content:
+  tool: tool.yaml
+source: "authored; verified against blueranger usage (blueranger <hci#> <bdaddr>; l2ping) + bluez"
+license: "project-proprietary lesson text; blueranger is GPL (referenced, not bundled)"
+checksum: ""

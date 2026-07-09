@@ -1,0 +1,232 @@
+tool_id: sherlock
+display_name: "Sherlock"
+binary_candidates: [sherlock]
+categories: [osint, reconnaissance]
+os_profile: kali
+one_liner: "Hunts a username across hundreds of social networks to find matching accounts."
+authorization_gate: false
+authorization_text: >
+  Sherlock queries public profile pages — it is passive OSINT. Still, only investigate
+  people/handles for a legitimate, lawful purpose (your own accounts, authorized
+  investigations, CTF/OSINT exercises). Respect privacy and local law.
+flows:
+  - flow_id: guided
+    title: "Guided first search (START HERE)"
+    goal: "Find where a username exists online, then save just the hits — inputs explained."
+    command_builder_id: sherlock
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Confirm Sherlock is installed and pick a username"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "Sherlock takes a USERNAME (a handle, e.g. the part after @ — not a real name) and checks hundreds of sites for a profile with that name."
+          why: "A username often reuses across platforms, so one handle can reveal a person's whole online footprint. First make sure the tool runs."
+          where: "The username is a positional argument at the end of the command."
+        find_it: >
+          Only search handles you have a legitimate reason to (your own, an authorized
+          investigation, or a CTF). Not installed? On Kali: `sudo apt install sherlock`, or
+          `pipx install sherlock-project`. The 'username' is the login handle, e.g. 'johndoe',
+          not 'John Doe'.
+        command_anatomy:
+          - {token: "which sherlock", does: "show where sherlock is installed (confirms it's available)"}
+          - {token: "sherlock --help", does: "print its usage/options"}
+          - {token: "| head -3", does: "just the first few lines"}
+        try_this: "which sherlock && sherlock --help | head -3"
+        success_criteria: "A path prints and the usage line appears — Sherlock is ready."
+        expected_output: |
+          /usr/bin/sherlock
+          usage: sherlock [-h] [--version] [--verbose] ...
+          Sherlock: Find Usernames Across Social Networks
+        alternatives:
+          - trigger: "sherlock: command not found"
+            cause: "Not installed."
+            fix: "Install it: `sudo apt install sherlock` (or `pipx install sherlock-project` then `pipx ensurepath`)."
+            check: "`which sherlock` prints a path."
+      - step_id: g2
+        title: "Search one username"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`sherlock <username>` checks every supported site and prints where the handle exists, with the profile URL."
+          why: "This is the core action — a map of accounts using that handle."
+          where: "The username is the positional argument."
+        find_it: "Use the handle from step 1. The first run downloads nothing extra; it just queries sites (needs internet)."
+        command_anatomy:
+          - {token: "sherlock", does: "the program"}
+          - {token: "johndoe", does: "the username to search for"}
+        try_this: "sherlock johndoe"
+        success_criteria: "It lists sites where the username was found, each with a URL."
+        expected_output: |
+          [*] Checking username johndoe on:
+          [+] GitHub: https://github.com/johndoe
+          [+] Reddit: https://reddit.com/user/johndoe
+          [+] Instagram: https://instagram.com/johndoe
+          [*] Search completed with 3 results
+        alternatives:
+          - trigger: "everything shows [-] Not Found"
+            cause: "The handle genuinely isn't used, or your network blocks the requests."
+            fix: "Try a handle you know exists (e.g. your own); check connectivity with `ping -c1 github.com`."
+            check: "A known-good handle returns [+] hits."
+          - trigger: "it's very slow"
+            cause: "It checks hundreds of sites."
+            fix: "Limit to specific sites with --site (later step), or raise --timeout for slow networks."
+            check: "A limited search returns quickly."
+      - step_id: g3
+        title: "Show only found accounts and save them"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`--print-found` hides the misses (cleaner output); `--output <file>` writes the results for one username to a text file."
+          why: "For a report you want just the hits, saved to a file you can keep and reference."
+          where: "OUTPUT_OPTIONS; --output names the file."
+        find_it: "Pick a filename in a folder you can write to (your home). Use --folderoutput <dir> instead when searching several usernames."
+        command_anatomy:
+          - {token: "sherlock johndoe", does: "search this username"}
+          - {token: "--print-found", does: "only print sites where the account WAS found"}
+          - {token: "--output johndoe.txt", does: "save the found results to this file"}
+        try_this: "sherlock johndoe --print-found --output johndoe.txt"
+        success_criteria: "Only [+] hits print, and johndoe.txt holds them (check with `cat johndoe.txt`)."
+        expected_output: |
+          [+] GitHub: https://github.com/johndoe
+          [+] Reddit: https://reddit.com/user/johndoe
+          [*] Results saved to johndoe.txt
+        alternatives:
+          - trigger: "Permission denied writing the file"
+            cause: "Not a writable location."
+            fix: "Write under your home, e.g. `--output ~/johndoe.txt`."
+            check: "The file is created."
+      - step_id: g4
+        title: "Search several handles, or narrow to specific sites"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "You can pass multiple usernames at once, and `--site <name>` limits the search to named platforms (repeat it for several)."
+          why: "People vary a handle (johndoe, john.doe, jdoe). Checking a few at once, or focusing the sites that matter, saves time."
+          where: "Usernames are positional; --site options go before them."
+        find_it: "List the handle variations you want to try. Site names are the platform names Sherlock prints (GitHub, Reddit, Twitter...)."
+        command_anatomy:
+          - {token: "sherlock", does: "the program"}
+          - {token: "--site GitHub --site Reddit", does: "only check these two platforms"}
+          - {token: "johndoe janedoe", does: "search BOTH usernames"}
+        try_this: "sherlock --site GitHub --site Reddit johndoe janedoe"
+        success_criteria: "Results print for each username, limited to the named sites."
+        expected_output: |
+          [*] Checking username johndoe on:
+          [+] GitHub: https://github.com/johndoe
+          [*] Checking username janedoe on:
+          [+] Reddit: https://reddit.com/user/janedoe
+        alternatives:
+          - trigger: "a --site name isn't recognised"
+            cause: "The site name must match Sherlock's list (case-sensitive-ish)."
+            fix: "Run a full search once to see the exact site names Sherlock uses, then match them."
+            check: "The named site appears in results."
+  - flow_id: single_search
+    title: "Single username search (reference)"
+    goal: "Check one handle across all sites."
+    command_builder_id: sherlock
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: sk1
+        title: "Search a username"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`sherlock <username>` queries all supported sites."
+          why: "The fastest way to map a handle's footprint."
+          where: "Username is positional."
+        find_it: "A handle you're authorized to investigate."
+        command_anatomy:
+          - {token: "sherlock johndoe", does: "search this username everywhere"}
+        try_this: "sherlock johndoe"
+        success_criteria: "Found sites list with URLs."
+        expected_output: |
+          [+] GitHub: https://github.com/johndoe
+        alternatives:
+          - trigger: "slow"
+            cause: "Hundreds of sites checked."
+            fix: "Use --site to narrow, or --timeout to bound each request."
+            check: "A narrowed run is faster."
+  - flow_id: output
+    title: "Output & formats (reference)"
+    goal: "Save results as text or CSV."
+    command_builder_id: sherlock
+    slots: [PROGRAM, OUTPUT_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: sk2
+        title: "Save with --output / --csv"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`--output <file>` (one user) or `--folderoutput <dir>` (many); `--csv` writes a spreadsheet-friendly file."
+          why: "Keep evidence and feed other tools/spreadsheets."
+          where: "OUTPUT_OPTIONS."
+        find_it: "A writable file/dir; add --print-found to store only hits."
+        command_anatomy:
+          - {token: "--print-found", does: "only found accounts"}
+          - {token: "--csv", does: "also write a CSV"}
+          - {token: "--output johndoe.txt", does: "save to this file"}
+        try_this: "sherlock johndoe --print-found --csv --output johndoe.txt"
+        success_criteria: "A text (and CSV) file of the hits is written."
+        expected_output: |
+          [*] Results saved to johndoe.txt
+        alternatives:
+          - trigger: "permission denied"
+            cause: "Unwritable path."
+            fix: "Write under your home."
+            check: "The file exists."
+  - flow_id: anonymize
+    title: "Route through Tor / a proxy (reference)"
+    goal: "Reduce direct exposure of your IP."
+    command_builder_id: sherlock
+    slots: [PROGRAM, ENV_INTERFACE, POSITIONAL_ARGS]
+    steps:
+      - step_id: sk3
+        title: "Use --tor or --proxy"
+        slot_target: ENV_INTERFACE
+        explanation:
+          what: "`--tor` (or `--unique-tor`) routes via Tor; `--proxy <url>` uses your own proxy."
+          why: "Many lookups from one IP can get rate-limited; Tor/proxy spreads or hides the source."
+          where: "ENV_INTERFACE."
+        find_it: "For --tor, install and run Tor (`sudo apt install tor && sudo systemctl start tor`). For --proxy, have a proxy URL."
+        command_anatomy:
+          - {token: "--tor", does: "route requests through the Tor network"}
+          - {token: "--proxy http://127.0.0.1:8080", does: "or use this proxy instead"}
+        try_this: "sherlock johndoe --tor"
+        success_criteria: "The search runs through Tor."
+        expected_output: |
+          [*] Using Tor to make requests
+          [+] GitHub: https://github.com/johndoe
+        alternatives:
+          - trigger: "Tor errors / can't connect"
+            cause: "Tor service isn't running."
+            fix: "`sudo systemctl start tor`; confirm it's listening on 9050."
+            check: "Tor is up, then retry."
+
+quick_build:
+  builder: sherlock
+  title: "Quick search"
+  fields:
+    - field_id: username
+      label: "Username(s)"
+      type: string
+      required: true
+      placeholder: "johndoe  (space/comma-separate several)"
+    - field_id: print_found
+      label: "Only show found accounts (--print-found)"
+      type: bool
+      default: true
+    - field_id: sites
+      label: "Limit to sites (--site)"
+      type: string
+      placeholder: "GitHub,Reddit  (optional)"
+    - field_id: timeout
+      label: "Per-site timeout (s)"
+      type: int
+      placeholder: "60"
+    - field_id: output
+      label: "Save to file (--output)"
+      type: path
+      placeholder: "johndoe.txt  (optional)"
+    - field_id: csv
+      label: "Also write CSV (--csv)"
+      type: bool
+    - field_id: tor
+      label: "Route via Tor (--tor)"
+      type: bool

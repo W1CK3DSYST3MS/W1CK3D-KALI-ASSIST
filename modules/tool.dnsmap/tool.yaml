@@ -1,0 +1,198 @@
+tool_id: dnsmap
+display_name: "dnsmap"
+binary_candidates: [dnsmap]
+categories: [reconnaissance, dns]
+os_profile: kali
+one_liner: "Brute-forces subdomains of a domain from a wordlist to map its DNS surface."
+authorization_gate: true
+authorization_text: >
+  Enumerating a domain you don't own or aren't authorized to test can breach scope and
+  hammer DNS servers. Continue only for authorized targets or your own domains. Practice on
+  domains you control. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "From a domain to a saved list of discovered subdomains — inputs explained."
+    command_builder_id: dnsmap
+    slots: [PROGRAM, TARGET_PIVOT, OUTPUT_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: g1
+        title: "Confirm dnsmap and pick a domain"
+        slot_target: null
+        glossary_refs: []
+        explanation:
+          what: "dnsmap takes a DOMAIN (example.com) — not a URL or IP — and tries names like www, mail, dev, vpn in front of it, keeping the ones that resolve."
+          why: "Subdomains reveal extra servers (dev/staging/admin) that widen the attack surface. First confirm the tool and your target."
+          where: "The domain is the first argument to dnsmap."
+        find_it: >
+          Only enumerate domains you own or are authorized to test. The input is a bare domain
+          (example.com), not http://example.com. Not installed? `sudo apt install dnsmap`. dnsmap
+          has a small built-in wordlist; a bigger one (step 3) finds more.
+        command_anatomy:
+          - {token: "which dnsmap", does: "show that dnsmap is installed"}
+        try_this: "which dnsmap"
+        success_criteria: "A path prints (e.g. /usr/bin/dnsmap)."
+        expected_output: |
+          /usr/bin/dnsmap
+        alternatives:
+          - trigger: "command not found"
+            cause: "Not installed."
+            fix: "Install it: `sudo apt install dnsmap`."
+            check: "which dnsmap prints a path."
+      - step_id: g2
+        title: "Run a basic subdomain scan"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "`dnsmap <domain>` uses the built-in wordlist and prints each subdomain that resolves, with its IP address."
+          why: "A quick first pass with zero setup — good for confirming the tool works and catching obvious subdomains."
+          where: "The domain is the first (and here only) argument."
+        find_it: "Use your authorized domain. This needs working DNS/internet."
+        command_anatomy:
+          - {token: "dnsmap", does: "the program"}
+          - {token: "example.com", does: "the domain to enumerate (must be first)"}
+        try_this: "dnsmap example.com"
+        success_criteria: "Discovered subdomains print with their IP addresses."
+        expected_output: |
+          dnsmap 0.36 - DNS Network Mapper
+          [+] searching (sub)domains for example.com using built-in wordlist
+          www.example.com
+          IP address #1: 93.184.216.34
+          mail.example.com
+          IP address #1: 93.184.216.35
+        alternatives:
+          - trigger: "no subdomains found at all"
+            cause: "The built-in list is small, or DNS isn't resolving."
+            fix: "Test DNS with `dig www.example.com`; then try a bigger wordlist (next step)."
+            check: "dig resolves names; a bigger list finds more."
+          - trigger: "every name seems to resolve (wildcards)"
+            cause: "The domain uses wildcard DNS (*.example.com all resolve)."
+            fix: "dnsmap flags likely wildcards; treat results with suspicion and verify a few by hand."
+            check: "A random nonsense subdomain resolving = wildcard."
+      - step_id: g3
+        title: "Use a bigger wordlist"
+        slot_target: EXTRA_FILES
+        explanation:
+          what: "`-w <wordlist>` swaps the small built-in list for a larger one, finding more subdomains."
+          why: "Coverage depends on the wordlist. SecLists ships large, high-quality DNS lists."
+          where: "EXTRA_FILES; -w names the file."
+        find_it: >
+          Good lists: dnsmap's own /usr/share/wordlists/dnsmap.txt, or from SecLists
+          (`sudo apt install seclists`)
+          /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt.
+        command_anatomy:
+          - {token: "dnsmap example.com", does: "the domain scan"}
+          - {token: "-w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt", does: "use this larger subdomain wordlist"}
+        try_this: "dnsmap example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+        success_criteria: "More subdomains are found than the built-in list returned."
+        expected_output: |
+          [+] searching (sub)domains for example.com using /usr/share/seclists/...
+          dev.example.com
+          IP address #1: 93.184.216.36
+          vpn.example.com
+          IP address #1: 93.184.216.37
+        alternatives:
+          - trigger: "wordlist file not found"
+            cause: "Wrong path or SecLists not installed."
+            fix: "Install SecLists (`sudo apt install seclists`) and check the path with `ls`."
+            check: "The wordlist path exists."
+      - step_id: g4
+        title: "Save the results"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-r <file>` writes a plain-text results file; `-c <file>` writes CSV. Pass a directory and dnsmap names the file itself."
+          why: "You'll want the subdomain list saved to feed into nmap/nikto or a report."
+          where: "OUTPUT_OPTIONS; -r/-c name the output."
+        find_it: "Choose a writable path (your home)."
+        command_anatomy:
+          - {token: "dnsmap example.com -w ...", does: "the wordlist scan"}
+          - {token: "-r ~/dnsmap-example.txt", does: "save the results to this text file"}
+        try_this: "dnsmap example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r ~/dnsmap-example.txt"
+        success_criteria: "The scan runs and ~/dnsmap-example.txt lists the subdomains (check with `cat`)."
+        expected_output: |
+          [+] writing results to ~/dnsmap-example.txt
+          [+] 6 (sub)domains and 6 IP address(es) found
+        alternatives:
+          - trigger: "Permission denied"
+            cause: "Unwritable location."
+            fix: "Save under your home, e.g. `-r ~/dnsmap-example.txt`."
+            check: "The file is created."
+  - flow_id: basic
+    title: "Basic scan (reference)"
+    goal: "Built-in wordlist pass."
+    command_builder_id: dnsmap
+    slots: [PROGRAM, TARGET_PIVOT]
+    steps:
+      - step_id: dm1
+        title: "Scan with the built-in list"
+        slot_target: TARGET_PIVOT
+        explanation:
+          what: "`dnsmap <domain>` uses the bundled wordlist."
+          why: "Zero-setup first pass."
+          where: "Domain is the first argument."
+        find_it: "An authorized domain (bare, no scheme)."
+        command_anatomy:
+          - {token: "dnsmap example.com", does: "enumerate subdomains with the built-in list"}
+        try_this: "dnsmap example.com"
+        success_criteria: "Resolving subdomains print with IPs."
+        expected_output: |
+          www.example.com
+          IP address #1: 93.184.216.34
+        alternatives:
+          - trigger: "nothing found"
+            cause: "Small list or DNS issue."
+            fix: "Use -w with a bigger list; test DNS with dig."
+            check: "dig resolves; bigger list finds more."
+  - flow_id: tuning
+    title: "Pacing & filtering (reference)"
+    goal: "Slow down or ignore wildcard IPs."
+    command_builder_id: dnsmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: dm2
+        title: "Delay and ignore-IPs"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-d <ms>` adds a delay between requests; `-i <ip>` ignores an IP that wildcard DNS returns for everything."
+          why: "Delays are kinder to DNS servers; ignoring the wildcard IP removes false positives."
+          where: "ACTION_OPTIONS."
+        find_it: "Find the wildcard IP by scanning first — if a bogus subdomain resolves, note that IP for -i."
+        command_anatomy:
+          - {token: "-d 3000", does: "wait 3000 ms between lookups"}
+          - {token: "-i 1.2.3.4", does: "ignore this IP (the wildcard address)"}
+        try_this: "dnsmap example.com -d 3000 -i 1.2.3.4"
+        success_criteria: "The scan paces itself and drops the wildcard IP."
+        expected_output: |
+          [+] ignoring IP address 1.2.3.4
+          dev.example.com
+          IP address #1: 93.184.216.36
+        alternatives:
+          - trigger: "still lots of false positives"
+            cause: "Multiple wildcard IPs."
+            fix: "Repeat -i for each wildcard IP you see."
+            check: "Only genuine subdomains remain."
+
+quick_build:
+  builder: dnsmap
+  title: "Quick scan"
+  fields:
+    - field_id: domain
+      label: "Domain"
+      type: string
+      required: true
+      placeholder: "example.com  (no http://)"
+    - field_id: wordlist
+      label: "Wordlist (-w)"
+      type: path
+      placeholder: "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+    - field_id: results
+      label: "Save results (-r)"
+      type: path
+      placeholder: "~/dnsmap.txt  (optional)"
+    - field_id: delay
+      label: "Delay between requests (ms, -d)"
+      type: int
+      placeholder: "3000"
+    - field_id: ignore_ips
+      label: "Ignore IP (wildcard, -i)"
+      type: string
+      placeholder: "1.2.3.4  (optional)"
