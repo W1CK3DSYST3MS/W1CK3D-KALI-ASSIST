@@ -20,15 +20,17 @@ def _truthy(v: object) -> bool:
 @register_builder("btscanner")
 def build_btscanner(inputs: Mapping[str, object]) -> CommandPlan:
     notes: list[str] = []
-    o: list[str] = []     # OUTPUT_OPTIONS
+    a: list[str] = []   # ACTION_OPTIONS
 
-    # btscanner is primarily an interactive ncurses tool: you launch it, then use
-    # in-app keys (i = inquiry scan) to discover devices. It writes device dumps
-    # to an output directory (-o); the adapter is prepared beforehand with
-    # hciconfig/rfkill, not a btscanner flag. Keep the command honest and minimal.
-    if inputs.get("output_dir"):
-        o.extend(["-o", str(inputs["output_dir"])])
-    else:
-        notes.append("btscanner is interactive: launch it, press 'i' to run an inquiry scan. -o saves device dumps to a directory.")
+    # Per the man page, btscanner's ONLY options are --help, --cfg <file> and
+    # --no-reset; it is an interactive ncurses tool. Device dumps are written to
+    # the 'device_path' configured in btscanner.conf, NOT via a command-line flag.
+    if _truthy(inputs.get("no_reset")):
+        a.append("--no-reset")
+    if inputs.get("config"):
+        a.extend(["--cfg", str(inputs["config"])])
+    if not a:
+        notes.append("btscanner is interactive: launch it, press 'i' for an inquiry scan. "
+                     "Device dumps go to the 'device_path' set in its config file (btscanner.conf).")
 
-    return assemble("btscanner", {Slot.OUTPUT_OPTIONS: o}, notes=notes)
+    return assemble("btscanner", {Slot.ACTION_OPTIONS: a}, notes=notes)

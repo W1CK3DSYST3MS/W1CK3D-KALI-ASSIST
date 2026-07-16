@@ -95,27 +95,30 @@ flows:
             fix: "Put one of YOUR devices into pairing/discoverable mode and re-run the inquiry."
             check: "Your test device shows in the list."
       - step_id: g4
-        title: "Save device dumps to a folder"
-        slot_target: OUTPUT_OPTIONS
+        title: "Find where btscanner saved the device info"
+        slot_target: ACTION_OPTIONS
         explanation:
-          what: "`-o <dir>` tells btscanner to write per-device info dumps into a directory as it discovers them."
-          why: "Keeps a record of what you found (addresses, names, classes) for later review."
-          where: "OUTPUT_OPTIONS; -o names the directory."
-        find_it: "Choose a writable folder (your home). Create it first with mkdir -p."
+          what: "btscanner automatically writes each discovered device's details to files. The location is the `device_path` set in its config file — there is NO command-line output flag. `--cfg <file>` points at a custom config; `--no-reset` skips resetting the adapter on start."
+          why: "Knowing where the dumps land (and how to change it via the config) is how you keep a record — you don't pass an output directory on the command line."
+          where: "Config-driven; --cfg / --no-reset are the only relevant options."
+        find_it: >
+          The default config is /etc/btscanner/btscanner.conf (or ~/.btscanner/). Open it and look
+          for `device_path` to see/point where per-device files are written. To use your own copy,
+          pass it with --cfg. btscanner's real options are only --help, --cfg and --no-reset.
         command_anatomy:
           - {token: "sudo btscanner", does: "launch the scanner"}
-          - {token: "-o ~/btscan", does: "save device dumps into this directory"}
-        try_this: "mkdir -p ~/btscan && sudo btscanner -o ~/btscan"
-        success_criteria: "As you scan, per-device files appear under ~/btscan."
+          - {token: "--no-reset", does: "don't reset the Bluetooth adapter on startup"}
+          - {token: "--cfg ~/btscanner.conf", does: "use a custom config (which sets device_path for dumps)"}
+        try_this: "grep -i device_path /etc/btscanner/btscanner.conf 2>/dev/null; sudo btscanner --no-reset"
+        success_criteria: "You can see the configured device_path, and btscanner launches without resetting the adapter."
         expected_output: |
-          (after scanning and quitting)
-          $ ls ~/btscan
-          11:22:33:44:55:66
+          device_path = /root/.btscanner
+          (btscanner UI opens; discovered devices are written under that path)
         alternatives:
-          - trigger: "nothing written"
-            cause: "No devices discovered, or the directory isn't writable."
-            fix: "Discover at least one device first; use a writable path under your home."
-            check: "Files appear under the output directory."
+          - trigger: "you can't find the config"
+            cause: "The config lives in a different location for your install."
+            fix: "Locate it: `find / -name btscanner.conf 2>/dev/null`; or copy the packaged one and edit device_path, then use --cfg."
+            check: "You know where dumps are written."
   - flow_id: prepare
     title: "Prepare the adapter (reference)"
     goal: "Get Bluetooth up before scanning."
@@ -147,7 +150,10 @@ quick_build:
   builder: btscanner
   title: "Quick scan"
   fields:
-    - field_id: output_dir
-      label: "Save dumps to (-o)"
+    - field_id: no_reset
+      label: "Don't reset the adapter (--no-reset)"
+      type: bool
+    - field_id: config
+      label: "Custom config file (--cfg)"
       type: path
-      placeholder: "~/btscan  (optional)"
+      placeholder: "~/btscanner.conf  (optional)"
