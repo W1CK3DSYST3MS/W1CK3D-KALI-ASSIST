@@ -94,5 +94,5 @@ exe = EXE(
     console=False,           # GUI app — no console window
     disable_windowed_traceback=False,
     argv_emulation=False,
-    icon=os.path.join(PROJECT, "assets", "W1CK3D-SYSTEMS-logo.png"),
+    icon=os.path.join(PROJECT, "assets", "W1CK3D-KALI-ASSIST-logo.png"),
 )

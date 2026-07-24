@@ -108,8 +108,7 @@ nmap-shaped; the adaptive stepper is the correct path for the other tools).
 - M4: per-tool GUI forms, theme polish, onboarding checklist, settings (output base
   dir); finalize AppImage; rebuild the binary (now bundles 10 tools).
 
-## Distribution guard (do not forget)
-This repo is **PRIVATE / closed source** — source + `docs/specs` blueprints never ship.
-Only the compiled binary is released (GitHub Release asset on a separate public repo),
-preserving the future Enterprise edition. No git remote is configured; keep it that way
-unless the remote is private.
+## Distribution model (updated 2026-07-25)
+This repo — source + `docs/specs` blueprints included — is **open source (MIT)**. The paid
+**Enterprise** edition (adds local-LLM / AI assistance) is a separate future offering, not
+this repo. Push only to the `W1CK3DSYST3MS` GitHub account, not any personal account.

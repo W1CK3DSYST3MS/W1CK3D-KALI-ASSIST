@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=W1CK3D'S KALI ASSIST
+Exec=w1ck3d-kali-assist
+Terminal=false
+Type=Application
+Icon=w1ck3d-kali-assist
+Comment=Offline, generate-only Kali Linux tool trainer, reference, and troubleshooter
+Categories=Education;

@@ -1,17 +1,9 @@
 # =============================================================================
-#  W1CK3D'S KALI ASSIST — PRIVATE / CLOSED-SOURCE REPOSITORY
+#  W1CK3D'S KALI ASSIST — open source (MIT), see LICENSE.
 # -----------------------------------------------------------------------------
-#  This repo holds the SOURCE CODE and the internal design BLUEPRINTS
-#  (docs/specs/). It must NEVER be made public.
-#
-#  Distribution model: only the COMPILED tool file (the built wizard) is ever
-#  released — as a GitHub Release asset on a SEPARATE public repo. The source
-#  in this repo and the docs/specs blueprints are NOT shipped, so the future
-#  Enterprise edition stays protected.
-#
-#  NOTE: a .gitignore does NOT hide tracked source. Protection comes from
-#  keeping THIS repo private and never pushing it to a public remote.
-#  (As of init: no remote is configured. Keep it that way unless it's private.)
+#  This repo holds the source code and the design blueprints (docs/specs/) for
+#  the free, generate-only edition. A future paid Enterprise edition (adds
+#  local-LLM / AI assistance) is a separate, later offering — not this repo.
 # =============================================================================
 
 # Python
