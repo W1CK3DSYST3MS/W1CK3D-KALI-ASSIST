@@ -41,8 +41,8 @@ what's still outstanding (AppImage packaging, further GUI polish).
 ## Install & run (from source)
 
 ```bash
-git clone https://github.com/W1CK3DSYST3MS/w1ck3d-kali-assist.git
-cd w1ck3d-kali-assist
+git clone https://github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST.git
+cd W1CK3D-KALI-ASSIST
 
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
