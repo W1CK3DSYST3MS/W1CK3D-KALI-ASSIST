@@ -25,11 +25,11 @@ def build_heartleech(inputs: Mapping[str, object]) -> CommandPlan:
     pos: list[str] = []    # POSITIONAL_ARGS (hostname)
 
     if inputs.get("port"):
-        a.extend(["-p", str(int(inputs["port"]))])
+        a.extend(["--port", str(int(inputs["port"]))])
     if _truthy(inputs.get("scan")):
         a.append("--scan")
     if _truthy(inputs.get("autopwn")):
-        a.append("-a")
+        a.append("--autopwn")
     if inputs.get("dump"):
         o.extend(["--dump", str(inputs["dump"])])
 

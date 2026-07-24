@@ -31,8 +31,16 @@ def build_nikto(inputs: Mapping[str, object]) -> CommandPlan:
 
     # Maintenance commands stand alone.
     if _truthy(inputs.get("update")):
-        return assemble("nikto", {Slot.ACTION_OPTIONS: ["-update"]},
-                        notes=["Refreshes the nikto vulnerability database/plugins."])
+        # This nikto build has NO -update flag (confirmed against installed --help).
+        # It only auto-checks CIRT.net for a newer nikto version on startup (toggle
+        # with -nocheck/-ask); the DB/plugins themselves ship in the Kali package and
+        # are refreshed via apt, not a nikto command line switch.
+        notes.append(
+            "nikto has no -update flag. It silently checks for a newer nikto version "
+            "on every run (toggle with -nocheck/-ask). To refresh the vulnerability "
+            "database/plugins on Kali, run: sudo apt update && sudo apt install "
+            "--only-upgrade nikto."
+        )
     if _truthy(inputs.get("list_plugins")):
         return assemble("nikto", {Slot.ACTION_OPTIONS: ["-list-plugins"]})
 

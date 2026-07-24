@@ -25,26 +25,39 @@ Legend: ✅ verified · ✍️ corrected · ⏳ pending · 🔬 expected_output 
 | gobuster | ✅ | github OJ/gobuster README | -u/-w/-x/-t/-k/-o/-a/-c/-H/-r/-s confirmed; -b blacklist; "can't set both -s and -b" + version-default note accurate |
 | photon | ✅ | github s0md3v/Photon wiki (Usage) | -u/-l/-t/-d/-o/--wayback confirmed; output categories internal/external/robots/scripts/etc. match |
 | btscanner | ✍️ | manpages.debian.org/btscanner | **CORRECTED**: removed invented `-o`; real options are only `--help`/`--cfg`/`--no-reset`; dumps go to config `device_path` |
-| nmap | ⏳🔬 | | |
-| sqlmap | ⏳🔬 | | |
-| nikto | ⏳🔬 | | check `-Display V`, `-Tuning`, `-Format` |
-| hydra | ⏳🔬 | | check http-post-form string; -L/-P/-C/-e/-M |
-| john | ⏳🔬 | | check --single/--wordlist/--rules/--format/--show |
-| hashcat | ⏳🔬 | | check -m/-a/-r/--show/--identify/-D |
-| aircrack-ng suite | ⏳🔬 | | airmon-ng/airodump-ng/aireplay-ng/aircrack-ng flags |
-| tshark | ⏳🔬 | | -i/-r/-Y/-f/-T fields/-e/-z |
-| metasploit (msfvenom/msfconsole) | ⏳🔬 | | payload/LHOST/LPORT/-f/-o; vsftpd module path |
-| sherlock | ⏳🔬 | | --site/--print-found/--output/--csv/--tor |
-| bettercap | ⏳🔬 | | -iface/-eval/-caplet/-silent; module names |
-| blueranger | ⏳🔬 | | `blueranger <hci#> <bdaddr>` |
-| gqrx | ⏳🔬 | | -l/-d/-c/-e/-r |
-| rfcat | ⏳🔬 | | -r research shell; d.* methods |
-| gvm | ⏳🔬 | | gvm-start/check-setup/feed-update; UI port 9392 |
-| heartleech | ⏳🔬 | | --scan/--dump/-p; hostname positional |
-| dirb | ⏳🔬 | | `dirb <url> <wordlist>` order; -X/-o/-r/-a/-c |
-| dirbuster | ⏳🔬 | | -H/-u/-l/-e/-r headless flags |
-| burpsuite | ⏳🔬 | | --project-file=/--config-file=; proxy/CA workflow |
-| kismet | ⏳🔬 | | -c source; web UI :2501 |
+| nmap | ✅ | installed `--help`/man, Nmap 7.99 (Kali 2026.3) | all flags (`-sn/-Pn/-n/-T0-5/-sV/--version-all/-sS/-sT/-sU/-p/--top-ports/-p-/-O/-A/--script/-oN/-oX/-oG/-oA/--reason/-F/-iL/-e`) confirmed |
+| sqlmap | ✅ | installed `--help`/`-hh`/man, sqlmap 1.10.6#stable | `-u/-g/--data/--cookie/--random-agent/--proxy/--tor/--check-tor/-p/--dbms/--level/--risk/--technique/-a/-b/--dump[-all]/-D/-T/-C/--os-shell/--os-pwn/--batch/--flush-session/--wizard` confirmed via `-hh` advanced help |
+| nikto | ✍️ | installed nikto (no `--version`; single-dash parser) + `/var/lib/nikto/nikto.pl`/`nikto_core.plugin` source | **CORRECTED**: removed invented `-update` flag — real nikto has none; it only silently checks CIRT.net for a newer *nikto* version at startup (`-nocheck`/`-ask`), never fetches signatures. DB/plugins ship in the Kali package, so "update" now means `sudo apt update && sudo apt install --only-upgrade nikto`. `-Tuning/-Format/-ssl/-nossl/-vhost/-evasion/-Plugins/-id/-useproxy/-Pause/-maxtime/-timeout/-Display V/-list-plugins` all confirmed correct. Builder + test updated (`test_nikto_update_has_no_such_flag`) |
+| hydra | ✅ | installed `--version`/help/man + `-U http-post-form`, Hydra v9.7 | `-l/-L/-p/-P/-C/-M/-o/-b/-f/-F/-t/-w/-e/-V/-R/-s` + http-post-form string format all confirmed |
+| john | ✅ | installed `--help` (John 1.9.0-jumbo-1) — man page is stale non-jumbo, help used as authoritative per source hierarchy | `--format=/--wordlist=/--rules[=]/--single/--incremental[=]/--show/--session=/--restore[=]/--fork=/--pot=/--list=` confirmed; hash file positional per real usage line |
+| hashcat | ✅ | installed `--help`/man, hashcat v7.1.2 | `-m/-a (0/1/3/6/7)/-r/--show/--identify/-D/-I/-d/-w/-O/--session/--force/-o/--username/--potfile-disable/-1/-b` confirmed |
+| aircrack-ng suite | ✅ | installed `--help`/man for all 4 binaries | `aircrack-ng -w/-b`, `airmon-ng <start\|stop> <iface> [chan]` / `check [kill]`, `airodump-ng -c/-w/--bssid` (module correctly avoids `-b`, which means `--band` here, not BSSID), `aireplay-ng --deauth/-a/-c` all confirmed |
+| tshark | ✅ | installed `tshark`/`dumpcap`/`capinfos`/`editcap`/`mergecap` --help/man, tshark 4.6.6 | `-D/-i/-r` (mutually exclusive, enforced in builder)/-f (BPF) vs -Y (display filter)/-T fields+-e/-E/-z io,phs\|conv,type\|endpoints,type\|follow,... /-s/-p/-o tls.keylog_file: all confirmed |
+| metasploit (msfvenom/msfconsole) | ✅ | installed `--help`, Framework 6.4.145-dev | msfvenom `-l/-p/-f/-e/-a/--platform/-o/-b/-i` + `LHOST=/LPORT=` shape matches tool's own usage example verbatim; msfconsole `-q/-x "cmd; cmd"` confirmed. Interactive console grammar (search/use/set/exploit -j/sessions -i) not re-verified via `--help` (didn't launch the framework) but is long-stable documented syntax |
+| sherlock | ✅ | installed `--help`/man, Sherlock v0.16.0 | `--timeout/--site/--print-found/--nsfw/--csv/--output(-o)/--folderoutput(-fo)/--tor(-t)/--proxy(-p)` confirmed; USERNAMES positional-last still parses correctly with `--tor`/`--proxy` under argparse regardless of the app's fixed slot order |
+| bettercap | ✅ | installed `--help` | `-iface/-eval/-caplet/-silent/-no-colors` all real top-level flags; `-eval` module names (net.probe/net.recon/arp.spoof/net.sniff) match standard bettercap docs |
+| blueranger | ✅ | installed `--help`/man | SYNOPSIS `blueranger <hciX> <bdaddr>` matches builder's positional order exactly |
+| gqrx | ✍️ | installed `--help`/man | **CORRECTED**: removed invented `-d` device-select flag — real gqrx only has `-h/--help-all/-s/-l/-c/-e/-r`; device selection is GUI-only (Configure I/O Devices dialog). Dropped the `device` quick_build field and `ENV_INTERFACE` slot usage from tool.yaml + builder |
+| rfcat | ✅ | installed `--help`/man | `-r` (research shell)/`-i INDEX` confirmed; `d.*` rflib API calls happen inside the interactive shell, not CLI flags |
+| gvm | ✍️ | installed `gvm-start`/`gvm-check-setup`/`greenbone-feed-sync --help` + `apt list --installed` | **CORRECTED**: `gvm-feed-update` is not installed on current Kali (GVM 25.04 packaging) — replaced with `greenbone-feed-sync` (confirmed installed, drop-in role, defaults `--type all`, drops root to `_gvm`) in tool.yaml, manifest.yaml, and builder's `_ACTIONS` map. `gvm-start`/`gvm-check-setup` confirmed correct as-is |
+| heartleech | ✍️ | installed `man heartleech` (full OPTIONS list) | **CORRECTED**: removed invented short flags `-p`/`-a` — real heartleech only has long-form `--port <port>` and `--autopwn` (only genuine short flag in the tool is `-d` for debug, unused here). Fixed builder + every tool.yaml mention across guided flow g1-g3 and reference flow hl1 |
+| dirb | ✅ | installed `man dirb`, DIRB v2.22 | `-X/-c/-a/-r/-S/-o` + positional `<url> [<wordlist>]` order confirmed |
+| dirbuster | ✅ | installed `-h` fallback (real DirBuster 1.0-RC1 usage text; `--version` only printed a GUI startup banner) | `-H/-u/-l/-e/-r` confirmed verbatim |
+| burpsuite | ✅ | installed `--help`, Burp Suite Community 2026.3.2 | `--project-file=`/`--config-file=` confirmed verbatim |
+| kismet | ✅ | installed `--help`/man, Kismet 2025.09.0 | `-c` (capture source)/`--no-ncurses`/`--log-prefix` confirmed in both help and man |
+
+### Verification pass 2 (2026-07-24)
+Ran `tools/verify_capture.sh` on this Kali 2026.3 box (read-only `--help`/`--version`/`man`
+capture for every referenced tool + helper — nothing executed against a target) and
+cross-checked all 20 previously-pending tools against it, with direct read-only
+`--help`/`man`/source-grep follow-ups where a capture was truncated or a tool's basic help
+hid advanced flags. **4 corrections found**: nikto (invented `-update` flag — real nikto has
+none), gqrx (invented `-d` device flag — device select is GUI-only), gvm (`gvm-feed-update`
+renamed to `greenbone-feed-sync` in current Kali packaging), heartleech (invented `-p`/`-a`
+short flags — real tool only has `--port`/`--autopwn`). The other 16 verified clean, no
+changes. Full test suite: 104 passed. `expected_output` byte-accuracy (as opposed to
+flags/syntax) remains unreconciled for all rows above the original 4 and is still deferred to
+an actual run against a live target/lab — out of scope for this pass, same as noted below.
 
 ## Lessons (14) — pending a separate pass
 Commands in the fundamentals lessons (shell/files/permissions/etc.) are standard coreutils

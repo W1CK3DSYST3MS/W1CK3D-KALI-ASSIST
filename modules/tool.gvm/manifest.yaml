@@ -11,6 +11,6 @@ provides:
   flows: [guided, manage]
 content:
   tool: tool.yaml
-source: "authored; verified against gvm-start/gvm-setup/gvm-check-setup/gvm-feed-update"
+source: "authored; verified against gvm-start/gvm-setup/gvm-check-setup/greenbone-feed-sync"
 license: "project-proprietary lesson text; GVM is GPL (referenced, not bundled)"
 checksum: ""

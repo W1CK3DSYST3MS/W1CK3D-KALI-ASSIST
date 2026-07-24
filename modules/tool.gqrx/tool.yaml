@@ -14,7 +14,7 @@ flows:
     title: "Guided first listen (START HERE)"
     goal: "From plugging in an SDR to hearing an FM station and reading the spectrum."
     command_builder_id: gqrx
-    slots: [PROGRAM, GLOBAL_OPTIONS, ENV_INTERFACE]
+    slots: [PROGRAM, GLOBAL_OPTIONS]
     steps:
       - step_id: g1
         title: "Plug in your SDR and confirm the OS sees it"
@@ -48,11 +48,11 @@ flows:
             check: "rtl_test completes."
       - step_id: g2
         title: "Launch Gqrx and select the device"
-        slot_target: ENV_INTERFACE
+        slot_target: null
         explanation:
           what: "`gqrx` opens the GUI. On first run it shows a Configure I/O Devices dialog — pick your SDR from the Device dropdown and click OK."
           why: "Gqrx must be told which SDR to use and at what sample rate before it can tune."
-          where: "The GUI device dialog; -d preselects a device on the command line."
+          where: "The GUI device dialog only — gqrx has no command-line device-select flag. `-c <file>` loads a saved config (which remembers your device) instead."
         find_it: "In the dialog, choose your dongle (e.g. 'Realtek RTL2838...'). Leave the input rate at the default (e.g. 2.4 Msps) to start."
         command_anatomy:
           - {token: "gqrx", does: "launch the receiver GUI"}
@@ -147,10 +147,6 @@ quick_build:
   builder: gqrx
   title: "Launch options"
   fields:
-    - field_id: device
-      label: "Device string (-d)"
-      type: string
-      placeholder: "rtl=0  (optional)"
     - field_id: config
       label: "Config file (-c)"
       type: path

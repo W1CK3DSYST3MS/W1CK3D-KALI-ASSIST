@@ -1,6 +1,6 @@
 tool_id: gvm
 display_name: "Greenbone / OpenVAS (gvm-start)"
-binary_candidates: [gvm-start, gvm-stop, gvm-setup, gvm-check-setup, gvm-feed-update]
+binary_candidates: [gvm-start, gvm-stop, gvm-setup, gvm-check-setup, greenbone-feed-sync]
 categories: [vulnerability_scanning]
 os_profile: kali
 one_liner: "Starts and manages the Greenbone/OpenVAS vulnerability scanner and its web UI."
@@ -100,14 +100,14 @@ flows:
         title: "Update the vulnerability feeds"
         slot_target: null
         explanation:
-          what: "`gvm-feed-update` downloads the latest NVTs (network vulnerability tests), SCAP and CERT data. Scans are only as good as these feeds."
+          what: "`greenbone-feed-sync` downloads the latest NVTs (network vulnerability tests), SCAP and CERT data. Scans are only as good as these feeds. (This replaces the older `gvm-feed-update` name, which is not present on current Kali GVM packaging.)"
           why: "Out-of-date feeds miss recent vulnerabilities. Refresh them before an important scan."
-          where: "Feed sync; needs root; can take a while."
+          where: "Feed sync; run as root — it drops privileges to the _gvm user itself by default; can take a while."
         find_it: "Needs internet. First-ever sync is large; later updates are incremental. Do it when you can leave it running."
         command_anatomy:
-          - {token: "sudo", does: "root"}
-          - {token: "gvm-feed-update", does: "sync the latest vulnerability test + SCAP/CERT feeds"}
-        try_this: "sudo gvm-feed-update"
+          - {token: "sudo", does: "root (the script re-execs as the _gvm user itself)"}
+          - {token: "greenbone-feed-sync", does: "sync the latest vulnerability test + SCAP/CERT feeds"}
+        try_this: "sudo greenbone-feed-sync"
         success_criteria: "The feeds sync without error; the UI's Feed Status shows current dates."
         expected_output: |
           Updating: NVT feed ...
@@ -129,14 +129,14 @@ flows:
         title: "start / stop / check-setup / feed-update"
         slot_target: null
         explanation:
-          what: "`gvm-start` and `gvm-stop` control the services; `gvm-check-setup` verifies health; `gvm-feed-update` refreshes data."
+          what: "`gvm-start` and `gvm-stop` control the services; `gvm-check-setup` verifies health; `greenbone-feed-sync` refreshes data."
           why: "Day-to-day control of the scanner without the web UI."
-          where: "Each is a separate gvm-* command (pick via the quick-build action)."
+          where: "Each is a separate command (pick via the quick-build action)."
         find_it: "Choose the action for what you need (start to use it, stop to free resources)."
         command_anatomy:
           - {token: "gvm-start / gvm-stop", does: "bring the services up / down"}
           - {token: "gvm-check-setup", does: "health check"}
-          - {token: "gvm-feed-update", does: "refresh feeds"}
+          - {token: "greenbone-feed-sync", does: "refresh feeds"}
         try_this: "sudo gvm-stop"
         success_criteria: "The chosen action completes (services stop, in this example)."
         expected_output: |

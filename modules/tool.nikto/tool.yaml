@@ -299,23 +299,27 @@ flows:
         slot_target: ACTION_OPTIONS
         glossary_refs: [plugin]
         explanation:
-          what: "`nikto -update` refreshes the DB/plugins; `-list-plugins` shows what's available."
-          why: "Fresh signatures catch newer issues."
-          where: "ACTION_OPTIONS."
-        find_it: "Just needs internet access."
+          what: "This nikto build has NO `-update` flag — it silently checks CIRT.net for a newer nikto version on every run (controlled by `-ask`/`-nocheck`), but that check does not fetch new signatures. On Kali the vulnerability DB/plugins ship inside the `nikto` package itself, so 'updating' means upgrading the package."
+          why: "Fresh signatures catch newer issues; on Kali that's an apt upgrade, not a nikto command-line switch."
+          where: "Package upgrade, not ACTION_OPTIONS; `-nocheck` (ACTION_OPTIONS) only skips nikto's own version check."
+        find_it: "Just needs internet access (for apt, or for nikto's automatic version check)."
         command_anatomy:
-          - {token: "nikto", does: "the program"}
-          - {token: "-update", does: "download the latest signature database and plugins"}
-        try_this: "nikto -update"
-        success_criteria: "nikto reports the database/plugins updated."
+          - {token: "sudo apt update", does: "refresh Kali's package index"}
+          - {token: "sudo apt install --only-upgrade nikto", does: "pull the newest nikto package, including its plugins/DB files"}
+        try_this: "sudo apt update && sudo apt install --only-upgrade nikto"
+        success_criteria: "apt reports nikto is already the newest version, or installs an upgrade."
         expected_output: |
-          + Retrieving 'db_tests'
-          + CIRT.net message: Databases are up to date
+          nikto is already the newest version (2.5.0-...).
+          (or: Setting up nikto (2.5.0-...) ...)
         alternatives:
-          - trigger: "update fails (offline/permissions)"
+          - trigger: "apt update/install fails (offline/permissions)"
             cause: "No network or insufficient permissions."
-            fix: "On Kali, update via apt instead (see Packages troubleshooter)."
-            check: "Retry with connectivity, or apt."
+            fix: "Connect to the internet and use sudo (see the Packages troubleshooter)."
+            check: "Retry with connectivity and sudo."
+          - trigger: "you just want nikto to skip its own online version check"
+            cause: "Every run silently checks CIRT.net for a newer nikto release unless told not to."
+            fix: "Add `-nocheck` to any scan to skip that check entirely."
+            check: "The scan starts immediately with no update check."
   - flow_id: integration
     title: "Integration & reading results (reference)"
     goal: "Chain the web-recon tools; verify findings."

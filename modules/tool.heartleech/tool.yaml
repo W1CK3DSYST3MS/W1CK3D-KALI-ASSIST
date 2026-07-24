@@ -24,7 +24,7 @@ flows:
         explanation:
           what: "Heartbleed affects OpenSSL 1.0.1 TLS services (HTTPS on 443, but also mail/VPN TLS ports). You need a hostname/IP running such a service."
           why: "Heartbleed is old, so you'll usually practise against a deliberately vulnerable lab VM. Confirm the port speaks TLS first."
-          where: "The hostname is the last argument to heartleech; the port is -p."
+          where: "The hostname is the last argument to heartleech; the port is --port."
         find_it: >
           Only test your own lab or an authorized target. Spin up a known-vulnerable VM (old
           OpenSSL 1.0.1). Confirm a TLS port with nmap and even pre-check with its script:
@@ -45,7 +45,7 @@ flows:
         alternatives:
           - trigger: "port closed / not TLS"
             cause: "Wrong host or port."
-            fix: "Find the TLS port with `nmap -sV TARGET` and use that with -p."
+            fix: "Find the TLS port with `nmap -sV TARGET` and use that with --port."
             check: "nmap shows an open TLS service."
       - step_id: g2
         title: "Scan for Heartbleed with heartleech"
@@ -53,8 +53,8 @@ flows:
         explanation:
           what: "`heartleech --scan <host>` sends a single crafted heartbeat and reports whether the server is vulnerable — it does NOT dump data yet."
           why: "A non-invasive confirmation before you extract anything."
-          where: "ACTION_OPTIONS (--scan); host is positional; -p sets a non-443 port."
-        find_it: "Use the host from step 1. Add `-p <port>` if it isn't 443."
+          where: "ACTION_OPTIONS (--scan); host is positional; --port sets a non-443 port."
+        find_it: "Use the host from step 1. Add `--port <port>` if it isn't 443."
         command_anatomy:
           - {token: "heartleech", does: "the tool"}
           - {token: "--scan", does: "just test for the bug (no data extraction)"}
@@ -67,7 +67,7 @@ flows:
         alternatives:
           - trigger: "connection errors / timeouts"
             cause: "Firewall, wrong port, or TLS not on that port."
-            fix: "Confirm the TLS port (nmap -sV) and pass it with -p; check reachability."
+            fix: "Confirm the TLS port (nmap -sV) and pass it with --port; check reachability."
             check: "heartleech connects and reports a verdict."
       - step_id: g3
         title: "Dump leaked memory (authorized targets only)"
@@ -78,15 +78,15 @@ flows:
           cookies and private keys. This is real exploitation — only against your own lab or an
           explicitly authorized target. Store the dump securely and delete it when done.
         explanation:
-          what: "`heartleech <host> -p 443 --dump <file>` repeatedly leaks ~64 KB chunks of server memory into a file until you stop it (Ctrl-C)."
+          what: "`heartleech <host> --port 443 --dump <file>` repeatedly leaks ~64 KB chunks of server memory into a file until you stop it (Ctrl-C)."
           why: "This is the actual impact of Heartbleed — showing how a simple bug exposes secrets. You then search the dump (next step)."
-          where: "OUTPUT_OPTIONS (--dump); host positional; -p port."
+          where: "OUTPUT_OPTIONS (--dump); host positional; --port port."
         find_it: "Pick a writable output path (your home). Let it run a little while to gather enough memory, then Ctrl-C."
         command_anatomy:
           - {token: "heartleech", does: "the tool"}
-          - {token: "TARGET -p 443", does: "the authorized host and TLS port"}
+          - {token: "TARGET --port 443", does: "the authorized host and TLS port"}
           - {token: "--dump ~/bleed.bin", does: "write leaked memory to this file"}
-        try_this: "heartleech TARGET -p 443 --dump ~/bleed.bin"
+        try_this: "heartleech TARGET --port 443 --dump ~/bleed.bin"
         success_criteria: "The file grows as memory is leaked; ~/bleed.bin exists after you stop it."
         expected_output: |
           [+] VULNERABLE
@@ -132,7 +132,7 @@ flows:
           what: "`heartleech --scan <host>` reports vulnerable/safe without dumping."
           why: "Safe confirmation step."
           where: "ACTION_OPTIONS (--scan)."
-        find_it: "An authorized TLS host; -p for non-443."
+        find_it: "An authorized TLS host; --port for non-443."
         command_anatomy:
           - {token: "--scan TARGET", does: "test the host for Heartbleed only"}
         try_this: "heartleech --scan TARGET"
@@ -142,7 +142,7 @@ flows:
         alternatives:
           - trigger: "cannot connect"
             cause: "Wrong port/host."
-            fix: "Find the TLS port with nmap -sV; use -p."
+            fix: "Find the TLS port with nmap -sV; use --port."
             check: "A verdict prints."
 
 quick_build:
@@ -155,7 +155,7 @@ quick_build:
       required: true
       placeholder: "10.0.0.20  or  vuln.lab"
     - field_id: port
-      label: "TLS port (-p)"
+      label: "TLS port (--port)"
       type: int
       placeholder: "443"
     - field_id: scan

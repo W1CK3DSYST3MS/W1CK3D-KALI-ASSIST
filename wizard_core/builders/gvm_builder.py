@@ -16,7 +16,9 @@ _ACTIONS = {
     "stop": "gvm-stop",
     "check-setup": "gvm-check-setup",
     "setup": "gvm-setup",
-    "feed-update": "gvm-feed-update",
+    # gvm-feed-update was renamed/replaced; current Kali GVM packaging ships
+    # greenbone-feed-sync instead (gvm-feed-update is not installed).
+    "feed-update": "greenbone-feed-sync",
 }
 
 

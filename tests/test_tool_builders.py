@@ -22,8 +22,13 @@ def test_gobuster_status_filter_mutual_exclusion():
                                  "status_blacklist": "404", "status_whitelist": "200"})
 
 
-def test_nikto_update_standalone():
-    assert get_builder("nikto")({"update": True}).bash_preview_string == "nikto -update"
+def test_nikto_update_has_no_such_flag():
+    # nikto's installed --help has no -update flag; the builder must never emit one
+    # (DB/plugin refresh on Kali is an apt upgrade, surfaced only as a note).
+    plan = get_builder("nikto")({"update": True})
+    assert "-update" not in plan.array_form
+    assert plan.bash_preview_string == "nikto"
+    assert any("-update" in n and "apt" in n for n in plan.notes)
 
 
 def test_hydra_positional_target_service_last():
