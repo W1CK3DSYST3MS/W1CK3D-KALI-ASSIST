@@ -1,0 +1,5 @@
+terms:
+  - term: sqlsus_conf
+    definition: "sqlsus's config file — describes the injectable URL (url_start/url_end around the injection point), not a target you pass on the command line."
+  - term: blind_injection
+    definition: "An injection where the response never shows query results directly — you infer true/false from a visible difference (boolean-based) or a delay (time-based)."

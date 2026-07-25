@@ -1,0 +1,141 @@
+tool_id: sqlsus
+display_name: "sqlsus"
+binary_candidates: [sqlsus]
+categories: [database, exploitation]
+os_profile: kali
+one_liner: "Turns a confirmed MySQL injection into an interactive shell for dumping and browsing the database."
+authorization_gate: true
+authorization_text: >
+  sqlsus goes past finding a SQL injection — it drives an interactive session against the
+  live database (listing schemas, dumping tables, reading/writing files if privileges
+  allow). This has direct impact on a live application/database if you get the wrong target.
+  Only run this against a MySQL-backed application and injection point you own or are
+  explicitly authorized to test. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first run (START HERE)"
+    goal: "From a confirmed MySQL injection to an interactive database session."
+    command_builder_id: sqlsus
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Confirm you have a real SQL injection point first"
+        slot_target: null
+        glossary_refs: [sqlsus_conf]
+        explanation:
+          what: "sqlsus isn't a scanner — it needs a SQL injection point you've ALREADY confirmed exists, specifically against a MySQL backend."
+          why: "Use the sqlmap tool to find and confirm the injection (and that the backend is MySQL) before touching sqlsus. sqlsus then drives an interactive session through that same injection point."
+          where: "Not part of the sqlsus command itself — this is a prerequisite."
+        find_it: "See the sqlmap tool's guided flow to find and confirm an injection point, including its DBMS (--dbms should show MySQL)."
+        command_anatomy:
+          - {token: "sqlmap", does: "confirms the injection + DBMS (see the sqlmap tool)"}
+        try_this: "sqlmap -u 'http://target/page?id=1' --dbms=mysql --banner"
+        success_criteria: "sqlmap confirms an injection and reports MySQL as the backend."
+        expected_output: |
+          [INFO] the back-end DBMS is MySQL
+          banner: '8.0.35-0ubuntu0.22.04.1'
+        alternatives:
+          - trigger: "sqlmap says a different DBMS"
+            cause: "sqlsus is MySQL-specific; other backends need different tooling (sqlninja for MSSQL, sqlmap's own features for others)."
+            fix: "Confirm the DBMS first — don't proceed with sqlsus against a non-MySQL target."
+            check: "—"
+      - step_id: g2
+        title: "Generate a config file template"
+        slot_target: null
+        explanation:
+          what: "`sqlsus -g <filename>` writes out a full config file template with every option commented and explained, ready to fill in."
+          why: "Like sqlninja, sqlsus doesn't take a URL as a command-line flag — the injectable URL and injection style (normal/blind/time-based) all live in this file."
+          where: "Not part of the interactive session itself — this generates the file you'll edit next."
+        find_it: "Any writable filename you'll remember."
+        command_anatomy:
+          - {token: "sqlsus", does: "the program"}
+          - {token: "-g myapp.conf", does: "generate a config template at this path — you choose the name"}
+        try_this: "sqlsus -g myapp.conf"
+        success_criteria: "myapp.conf is created, with commented sections for url_start/url_end, blind mode, cookies, and more."
+        expected_output: |
+          [+] Configuration successfully saved to myapp.conf
+        alternatives:
+          - trigger: "Permission denied"
+            cause: "Unwritable location."
+            fix: "Save under your home directory."
+            check: "The file is created."
+      - step_id: g3
+        title: "Edit the config with the real injection point"
+        slot_target: null
+        explanation:
+          what: "Edit `url_start`/`url_end` in the config to bracket the injection point in the real vulnerable URL, and set `blind`/`blind_string` if it's a blind injection rather than one that returns data directly."
+          why: "This is the one piece sqlsus can't guess for you — everything else about how it queries the database follows automatically once this is right."
+          where: "Inside myapp.conf — no command to run for this step, just edit the file."
+        find_it: "Use the exact injectable URL and injection syntax confirmed by sqlmap in step 1."
+        command_anatomy:
+          - {token: "url_start", does: "everything in the URL up to and including the injection point"}
+          - {token: "url_end", does: "everything after — '#' is common, to comment out the rest of the original query"}
+        try_this: "nano myapp.conf   # set url_start / url_end to match your confirmed injection"
+        success_criteria: "url_start and url_end together form the real vulnerable request."
+        expected_output: |
+          (no terminal output — this step is editing the config file directly)
+        alternatives:
+          - trigger: "not sure how to split the URL"
+            cause: "Unclear exactly where the injectable parameter's quote/statement ends."
+            fix: "Copy the exact working payload sqlmap used in step 1 as a reference."
+            check: "—"
+      - step_id: g4
+        title: "Launch the interactive session"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`sqlsus <config file>` opens an interactive shell (like msfconsole) driven through the injection point — from here you run sqlsus's own commands (get_databases, get_tables, get_current_user, and more) to explore and dump the database."
+          why: "This is the actual payoff — a live, query-by-query session against the database through the injection, rather than one-off requests."
+          where: "POSITIONAL_ARGS: the config file is the only argument."
+        find_it: "The config file from steps 2–3."
+        command_anatomy:
+          - {token: "sqlsus", does: "the program"}
+          - {token: "myapp.conf", does: "the config file from steps 2-3"}
+        try_this: "sqlsus myapp.conf"
+        success_criteria: "sqlsus connects through the injection and drops you at its own sql> prompt."
+        expected_output: |
+          [+] Successfully identified injection point
+          sql>
+        alternatives:
+          - trigger: "injection point not identified"
+            cause: "url_start/url_end don't match the real vulnerable request, or the injection needs blind mode."
+            fix: "Re-check the config against sqlmap's confirmed payload; try blind=1 (boolean) or blind=2 (time-based) if the app never returns query output directly."
+            check: "—"
+      - step_id: g5
+        title: "Run a quick command without staying interactive"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-e '<command>'` runs one sqlsus command (or several, semicolon-separated) and exits — get_databases lists every database the current user can see."
+          why: "Useful for scripting, or just a fast first look, without sitting in the interactive shell."
+          where: "ACTION_OPTIONS, alongside the config file."
+        find_it: "Same config file as step 4. get_databases/get_tables/get_current_user are documented sqlsus commands — the full list is shown with 'help' inside the interactive shell."
+        command_anatomy:
+          - {token: "sqlsus myapp.conf", does: "same config"}
+          - {token: "-e 'get_databases'", does: "run this one command and exit"}
+        try_this: "sqlsus myapp.conf -e 'get_databases'"
+        success_criteria: "A list of database names prints, then sqlsus exits."
+        expected_output: |
+          [+] Successfully identified injection point
+          information_schema
+          webapp_db
+          mysql
+        alternatives:
+          - trigger: "empty result"
+            cause: "The current database user has very limited privileges."
+            fix: "Try get_current_user first to confirm what you're actually authenticated as through the injection."
+            check: "—"
+quick_build:
+  builder: sqlsus
+  title: "Quick run"
+  fields:
+    - field_id: conf_file
+      label: "Config file"
+      type: path
+      required: true
+      placeholder: "myapp.conf"
+    - field_id: genconf
+      label: "Generate a new config template instead (-g)"
+      type: bool
+    - field_id: execute
+      label: "Run one command and exit (-e)"
+      type: string
+      placeholder: "get_databases  (optional)"

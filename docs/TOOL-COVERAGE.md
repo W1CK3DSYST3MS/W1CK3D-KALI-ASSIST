@@ -2,7 +2,7 @@
 
 Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency lists (`apt-cache depends kali-tools-*`) on this machine (Kali 2026.3) — the authoritative catalog of what Kali ships, not a hand-typed guess.
 
-**31 / 406 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the 31 already done (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to). **`kali-tools-top10` is fully closed out.** `database` is at 6/10 (remaining: `jsql-injection`/`sqldict`/`sqlitebrowser` skipped as GUI-only or broken-legacy-Wine, not a fit for this app's format; `sqlsus` blocked on a missing Perl dep on this box).
+**32 / 406 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the 32 already done (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to). **`kali-tools-top10` is fully closed out.** `database` is at 7/10 — the only 3 remaining (`jsql-injection`/`sqldict`/`sqlitebrowser`) are GUI-only or a broken legacy-Wine tool, deliberately skipped as not a fit for this app's format.
 
 **Read before treating this as a literal to-do list:** this is the raw `apt-cache depends` output per category, which includes some incidental dependencies pulled in alongside real tools (utility packages, libraries, a few GUI-only apps that don't fit this app's command-builder/guided-walkthrough format). Each category needs a quick human skim to strip those before treating its list as committed scope — don't assume every row here becomes a module.
 
@@ -13,8 +13,8 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 | top10 | 10 | 10 |
 | information-gathering | 4 | 51 |
 | vulnerability | 3 | 37 |
-| web | 14 | 79 |
-| database | 6 | 10 |
+| web | 15 | 79 |
+| database | 7 | 10 |
 | passwords | 3 | 48 |
 | wireless | 2 | 4 |
 | 802-11 | 3 | 19 |
@@ -147,7 +147,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] voiphopper
 - [ ] yersinia
 
-## web  (14/79 done)
+## web  (15/79 done)
 
 - [ ] apache-users
 - [ ] apache2
@@ -203,7 +203,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] sqlitebrowser
 - [x] sqlmap
 - [x] sqlninja
-- [ ] sqlsus
+- [x] sqlsus
 - [ ] ssldump
 - [ ] sslh
 - [ ] sslscan
@@ -229,7 +229,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] xsser
 - [ ] zaproxy
 
-## database  (6/10 done)
+## database  (7/10 done)
 
 - [ ] jsql-injection
 - [x] mdbtools
@@ -239,7 +239,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] sqlitebrowser
 - [x] sqlmap
 - [x] sqlninja
-- [ ] sqlsus
+- [x] sqlsus
 - [x] tnscmd10g
 
 ## passwords  (3/48 done)
