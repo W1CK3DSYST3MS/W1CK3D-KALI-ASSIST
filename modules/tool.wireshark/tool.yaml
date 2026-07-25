@@ -329,7 +329,7 @@ flows:
       - step_id: ts7
         title: "Follow a TCP stream"
         slot_target: ACTION_OPTIONS
-        glossary_refs: [stream]
+        glossary_refs: [stream, tcp, packet]
         explanation:
           what: "`-q -z follow,tcp,ascii,<stream#>` reassembles one TCP conversation."
           why: "Read an HTTP exchange or similar in order; find stream numbers via tcp.stream."

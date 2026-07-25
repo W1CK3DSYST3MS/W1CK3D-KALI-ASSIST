@@ -20,7 +20,7 @@ flows:
       - step_id: g1
         title: "Get a legal target URL with a parameter"
         slot_target: null
-        glossary_refs: [sql_injection, injection_point, parameter]
+        glossary_refs: [sql_injection, injection_point, parameter, url]
         explanation:
           what: "sqlmap tests a URL that has a PARAMETER — the ?name=value part, e.g. http://site/page.php?id=1. The 'id' is the parameter it will try to inject."
           why: "SQL injection happens where user input reaches a database query. No parameter = nothing for sqlmap to test."

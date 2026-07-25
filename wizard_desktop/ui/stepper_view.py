@@ -149,6 +149,13 @@ class StepperView(QWidget):
         self._expected_cap = QLabel("EXPECTED — what a successful run looks like:")
         self._expected_cap.setObjectName("Caption")
         self._root.addWidget(self._expected_cap)
+        self._expected_hint = QLabel(
+            "Your own output will show different values — IPs, names, counts, timestamps. "
+            "That's normal. Match the SHAPE of it, not the exact text."
+        )
+        self._expected_hint.setObjectName("Muted")
+        self._expected_hint.setWordWrap(True)
+        self._root.addWidget(self._expected_hint)
         self._expected = QTextEdit()
         self._expected.setObjectName("Mono")
         self._expected.setReadOnly(True)
@@ -171,6 +178,9 @@ class StepperView(QWidget):
         self._root.addWidget(self._new_term)
 
         # Yes/No gate
+        gate_host_layout = QVBoxLayout()
+        gate_host_layout.setContentsMargins(0, 0, 0, 0)
+        gate_host_layout.setSpacing(4)
         gate = QHBoxLayout()
         self._gate_label = QLabel("Did it work?")
         self._gate_label.setObjectName("H2")
@@ -184,8 +194,17 @@ class StepperView(QWidget):
         self._yes.clicked.connect(self._answer_yes)
         gate.addWidget(self._no)
         gate.addWidget(self._yes)
+        gate_host_layout.addLayout(gate)
+        gate_hint = QLabel(
+            "YES = you got something in this shape, even if the details differ (or you only "
+            "got PART of it — that usually still counts as YES). NO = it errored, or nothing "
+            "printed at all — NO shows what different/partial output usually means."
+        )
+        gate_hint.setObjectName("Faint")
+        gate_hint.setWordWrap(True)
+        gate_host_layout.addWidget(gate_hint)
         self._gate_host = QWidget()
-        self._gate_host.setLayout(gate)
+        self._gate_host.setLayout(gate_host_layout)
         self._root.addWidget(self._gate_host)
 
         # Final panel (complete or exhausted)
@@ -251,6 +270,7 @@ class StepperView(QWidget):
 
         has_expected = bool(v.expected_output.strip())
         self._expected_cap.setVisible(has_expected)
+        self._expected_hint.setVisible(has_expected)
         self._expected.setVisible(has_expected)
         if has_expected:
             self._expected.setPlainText(v.expected_output)
@@ -295,8 +315,8 @@ class StepperView(QWidget):
 
     def _render_final(self) -> None:
         for w in (self._explain, self._find, self._alt, self._try, self._try_label,
-                  self._anatomy, self._success, self._expected_cap, self._expected,
-                  self._gate_host, self._new_term):
+                  self._anatomy, self._success, self._expected_cap, self._expected_hint,
+                  self._expected, self._gate_host, self._new_term):
             w.hide()
         self._final.show()
         if self._s.state is StepperState.COMPLETE:

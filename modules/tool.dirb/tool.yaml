@@ -19,7 +19,7 @@ flows:
       - step_id: g1
         title: "Confirm you have a web target"
         slot_target: null
-        glossary_refs: []
+        glossary_refs: [url, http_https]
         explanation:
           what: "dirb scans a WEB server, so you need a base URL like http://10.0.0.20/ that serves pages. It tries each word in a list as a path and reports what exists."
           why: "If the target isn't a web server (or wrong port), every request fails. Confirm it responds first."

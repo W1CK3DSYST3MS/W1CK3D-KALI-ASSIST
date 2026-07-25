@@ -79,7 +79,7 @@ flows:
       - step_id: g3
         title: "Do a basic port scan"
         slot_target: ACTION_OPTIONS
-        glossary_refs: [port_state, connect_scan]
+        glossary_refs: [port_state, connect_scan, tcp]
         explanation:
           what: "With no scan-type flag, nmap checks the 1000 most common TCP ports and prints a table of which are open, closed, or filtered."
           why: "Open ports are the doors into a machine — this is the core of what nmap is for."
@@ -319,7 +319,7 @@ flows:
       - step_id: u1
         title: "Scan top UDP ports"
         slot_target: ACTION_OPTIONS
-        glossary_refs: [udp_scan, port_state]
+        glossary_refs: [udp_scan, port_state, udp, handshake]
         explanation:
           what: "`-sU` scans UDP ports; `--top-ports 20` limits it to the 20 most common so it finishes this decade."
           why: "TCP scans miss UDP services like DNS (53), SNMP (161) and DHCP — sometimes the interesting ones."

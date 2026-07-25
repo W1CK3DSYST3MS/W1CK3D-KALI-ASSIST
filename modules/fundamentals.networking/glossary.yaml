@@ -19,3 +19,19 @@ terms:
     definition: "A subnet written as address/prefix, e.g. 192.168.1.0/24 (256 addresses)."
   - term: loopback
     definition: "The internal lo interface (127.0.0.1) — the machine talking to itself."
+  - term: ip_protocol
+    definition: "IP (Internet Protocol) — the addressing system every device on a network uses to send/receive data. Not to be confused with 'an IP' (see ip_address), which is one specific address in that system."
+  - term: tcp
+    definition: "TCP (Transmission Control Protocol) — a connection that confirms delivery (like a phone call: both sides check in). Reliable but has a bit more setup overhead than UDP."
+  - term: udp
+    definition: "UDP (User Datagram Protocol) — sends data without confirming it arrived (like a postcard). Faster, no handshake, but nothing resends a dropped packet automatically."
+  - term: url
+    definition: "URL (Uniform Resource Locator) — a full web address, e.g. https://example.com/page — the scheme (https://), the host (example.com), and a path (/page)."
+  - term: http_https
+    definition: "HTTP is the protocol web browsers/servers speak; HTTPS is the same thing encrypted (the 's' = secure). Port 80 for HTTP, 443 for HTTPS by default."
+  - term: cli
+    definition: "CLI (Command-Line Interface) — controlling a program by typing text commands, as opposed to a GUI (Graphical User Interface, clicking buttons/menus). Everything in this app is CLI."
+  - term: handshake
+    definition: "The back-and-forth a connection does to set itself up before real data flows (e.g. TCP's SYN/SYN-ACK/ACK) — this is the 'connection overhead' TCP has and UDP skips."
+  - term: packet
+    definition: "One unit of data sent over a network — a message has a header (addressing info) and a payload (the actual content), like an envelope and a letter."

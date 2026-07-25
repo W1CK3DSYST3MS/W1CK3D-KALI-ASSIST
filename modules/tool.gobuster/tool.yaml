@@ -20,7 +20,7 @@ flows:
       - step_id: g1
         title: "Confirm you have a web target"
         slot_target: null
-        glossary_refs: [mode]
+        glossary_refs: [mode, url, http_https]
         explanation:
           what: "gobuster's 'dir' mode guesses hidden paths on a WEB server, so you first need a URL like http://10.0.0.20 or https://site.com that actually serves web pages."
           why: "If the target isn't a web server (or you have the wrong port), every guess fails — confirm it responds first."

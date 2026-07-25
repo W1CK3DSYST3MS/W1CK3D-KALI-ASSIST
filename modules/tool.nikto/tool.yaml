@@ -20,7 +20,7 @@ flows:
       - step_id: g1
         title: "Confirm you have a web server to scan"
         slot_target: null
-        glossary_refs: [web_vuln_scan]
+        glossary_refs: [web_vuln_scan, url, http_https]
         explanation:
           what: "nikto checks a WEB server for thousands of known-bad files, outdated software and misconfigurations. You need a URL/host that serves web pages."
           why: "Pointing nikto at a non-web port just wastes time — confirm there's a web service first."
