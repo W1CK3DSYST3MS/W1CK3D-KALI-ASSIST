@@ -198,6 +198,97 @@ flows:
             cause: "Tor service isn't running."
             fix: "`sudo systemctl start tor`; confirm it's listening on 9050."
             check: "Tor is up, then retry."
+  - flow_id: next_steps
+    title: "Now what — digging deeper (reference)"
+    goal: "Turn a list of found accounts into an actual investigation, not just a list of links."
+    command_builder_id: sherlock
+    slots: [PROGRAM, POSITIONAL_ARGS]
+    steps:
+      - step_id: sk4
+        title: "Archive what you found — pages change and disappear"
+        slot_target: null
+        explanation:
+          what: "`wget --page-requisites --convert-links` saves a local, browsable copy of a found profile page, not just the URL — the URL alone is worthless once the account is deleted or edited."
+          why: "For any real investigation, evidence you can't independently prove later isn't evidence — save the page as you found it."
+          where: "Not a Sherlock command — run this against a URL from your results (step 2/3)."
+        find_it: "A profile URL from your Sherlock results."
+        command_anatomy:
+          - {token: "wget", does: "the download tool"}
+          - {token: "--page-requisites --convert-links", does: "also save images/CSS and rewrite links to work offline"}
+          - {token: "https://github.com/johndoe", does: "the found profile URL — from your results"}
+        try_this: "wget --page-requisites --convert-links https://github.com/johndoe"
+        success_criteria: "A local copy of the page (and its assets) is saved in the current directory."
+        expected_output: |
+          Saving to: 'github.com/johndoe.html'
+          100%[===================>] 45,231  --.-KB/s
+        alternatives:
+          - trigger: "page requires login to view fully"
+            cause: "Some platforms only show a preview to logged-out/unauthenticated requests."
+            fix: "A screenshot of what you can actually see is still valid evidence — note in your record what was/wasn't accessible."
+            check: "—"
+      - step_id: sk5
+        title: "If a profile links a personal site or blog, crawl it"
+        slot_target: null
+        explanation:
+          what: "Many profiles link out to a personal website, portfolio, or blog — run the photon tool against it to harvest emails, other linked profiles, and internal pages you'd otherwise miss browsing by hand."
+          why: "A personal site is often the richest single source in an investigation — it's the one place someone controls entirely themselves."
+          where: "Not a Sherlock command — see the photon tool's own guided flow for the full walkthrough."
+        find_it: "A personal site URL found in one of the profiles from step 2/3."
+        command_anatomy:
+          - {token: "photon", does: "the crawler (see the photon tool)"}
+          - {token: "-u https://johndoe.dev", does: "the personal site found via a profile"}
+        try_this: "photon -u https://johndoe.dev -o ~/photon_johndoe"
+        success_criteria: "photon finds internal pages, emails, and any files the site links to."
+        expected_output: |
+          [+] Crawling complete
+          [+] Results saved in ~/photon_johndoe
+        alternatives:
+          - trigger: "no useful results"
+            cause: "A very small/static site with nothing to crawl beyond the homepage."
+            fix: "Check the profile bios/pinned posts by hand instead — not everything shows up in an automated crawl."
+            check: "—"
+      - step_id: sk6
+        title: "Check a downloaded profile picture for embedded metadata"
+        slot_target: null
+        explanation:
+          what: "Run the exiftool tool against any profile picture you downloaded (not screenshotted) — occasionally a GPS location, device model, or original filename survives, especially on platforms that don't scrub it."
+          why: "Most platforms strip this on upload, so don't expect a hit every time — but when it's there, it's some of the highest-value data in the whole investigation."
+          where: "Not a Sherlock command — see the exiftool tool's own guided flow."
+        find_it: "A directly downloaded (not screenshotted) image file from a found profile."
+        command_anatomy:
+          - {token: "exiftool", does: "the metadata reader (see the exiftool tool)"}
+          - {token: "profile_pic.jpg", does: "the downloaded image"}
+        try_this: "exiftool profile_pic.jpg"
+        success_criteria: "Any surviving metadata (device, timestamp, occasionally GPS) prints."
+        expected_output: |
+          Camera Model Name              : iPhone 13
+          Create Date                    : 2026:03:14 15:09:22
+        alternatives:
+          - trigger: "almost nothing prints"
+            cause: "Expected — most social platforms strip this on upload."
+            fix: "Not every lead pays off; move on to correlating what you already have."
+            check: "—"
+      - step_id: sk7
+        title: "Have a real name or company angle too? Pivot to theHarvester"
+        slot_target: null
+        explanation:
+          what: "If the investigation also involves a company (an employer found in a bio, for instance), theHarvester searches for that company's emails, subdomains, and other employee names — a different, complementary angle from Sherlock's username-first approach."
+          why: "Sherlock starts from a handle; theHarvester starts from an organization — combining both gives a much fuller picture than either alone."
+          where: "Not a Sherlock command — see the theHarvester tool's own guided flow."
+        find_it: "A company/employer name or domain mentioned in a found profile's bio."
+        command_anatomy:
+          - {token: "theHarvester", does: "the OSINT tool (see the theHarvester tool)"}
+          - {token: "-d company.com -b crtsh", does: "search this company's domain"}
+        try_this: "theHarvester -d company.com -b crtsh"
+        success_criteria: "Additional emails/subdomains/hosts tied to the same organization turn up."
+        expected_output: |
+          [*] Emails found: 2
+          jdoe@company.com
+        alternatives:
+          - trigger: "no company/domain angle exists"
+            cause: "The investigation is purely about one individual with no organizational tie."
+            fix: "That's fine — not every investigation needs every tool. Archiving (sk4) and metadata (sk6) still apply."
+            check: "—"
 
 quick_build:
   builder: sherlock

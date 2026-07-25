@@ -1,0 +1,17 @@
+module_id: tool.exiftool
+name: "exiftool — file metadata reader (GPS, device, author info)"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: exiftool
+  flows: [guided]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against installed exiftool man page + --help (Kali 2026.3, ExifTool 13.55, package libimage-exiftool-perl)"
+license: "MIT (this repo); exiftool is GPL/Artistic (referenced, not bundled)"
+checksum: ""

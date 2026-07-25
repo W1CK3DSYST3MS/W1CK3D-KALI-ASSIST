@@ -1,0 +1,141 @@
+tool_id: exiftool
+display_name: "ExifTool"
+binary_candidates: [exiftool]
+categories: [osint, forensics]
+os_profile: kali
+one_liner: "Reads embedded metadata out of photos and documents — GPS location, device model, timestamps, author info."
+authorization_gate: true
+authorization_text: >
+  ExifTool reads real metadata out of real files — if those files came from a target
+  (downloaded profile pictures, documents), any embedded GPS coordinates or personal info you
+  extract is sensitive data about a real person or organization. Only analyze files you own or
+  are explicitly authorized to investigate, and handle anything you extract accordingly.
+  Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first read (START HERE)"
+    goal: "From a downloaded file to whatever metadata it's still carrying — GPS, device, timestamps."
+    command_builder_id: exiftool
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: g1
+        title: "Read everything a file is carrying"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [exif]
+        explanation:
+          what: "`exiftool <file>` with no options prints every piece of metadata it can find — camera/phone model, timestamps, software used, GPS if present, author/document properties for office files."
+          why: "A quick full read tells you whether there's anything worth digging into further before you narrow to specific tags."
+          where: "POSITIONAL_ARGS: the file is the only argument."
+        find_it: "Any file you're authorized to inspect — a downloaded profile picture, a document, a video."
+        command_anatomy:
+          - {token: "exiftool", does: "the program"}
+          - {token: "photo.jpg", does: "the file — you type this in"}
+        try_this: "exiftool photo.jpg"
+        success_criteria: "A list of tag: value pairs prints — even a heavily-scrubbed file usually shows at least file type and dimensions."
+        expected_output: |
+          File Name                      : photo.jpg
+          Camera Model Name              : iPhone 13
+          Create Date                    : 2026:03:14 15:09:22
+          GPS Latitude                   : 40 deg 41' 21.12" N
+          GPS Longitude                  : 74 deg 2' 40.20" W
+        alternatives:
+          - trigger: "almost nothing prints"
+            cause: "Most social platforms strip EXIF/GPS data on upload — a downloaded/screenshotted image from Instagram, Twitter, etc. is very likely already scrubbed."
+            fix: "This is expected for platform-hosted images; original files (emailed, some cloud-synced originals) are far more likely to still carry metadata."
+            check: "—"
+      - step_id: g2
+        title: "Check specifically for GPS coordinates"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-gps:all` extracts only the GPS group of tags; `-c '%.6f'` formats coordinates as plain decimal degrees instead of degrees/minutes/seconds — directly pastable into Google Maps or similar."
+          why: "GPS is the single highest-value tag for OSINT — this pulls just that, in a form you can act on immediately."
+          where: "ACTION_OPTIONS; -c takes a format string."
+        find_it: "Same file as step 1."
+        command_anatomy:
+          - {token: "exiftool -gps:all", does: "only the GPS group of tags"}
+          - {token: "-c '%.6f'", does: "decimal degrees format instead of DMS"}
+          - {token: "photo.jpg", does: "the file"}
+        try_this: "exiftool -gps:all -c '%.6f' photo.jpg"
+        success_criteria: "GPS Latitude/Longitude print as plain decimal numbers, if the file has them."
+        expected_output: |
+          GPS Latitude                   : 40.689200
+          GPS Longitude                  : -74.044500
+          GPS Position                   : 40.689200 -74.044500
+        alternatives:
+          - trigger: "no GPS tags at all"
+            cause: "The file never had location data, or it was stripped before you got it."
+            fix: "Check Create Date/Software tags instead — device and timing info is often still present even when GPS isn't."
+            check: "—"
+      - step_id: g3
+        title: "Process a whole folder at once"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-r` recurses into subdirectories; `-common` (a shorthand tag list) shows just the tags that matter most (date, camera, GPS, dimensions) instead of everything, across every file in the folder."
+          why: "When you've downloaded a batch of images during an investigation, checking them one at a time doesn't scale — this covers the whole folder in one pass."
+          where: "ACTION_OPTIONS; the folder is still the positional argument."
+        find_it: "A folder of downloaded files instead of a single filename."
+        command_anatomy:
+          - {token: "exiftool -r", does: "recurse into subfolders too"}
+          - {token: "-common", does: "just the commonly useful tags, not everything"}
+          - {token: "./downloaded_photos/", does: "the folder — you type this in"}
+        try_this: "exiftool -r -common ./downloaded_photos/"
+        success_criteria: "A summary block prints per file, showing the common tags for each."
+        expected_output: |
+          ======== ./downloaded_photos/img1.jpg
+          Create Date                    : 2026:01:10 09:15:00
+          GPS Position                   : 40.689200 -74.044500
+          ======== ./downloaded_photos/img2.jpg
+          Create Date                    : 2026:02:03 18:40:12
+              2 image files read
+        alternatives:
+          - trigger: "some files are skipped"
+            cause: "ExifTool only processes recognized file types by default."
+            fix: "Add -ext '*' to force processing regardless of extension, if you need every file checked."
+            check: "—"
+      - step_id: g4
+        title: "Export everything as JSON for correlation"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-json` outputs structured JSON instead of plain text — one object per file, every tag as a field — easy to load into a script, spreadsheet, or another tool to cross-reference dates/locations across many files at once."
+          why: "Correlating findings (e.g. 'which of these 40 photos share a GPS location or were taken the same week') is much easier with structured data than by eye."
+          where: "ACTION_OPTIONS, combine with -r for a whole folder."
+        find_it: "Same folder as step 3."
+        command_anatomy:
+          - {token: "exiftool -r -json", does: "recurse, output as JSON"}
+          - {token: "./downloaded_photos/", does: "the folder"}
+          - {token: "> metadata.json", does: "save the JSON to this file"}
+        try_this: "exiftool -r -json ./downloaded_photos/ > metadata.json"
+        success_criteria: "metadata.json exists and contains one JSON object per processed file."
+        expected_output: |
+          [{"SourceFile":"./downloaded_photos/img1.jpg","GPSLatitude":40.6892,...}]
+        alternatives:
+          - trigger: "empty array"
+            cause: "No matching files in the folder, or wrong path."
+            fix: "Confirm the folder path and that it actually contains image/document files."
+            check: "—"
+quick_build:
+  builder: exiftool
+  title: "Quick read"
+  fields:
+    - field_id: target
+      label: "File or folder"
+      type: path
+      required: true
+      placeholder: "photo.jpg"
+    - field_id: recurse
+      label: "Recurse into subfolders (-r)"
+      type: bool
+    - field_id: gps_only
+      label: "GPS tags only (-gps:all)"
+      type: bool
+    - field_id: common_only
+      label: "Common tags only (-common)"
+      type: bool
+      default: true
+    - field_id: json
+      label: "Output as JSON (-json)"
+      type: bool
+    - field_id: output
+      label: "Save output to file"
+      type: path
+      placeholder: "metadata.json  (optional, use with > redirection)"

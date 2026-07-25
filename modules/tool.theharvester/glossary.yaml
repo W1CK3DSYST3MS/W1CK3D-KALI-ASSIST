@@ -1,0 +1,7 @@
+terms:
+  - term: osint_source
+    definition: "theHarvester doesn't scan the target directly for most sources — it queries a third-party data source (search engines, certificate logs, breach databases) that already indexed public info about the target."
+  - term: crtsh
+    definition: "crt.sh — a free, public search engine over Certificate Transparency logs. Every HTTPS certificate ever issued gets logged publicly, which leaks subdomain names (a cert for mail.corp.com proves mail.corp.com exists) — and needs no API key."
+  - term: dns_takeover
+    definition: "A subdomain still pointing (via CNAME) at a cloud service you no longer own (a deleted S3 bucket, an expired Heroku app) — someone else can claim that service and serve their own content under your domain."

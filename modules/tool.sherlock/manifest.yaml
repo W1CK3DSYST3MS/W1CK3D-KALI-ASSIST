@@ -8,7 +8,7 @@ requires:
   modules: []
 provides:
   tool: sherlock
-  flows: [guided, single_search, output, anonymize]
+  flows: [guided, single_search, output, anonymize, next_steps]
 content:
   tool: tool.yaml
 source: "authored; verified against sherlock-project usage/options"

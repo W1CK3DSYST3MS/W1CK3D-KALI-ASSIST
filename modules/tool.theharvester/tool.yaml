@@ -1,0 +1,169 @@
+tool_id: theharvester
+display_name: "theHarvester"
+binary_candidates: [theHarvester, theharvester]
+categories: [osint, reconnaissance]
+os_profile: kali
+one_liner: "Gathers emails, subdomains, hosts, and employee names for a company or domain from public sources."
+authorization_gate: true
+authorization_text: >
+  theHarvester queries public sources (certificate logs, search engines, and — with API keys
+  configured — services like Shodan) about a company/domain, and its -c/-t options actively
+  probe DNS and check for subdomain takeovers. Respect each source's own terms of service, and
+  only investigate companies/domains you own or are explicitly authorized to research.
+  Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first harvest (START HERE)"
+    goal: "From a company/domain to its emails, subdomains, and hosts — then what to do with them."
+    command_builder_id: theharvester
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm theHarvester and run a first, no-API-key search"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [osint_source, crtsh]
+        explanation:
+          what: "`-d <domain> -b crtsh` searches Certificate Transparency logs for the domain — this source needs no API key, unlike most of theHarvester's other 40+ sources, so it's the best first search."
+          why: "Confirms the tool works and gives real subdomain data immediately, before you worry about configuring any API keys."
+          where: "ACTION_OPTIONS; -d is the target, -b picks the source."
+        find_it: "A company/domain you're authorized to research. crtsh needs internet but no account/key."
+        command_anatomy:
+          - {token: "theHarvester", does: "the program"}
+          - {token: "-d example-corp.com", does: "the target domain — you type this in"}
+          - {token: "-b crtsh", does: "search this source (Certificate Transparency logs, no key needed)"}
+        try_this: "theHarvester -d example-corp.com -b crtsh"
+        success_criteria: "A list of subdomains/hosts prints, found via certificate records."
+        expected_output: |
+          [*] Target: example-corp.com
+          [*] Searching crtsh.
+          [*] Hosts found: 3
+          ---------------------
+          mail.example-corp.com
+          vpn.example-corp.com
+          www.example-corp.com
+        alternatives:
+          - trigger: "nothing found"
+            cause: "The domain has few/no publicly logged certificates, or a typo in the domain."
+            fix: "Double-check the domain spelling; try a source that doesn't rely on certificates, like -b duckduckgo."
+            check: "—"
+      - step_id: g2
+        title: "Broaden to more sources at once"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-b` accepts a comma-separated list — combining sources finds more than any single one, since each indexes different public data."
+          why: "Emails mostly come from search-engine/breach sources (not crtsh); combining sources covers both subdomains AND emails/names in one run."
+          where: "ACTION_OPTIONS; same -d as step 1."
+        find_it: "duckduckgo and urlscan need no API key either — good next sources to add without any setup."
+        command_anatomy:
+          - {token: "theHarvester -d example-corp.com", does: "same target"}
+          - {token: "-b crtsh,duckduckgo,urlscan", does: "search all three sources in one run"}
+        try_this: "theHarvester -d example-corp.com -b crtsh,duckduckgo,urlscan"
+        success_criteria: "Results now may include emails and employee names alongside hosts, depending what each source indexed."
+        expected_output: |
+          [*] Emails found: 2
+          ---------------------
+          info@example-corp.com
+          jdoe@example-corp.com
+          [*] Hosts found: 4
+        alternatives:
+          - trigger: "a source errors out (API key missing)"
+            cause: "Most of theHarvester's 40+ sources (Shodan, Censys, Hunter...) need a key configured in /etc/theHarvester/api-keys.yaml."
+            fix: "Stick to key-free sources (crtsh/duckduckgo/urlscan/rapiddns/hackertarget) unless you've set up keys for the others."
+            check: "—"
+      - step_id: g3
+        title: "Confirm which discovered subdomains actually resolve"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-c` (DNS brute-force) and `-r` (DNS resolve) actively query DNS for the discovered names, confirming which ones are live right now — a certificate log entry can be years old and long gone."
+          why: "Turns a list of historically-seen names into a list of hosts that actually exist today, worth investigating further."
+          where: "ACTION_OPTIONS, alongside -d/-b."
+        find_it: "Same domain and sources as before."
+        command_anatomy:
+          - {token: "theHarvester -d example-corp.com -b crtsh", does: "same search"}
+          - {token: "-c", does: "DNS brute-force common subdomain names too"}
+          - {token: "-r", does: "resolve every discovered name via DNS"}
+        try_this: "theHarvester -d example-corp.com -b crtsh -c -r"
+        success_criteria: "Discovered hosts are now shown with their resolved IP addresses (or dropped if they no longer resolve)."
+        expected_output: |
+          [*] Resolving hosts
+          mail.example-corp.com:93.184.216.34
+          www.example-corp.com:93.184.216.35
+        alternatives:
+          - trigger: "takes a long time"
+            cause: "DNS brute force tries a whole built-in wordlist against the domain."
+            fix: "Let it finish, or skip -c and just resolve the already-discovered names with -r alone."
+            check: "—"
+      - step_id: g4
+        title: "Save the results"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-f <name>` writes the full results to both <name>.xml and <name>.json — the terminal view is a summary, these files have everything."
+          why: "You'll want this saved to feed into the next tools (see the final step) or a report, not just scrolled past in the terminal."
+          where: "OUTPUT_OPTIONS; -f names the output (no extension — both .xml and .json are written)."
+        find_it: "Any filename in a writable directory."
+        command_anatomy:
+          - {token: "theHarvester -d example-corp.com -b crtsh", does: "same search"}
+          - {token: "-f example-corp-results", does: "write example-corp-results.xml and .json — you choose the name"}
+        try_this: "theHarvester -d example-corp.com -b crtsh -f example-corp-results"
+        success_criteria: "example-corp-results.xml and example-corp-results.json both exist."
+        expected_output: |
+          [*] Saving files...
+        alternatives:
+          - trigger: "Permission denied"
+            cause: "Unwritable location."
+            fix: "Save under your home directory."
+            check: "Both files are created."
+      - step_id: g5
+        title: "Now what — pivoting on what you found"
+        slot_target: null
+        glossary_refs: [dns_takeover]
+        explanation:
+          what: "A list of subdomains and emails isn't the end — each one is a lead into a different tool: subdomains feed into nmap/gobuster (scan/enumerate each host); emails feed into breach-check services and, if you have a personal name, sherlock (try it as a username guess); --take-over flags subdomains that look abandoned and takeover-able."
+          why: "This is where reconnaissance turns into an actual assessment — raw OSINT data has to be acted on to be worth anything."
+          where: "Not a single command — this step is guidance for what comes after."
+        find_it: "Your saved results file from step 4 has the full list to work through."
+        command_anatomy:
+          - {token: "nmap -sV -iL subdomains.txt", does: "scan every discovered host (see the nmap tool)"}
+          - {token: "theHarvester -d example-corp.com -t", does: "add --take-over to flag abandoned/claimable subdomains"}
+        try_this: "theHarvester -d example-corp.com -b crtsh -t"
+        success_criteria: "You have a concrete next action for each type of finding: hosts to scan, emails to cross-reference, takeover candidates to report."
+        expected_output: |
+          [*] Checking for subdomain takeovers
+          [!] Possible takeover: old-app.example-corp.com (CNAME to unclaimed Heroku app)
+        alternatives:
+          - trigger: "not sure what to actually scan next"
+            cause: "A long list with no obvious priority."
+            fix: "Start with anything that resolved in step 3 (still live) and anything --take-over flagged (actionable finding on its own)."
+            check: "—"
+quick_build:
+  builder: theharvester
+  title: "Quick harvest"
+  fields:
+    - field_id: domain
+      label: "Domain/company (-d)"
+      type: string
+      required: true
+      placeholder: "example-corp.com"
+    - field_id: sources
+      label: "Sources (-b)"
+      type: string
+      default: "crtsh,duckduckgo,urlscan"
+      placeholder: "crtsh,duckduckgo,urlscan"
+    - field_id: limit
+      label: "Result limit (-l)"
+      type: int
+      placeholder: "500"
+    - field_id: dns_brute
+      label: "DNS brute-force (-c)"
+      type: bool
+    - field_id: dns_resolve
+      label: "Resolve discovered hosts (-r)"
+      type: bool
+      default: true
+    - field_id: take_over
+      label: "Check for subdomain takeovers (-t)"
+      type: bool
+    - field_id: filename
+      label: "Save results (-f)"
+      type: path
+      placeholder: "results  (optional, writes .xml + .json)"

@@ -1,0 +1,5 @@
+terms:
+  - term: exif
+    definition: "Exchangeable Image File format — metadata embedded in a photo by the camera/phone that took it: timestamp, device model, and often GPS coordinates."
+  - term: metadata_scrubbing
+    definition: "Social media platforms usually strip GPS/EXIF data on upload — so a screenshot or a direct download from most platforms won't have it. Original, unprocessed files (emailed photos, some cloud-synced originals) are far more likely to still carry it."

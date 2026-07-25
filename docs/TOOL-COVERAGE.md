@@ -2,7 +2,7 @@
 
 Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency lists (`apt-cache depends kali-tools-*`) on this machine (Kali 2026.3) — the authoritative catalog of what Kali ships, not a hand-typed guess.
 
-**32 / 406 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the 32 already done (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to). **`kali-tools-top10` is fully closed out.** `database` is at 7/10 — the only 3 remaining (`jsql-injection`/`sqldict`/`sqlitebrowser`) are GUI-only or a broken legacy-Wine tool, deliberately skipped as not a fit for this app's format.
+**34 / 407 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the 34 already done (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to). **`kali-tools-top10` is fully closed out.** `database` is at 7/10 — the only 3 remaining (`jsql-injection`/`sqldict`/`sqlitebrowser`) are GUI-only or a broken legacy-Wine tool, deliberately skipped as not a fit for this app's format.
 
 **Read before treating this as a literal to-do list:** this is the raw `apt-cache depends` output per category, which includes some incidental dependencies pulled in alongside real tools (utility packages, libraries, a few GUI-only apps that don't fit this app's command-builder/guided-walkthrough format). Each category needs a quick human skim to strip those before treating its list as committed scope — don't assume every row here becomes a module.
 
@@ -11,7 +11,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 | Category | Done | Total |
 |---|---|---|
 | top10 | 10 | 10 |
-| information-gathering | 4 | 51 |
+| information-gathering | 5 | 51 |
 | vulnerability | 3 | 37 |
 | web | 15 | 79 |
 | database | 7 | 10 |
@@ -26,7 +26,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 | sniffing-spoofing | 3 | 24 |
 | post-exploitation | 0 | 22 |
 | reverse-engineering | 1 | 14 |
-| forensics | 2 | 99 |
+| forensics | 3 | 100 |
 | crypto-stego | 0 | 6 |
 | fuzzing | 0 | 4 |
 | social-engineering | 0 | 5 |
@@ -53,7 +53,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [x] sqlmap
 - [x] wireshark — implemented as tshark (CLI)
 
-## information-gathering  (4/51 done)
+## information-gathering  (5/51 done)
 
 - [ ] 0trace
 - [ ] braa
@@ -99,7 +99,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] sslyze
 - [ ] swaks
 - [ ] thc-ipv6
-- [ ] theharvester
+- [x] theharvester
 - [ ] tlssled
 - [ ] twofi
 - [ ] unicornscan
@@ -459,7 +459,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] rizin-cutter
 - [ ] rz-ghidra
 
-## forensics  (2/99 done)
+## forensics  (3/100 done)
 
 - [ ] 7zip
 - [ ] afflib-tools
@@ -479,6 +479,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] edb-debugger
 - [ ] ewf-tools
 - [ ] exifprobe
+- [x] exiftool
 - [ ] exiv2
 - [ ] ext3grep
 - [ ] ext4magic
