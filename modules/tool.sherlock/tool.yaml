@@ -12,7 +12,10 @@ authorization_text: >
 flows:
   - flow_id: guided
     title: "Guided first search (START HERE)"
-    goal: "Find where a username exists online, then save just the hits — inputs explained."
+    goal: >
+      Find where a username exists online, then save just the hits — inputs explained. Once
+      you have results, pick "Now what — digging deeper" from this dropdown for what an
+      actual investigation does next.
     command_builder_id: sherlock
     slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS, POSITIONAL_ARGS]
     steps:
@@ -108,7 +111,10 @@ flows:
           - {token: "--site GitHub --site Reddit", does: "only check these two platforms"}
           - {token: "johndoe janedoe", does: "search BOTH usernames"}
         try_this: "sherlock --site GitHub --site Reddit johndoe janedoe"
-        success_criteria: "Results print for each username, limited to the named sites."
+        success_criteria: >
+          Results print for each username, limited to the named sites. This is the end of
+          the guided walkthrough — for what to actually DO with what you found, pick "Now
+          what — digging deeper" from the flow dropdown at the top of this page.
         expected_output: |
           [*] Checking username johndoe on:
           [+] GitHub: https://github.com/johndoe
