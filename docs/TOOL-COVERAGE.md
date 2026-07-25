@@ -2,7 +2,7 @@
 
 Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency lists (`apt-cache depends kali-tools-*`) on this machine (Kali 2026.3) — the authoritative catalog of what Kali ships, not a hand-typed guess.
 
-**24 / 406 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the existing 24 (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to).
+**26 / 406 done.** Goal: a guided walkthrough + quick-build form for every tool in Kali's catalog, same depth as the 26 already done (see `docs/VERIFICATION-LOG.md` for the doc-verification standard each one is held to). **`kali-tools-top10` is fully closed out.**
 
 **Read before treating this as a literal to-do list:** this is the raw `apt-cache depends` output per category, which includes some incidental dependencies pulled in alongside real tools (utility packages, libraries, a few GUI-only apps that don't fit this app's command-builder/guided-walkthrough format). Each category needs a quick human skim to strip those before treating its list as committed scope — don't assume every row here becomes a module.
 
@@ -10,7 +10,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 
 | Category | Done | Total |
 |---|---|---|
-| top10 | 8 | 10 |
+| top10 | 10 | 10 |
 | information-gathering | 4 | 51 |
 | vulnerability | 3 | 37 |
 | web | 10 | 79 |
@@ -23,7 +23,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 | sdr | 1 | 12 |
 | voip | 2 | 18 |
 | exploitation | 2 | 9 |
-| sniffing-spoofing | 2 | 24 |
+| sniffing-spoofing | 3 | 24 |
 | post-exploitation | 0 | 22 |
 | reverse-engineering | 1 | 14 |
 | forensics | 1 | 99 |
@@ -40,16 +40,16 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 | reporting | 0 | 8 |
 | windows-resources | 1 | 16 |
 
-## top10  (8/10 done)
+## top10  (10/10 done)
 
 - [x] aircrack-ng
 - [x] burpsuite
 - [x] hydra
 - [x] john
 - [x] metasploit-framework — implemented as metasploit
-- [ ] netexec
+- [x] netexec
 - [x] nmap
-- [ ] responder
+- [x] responder
 - [x] sqlmap
 - [x] wireshark — implemented as tshark (CLI)
 
@@ -390,7 +390,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [x] sqlmap
 - [ ] termineter
 
-## sniffing-spoofing  (2/24 done)
+## sniffing-spoofing  (3/24 done)
 
 - [ ] above
 - [x] bettercap
@@ -408,7 +408,7 @@ Auto-generated 2026-07-25 from Kali's own `kali-tools-*` metapackage dependency 
 - [ ] mitmproxy
 - [ ] netsniff-ng
 - [ ] rebind
-- [ ] responder
+- [x] responder
 - [ ] sniffjoke
 - [ ] sslsniff
 - [ ] sslsplit
