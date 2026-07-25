@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against OWASP DirBuster usage (GUI + -H headless -u/-l/-e/-r)"
-license: "project-proprietary lesson text; DirBuster is LGPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); DirBuster is LGPL (referenced, not bundled)"
 checksum: ""

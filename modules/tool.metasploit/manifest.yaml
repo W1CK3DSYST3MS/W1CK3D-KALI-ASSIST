@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against msfconsole/msfvenom help + Rapid7/Offensive Security docs"
-license: "project-proprietary lesson text; Metasploit Framework is BSD (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); Metasploit Framework is BSD (referenced, not bundled)"
 checksum: ""

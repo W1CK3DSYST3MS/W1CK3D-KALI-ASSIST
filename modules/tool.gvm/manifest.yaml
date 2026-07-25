@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against gvm-start/gvm-setup/gvm-check-setup/greenbone-feed-sync"
-license: "project-proprietary lesson text; GVM is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); GVM is GPL (referenced, not bundled)"
 checksum: ""

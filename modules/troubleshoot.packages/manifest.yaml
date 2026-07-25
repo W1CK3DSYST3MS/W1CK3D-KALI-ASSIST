@@ -13,5 +13,5 @@ content:
   troubleshooter: troubleshooter.yaml
   glossary: glossary.yaml
 source: "authored; verified against apt/dpkg/gpg/update-ca-certificates man pages + Kali/Debian docs"
-license: "project-proprietary"
+license: "MIT (this repo)"
 checksum: ""

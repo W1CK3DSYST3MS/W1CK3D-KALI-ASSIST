@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against gobuster help (v3) / OJ gobuster docs"
-license: "project-proprietary lesson text; gobuster is Apache-2.0 (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); gobuster is Apache-2.0 (referenced, not bundled)"
 checksum: ""

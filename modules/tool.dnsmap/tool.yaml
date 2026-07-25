@@ -46,11 +46,14 @@ flows:
           what: "`dnsmap <domain>` uses the built-in wordlist and prints each subdomain that resolves, with its IP address."
           why: "A quick first pass with zero setup — good for confirming the tool works and catching obvious subdomains."
           where: "The domain is the first (and here only) argument."
-        find_it: "Use your authorized domain. This needs working DNS/internet."
+        find_it: >
+          Use your authorized domain — replace <target-domain> below with it (e.g.
+          example.com is just an illustration here, not a real target). This needs working
+          DNS/internet.
         command_anatomy:
           - {token: "dnsmap", does: "the program"}
-          - {token: "example.com", does: "the domain to enumerate (must be first)"}
-        try_this: "dnsmap example.com"
+          - {token: "<target-domain>", does: "the domain to enumerate (must be first) — you type this in"}
+        try_this: "dnsmap <target-domain>"
         success_criteria: "Discovered subdomains print with their IP addresses."
         expected_output: |
           dnsmap 0.36 - DNS Network Mapper
@@ -80,9 +83,9 @@ flows:
           (`sudo apt install seclists`)
           /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt.
         command_anatomy:
-          - {token: "dnsmap example.com", does: "the domain scan"}
+          - {token: "dnsmap <target-domain>", does: "the domain scan — replace <target-domain> with your authorized domain"}
           - {token: "-w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt", does: "use this larger subdomain wordlist"}
-        try_this: "dnsmap example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+        try_this: "dnsmap <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
         success_criteria: "More subdomains are found than the built-in list returned."
         expected_output: |
           [+] searching (sub)domains for example.com using /usr/share/seclists/...
@@ -104,9 +107,9 @@ flows:
           where: "OUTPUT_OPTIONS; -r/-c name the output."
         find_it: "Choose a writable path (your home)."
         command_anatomy:
-          - {token: "dnsmap example.com -w ...", does: "the wordlist scan"}
+          - {token: "dnsmap <target-domain> -w ...", does: "the wordlist scan — replace <target-domain> with your authorized domain"}
           - {token: "-r ~/dnsmap-example.txt", does: "save the results to this text file"}
-        try_this: "dnsmap example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r ~/dnsmap-example.txt"
+        try_this: "dnsmap <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r ~/dnsmap-example.txt"
         success_criteria: "The scan runs and ~/dnsmap-example.txt lists the subdomains (check with `cat`)."
         expected_output: |
           [+] writing results to ~/dnsmap-example.txt
@@ -129,10 +132,10 @@ flows:
           what: "`dnsmap <domain>` uses the bundled wordlist."
           why: "Zero-setup first pass."
           where: "Domain is the first argument."
-        find_it: "An authorized domain (bare, no scheme)."
+        find_it: "An authorized domain (bare, no scheme) — replace <target-domain> below with it."
         command_anatomy:
-          - {token: "dnsmap example.com", does: "enumerate subdomains with the built-in list"}
-        try_this: "dnsmap example.com"
+          - {token: "dnsmap <target-domain>", does: "enumerate subdomains with the built-in list — you type the domain in"}
+        try_this: "dnsmap <target-domain>"
         success_criteria: "Resolving subdomains print with IPs."
         expected_output: |
           www.example.com
@@ -155,11 +158,14 @@ flows:
           what: "`-d <ms>` adds a delay between requests; `-i <ip>` ignores an IP that wildcard DNS returns for everything."
           why: "Delays are kinder to DNS servers; ignoring the wildcard IP removes false positives."
           where: "ACTION_OPTIONS."
-        find_it: "Find the wildcard IP by scanning first — if a bogus subdomain resolves, note that IP for -i."
+        find_it: >
+          Find the wildcard IP by scanning first — if a bogus subdomain resolves, note that IP
+          for -i. Replace <target-domain> below with your authorized domain.
         command_anatomy:
+          - {token: "<target-domain>", does: "your authorized domain — you type this in"}
           - {token: "-d 3000", does: "wait 3000 ms between lookups"}
           - {token: "-i 1.2.3.4", does: "ignore this IP (the wildcard address)"}
-        try_this: "dnsmap example.com -d 3000 -i 1.2.3.4"
+        try_this: "dnsmap <target-domain> -d 3000 -i 1.2.3.4"
         success_criteria: "The scan paces itself and drops the wildcard IP."
         expected_output: |
           [+] ignoring IP address 1.2.3.4

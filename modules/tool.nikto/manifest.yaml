@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against nikto -Help / cirt.net docs"
-license: "project-proprietary lesson text; nikto is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); nikto is GPL (referenced, not bundled)"
 checksum: ""

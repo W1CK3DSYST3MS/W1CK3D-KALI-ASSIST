@@ -319,13 +319,16 @@ flows:
           what: "`dns -d <domain> -w <list>`; `-i` shows IPs; `-r <resolver>` uses a specific DNS server."
           why: "Maps the attack surface beyond the main site."
           where: "dns subcommand; -d in TARGET_PIVOT."
-        find_it: "Use a registered domain you're authorized to test (e.g. example.com), and a DNS subdomain list from SecLists."
+        find_it: >
+          Use a registered domain you're authorized to test — replace <target-domain> below
+          with it (example.com in the explanation above is just an illustration, not a real
+          target) — and a DNS subdomain list from SecLists.
         command_anatomy:
           - {token: "dns", does: "subdomain brute-force mode"}
-          - {token: "-d example.com", does: "the base domain"}
+          - {token: "-d <target-domain>", does: "the base domain — you type this in"}
           - {token: "-w .../subdomains-top1million-5000.txt", does: "list of subdomain names to try"}
           - {token: "-i", does: "also show the resolved IP addresses"}
-        try_this: "gobuster dns -d example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -i"
+        try_this: "gobuster dns -d <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -i"
         success_criteria: "Discovered subdomains print (with IPs if -i)."
         expected_output: |
           Found: www.example.com [93.184.216.34]
@@ -349,12 +352,15 @@ flows:
           what: "`vhost -u <url> -w <list> --append-domain` brute-forces hostnames via the Host header."
           why: "Modern gobuster requires --append-domain to add the base domain to each word."
           where: "vhost subcommand; --append-domain in ACTION_OPTIONS."
-        find_it: "Use the site's URL and a subdomain wordlist; --append-domain joins each word to the base domain."
+        find_it: >
+          Use the site's own URL (replace <target-url> below with it — https://example.com is
+          just an illustration, not a real target) and a subdomain wordlist; --append-domain
+          joins each word to the base domain.
         command_anatomy:
           - {token: "vhost", does: "virtual-host brute-force mode"}
-          - {token: "-u https://example.com", does: "the target"}
+          - {token: "-u <target-url>", does: "the target — you type this in, e.g. https://yoursite.com"}
           - {token: "--append-domain", does: "append the base domain to each word (required on modern gobuster)"}
-        try_this: "gobuster vhost -u https://example.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain"
+        try_this: "gobuster vhost -u <target-url> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain"
         success_criteria: "Hidden virtual hosts are reported."
         expected_output: |
           Found: dev.example.com (Status: 200) [Size: 5122]

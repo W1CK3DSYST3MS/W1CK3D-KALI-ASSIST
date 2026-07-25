@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against aircrack-ng suite man pages / aircrack-ng.org docs"
-license: "project-proprietary lesson text; aircrack-ng is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); aircrack-ng is GPL (referenced, not bundled)"
 checksum: ""

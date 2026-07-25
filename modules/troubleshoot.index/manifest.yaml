@@ -11,5 +11,5 @@ provides:
   entry: troubleshoot.start
 content: {}
 source: "authored; index auto-built from each module's declared symptoms + aliases"
-license: "project-proprietary"
+license: "MIT (this repo)"
 checksum: ""

@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against Photon (s0md3v) usage (-u/-l/-t/-d/-o/--wayback)"
-license: "project-proprietary lesson text; Photon is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); Photon is GPL (referenced, not bundled)"
 checksum: ""

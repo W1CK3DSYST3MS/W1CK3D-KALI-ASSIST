@@ -13,5 +13,5 @@ content:
   lesson: lesson.yaml
   glossary: glossary.yaml
 source: "authored; verified against id/whoami/su/sudo/adduser/usermod/getent man pages"
-license: "project-proprietary lesson text"
+license: "MIT-licensed project text (this repo)"
 checksum: ""

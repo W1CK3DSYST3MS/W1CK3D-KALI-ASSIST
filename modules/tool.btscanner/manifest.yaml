@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against btscanner usage (interactive ncurses; -o output dir) + bluez adapter prep"
-license: "project-proprietary lesson text; btscanner is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); btscanner is GPL (referenced, not bundled)"
 checksum: ""

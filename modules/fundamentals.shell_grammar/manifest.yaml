@@ -13,5 +13,5 @@ content:
   lesson: lesson.yaml
   glossary: glossary.yaml
 source: "authored (original) + examples seeded from tldr-pages (CC-BY 4.0)"
-license: "project-proprietary lesson text; example commands CC-BY 4.0 attributed"
+license: "MIT-licensed project text (this repo); example commands CC-BY 4.0 attributed"
 checksum: ""

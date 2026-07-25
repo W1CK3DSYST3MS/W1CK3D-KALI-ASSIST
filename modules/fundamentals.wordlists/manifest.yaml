@@ -13,5 +13,5 @@ content:
   lesson: lesson.yaml
   glossary: glossary.yaml
 source: "authored; verified against Kali /usr/share/wordlists layout, seclists, cewl/crunch, tool -w/-P/--wordlist flags"
-license: "project-proprietary lesson text"
+license: "MIT-licensed project text (this repo)"
 checksum: ""

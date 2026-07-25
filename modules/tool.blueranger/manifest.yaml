@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against blueranger usage (blueranger <hci#> <bdaddr>; l2ping) + bluez"
-license: "project-proprietary lesson text; blueranger is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); blueranger is GPL (referenced, not bundled)"
 checksum: ""

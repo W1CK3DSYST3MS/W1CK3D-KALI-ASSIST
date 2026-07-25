@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against kismet usage (-c source; web UI :2501; .kismet logs)"
-license: "project-proprietary lesson text; Kismet is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); Kismet is GPL (referenced, not bundled)"
 checksum: ""

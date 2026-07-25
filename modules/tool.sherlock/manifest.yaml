@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against sherlock-project usage/options"
-license: "project-proprietary lesson text; sherlock is MIT (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); sherlock is MIT (referenced, not bundled)"
 checksum: ""

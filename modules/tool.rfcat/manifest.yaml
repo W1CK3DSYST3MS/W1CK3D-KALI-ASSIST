@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against rfcat/RfCat usage (YARD Stick One / CC1111)"
-license: "project-proprietary lesson text; rfcat is BSD (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); rfcat is BSD (referenced, not bundled)"
 checksum: ""

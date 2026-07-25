@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against gqrx usage + rtl-sdr device prep"
-license: "project-proprietary lesson text; gqrx is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); gqrx is GPL (referenced, not bundled)"
 checksum: ""

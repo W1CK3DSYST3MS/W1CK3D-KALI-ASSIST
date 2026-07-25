@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against Burp Suite CE launch/proxy workflow"
-license: "project-proprietary lesson text; Burp Suite is PortSwigger proprietary (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); Burp Suite is PortSwigger proprietary (referenced, not bundled)"
 checksum: ""

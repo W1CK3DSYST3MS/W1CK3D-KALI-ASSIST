@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against dirb usage (dirb <url> [wordlist] [options])"
-license: "project-proprietary lesson text; dirb is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); dirb is GPL (referenced, not bundled)"
 checksum: ""

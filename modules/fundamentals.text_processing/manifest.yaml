@@ -13,5 +13,5 @@ content:
   lesson: lesson.yaml
   glossary: glossary.yaml
 source: "authored; verified against grep/sed/awk/cut/sort/uniq/tr/wc man pages"
-license: "project-proprietary lesson text"
+license: "MIT-licensed project text (this repo)"
 checksum: ""

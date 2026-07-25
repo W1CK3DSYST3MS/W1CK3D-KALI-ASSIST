@@ -48,12 +48,15 @@ flows:
           what: "`photon -u https://example.com -o <dir>` crawls the site from that URL and saves categorised results (internal URLs, external URLs, emails, files...) into the output directory."
           why: "This is the core action — a structured harvest of everything the site links to."
           where: "-u is the start URL; -o is the output directory."
-        find_it: "Use your authorized site's URL and a writable output folder (your home). Start shallow to keep it quick."
+        find_it: >
+          Use your authorized site's URL — replace <target-url> below with it
+          (https://example.com in the explanation above is just an illustration, not a real
+          target) — and a writable output folder (your home). Start shallow to keep it quick.
         command_anatomy:
           - {token: "photon", does: "the crawler"}
-          - {token: "-u https://example.com", does: "the start URL to crawl"}
+          - {token: "-u <target-url>", does: "the start URL to crawl — you type this in"}
           - {token: "-o ~/photon_example", does: "save results into this directory"}
-        try_this: "photon -u https://example.com -o ~/photon_example"
+        try_this: "photon -u <target-url> -o ~/photon_example"
         success_criteria: "It crawls and reports counts, and ~/photon_example is created with result files."
         expected_output: |
           ┌─ Photon ─┐
@@ -79,7 +82,7 @@ flows:
           - {token: "-t 10", does: "use 10 threads"}
           - {token: "--wayback", does: "also seed from archived (Wayback Machine) URLs"}
           - {token: "-o ~/photon_example", does: "output directory"}
-        try_this: "photon -u https://example.com -l 3 -t 10 --wayback -o ~/photon_example"
+        try_this: "photon -u <target-url> -l 3 -t 10 --wayback -o ~/photon_example"
         success_criteria: "More URLs are found, including historical/archived ones."
         expected_output: |
           [~] Pulling URLs from Wayback Machine
@@ -127,11 +130,12 @@ flows:
           what: "`-l` depth, `-t` threads, `-d` delay (seconds), `--wayback` archived URLs."
           why: "Trade coverage vs speed vs politeness."
           where: "ACTION_OPTIONS."
-        find_it: "Pick depth for coverage, threads/delay for pacing."
+        find_it: "Pick depth for coverage, threads/delay for pacing. Replace <target-url> below with your authorized site's URL."
         command_anatomy:
+          - {token: "<target-url>", does: "your authorized site's URL — you type this in"}
           - {token: "-l 3 -t 10 -d 1", does: "depth 3, 10 threads, 1s delay"}
           - {token: "--wayback", does: "include archived URLs"}
-        try_this: "photon -u https://example.com -l 3 -t 10 -d 1 --wayback -o ~/photon_example"
+        try_this: "photon -u <target-url> -l 3 -t 10 -d 1 --wayback -o ~/photon_example"
         success_criteria: "The crawl runs with the chosen pacing/coverage."
         expected_output: |
           [+] Total URLs: 160

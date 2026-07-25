@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against tshark/wireshark-filter man pages + wireshark.org docs"
-license: "project-proprietary lesson text; Wireshark is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); Wireshark is GPL (referenced, not bundled)"
 checksum: ""

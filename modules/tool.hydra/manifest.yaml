@@ -14,5 +14,5 @@ content:
   tool: tool.yaml
   glossary: glossary.yaml
 source: "authored; verified against hydra -h / official docs (THC-Hydra)"
-license: "project-proprietary lesson text; hydra is AGPL/GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); hydra is AGPL/GPL (referenced, not bundled)"
 checksum: ""

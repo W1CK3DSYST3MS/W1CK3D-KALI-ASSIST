@@ -13,5 +13,5 @@ content:
   lesson: lesson.yaml
   glossary: glossary.yaml
 source: "authored; verified against zsh/bash, PATH, alias, export docs + Kali (default shell = zsh)"
-license: "project-proprietary lesson text"
+license: "MIT-licensed project text (this repo)"
 checksum: ""

@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against heartleech usage (CVE-2014-0160; --scan/--dump/-p)"
-license: "project-proprietary lesson text; heartleech is BSD (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); heartleech is BSD (referenced, not bundled)"
 checksum: ""

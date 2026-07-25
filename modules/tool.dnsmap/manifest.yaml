@@ -12,5 +12,5 @@ provides:
 content:
   tool: tool.yaml
 source: "authored; verified against dnsmap usage (domain-first argument, -w/-r/-c/-d/-i)"
-license: "project-proprietary lesson text; dnsmap is GPL (referenced, not bundled)"
+license: "MIT-licensed project text (this repo); dnsmap is GPL (referenced, not bundled)"
 checksum: ""
