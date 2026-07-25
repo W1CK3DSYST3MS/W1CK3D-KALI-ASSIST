@@ -12,24 +12,27 @@ Issue Log** plus curated trusted links — no live help, no AI, nothing phoned h
 
 ## What's inside
 
-- **24 tool modules** — nmap, sqlmap, gobuster, nikto, hydra, john, hashcat, the aircrack-ng
+- **26 tool modules** — nmap, sqlmap, gobuster, nikto, hydra, john, hashcat, the aircrack-ng
   suite, tshark/wireshark, metasploit, sherlock, dnsmap, bettercap, blueranger, btscanner,
-  gqrx, rfcat, gvm, heartleech, dirb, dirbuster, burpsuite, kismet, photon — each as a guided
-  walkthrough plus a quick-build form, with an authorization gate before anything offensive is
-  shown.
+  gqrx, rfcat, gvm, heartleech, dirb, dirbuster, burpsuite, kismet, photon, responder, netexec
+  — each as a guided walkthrough plus a quick-build form, with an authorization gate before
+  anything offensive is shown.
 - **14 fundamentals lessons** (shell grammar, permissions, networking, packages, users/groups,
   and more) and a **full symptom-first troubleshooter** (networking, packages/keys/certs,
   services/systemd, permissions/filesystem, and rare/hard cases).
 - Every tool's flags/syntax have been cross-checked against the real installed tool's
   `--help`/`man` output on Kali — see `docs/VERIFICATION-LOG.md` for the source and status of
   each one.
+- Working toward guides for every tool in Kali's official catalog — see
+  `docs/TOOL-COVERAGE.md` for the tracked checklist (406 tools across 29 categories).
 
 ## Status
 
-Fully built and passing: 104 automated tests, the CLI harness, the GUI smoke test, and a
-native Kali/Linux binary build (`--self-test` reports `tools=24 lessons=14 troubleshooters=5`).
-No public release exists yet — see `docs/PHASE-TWO-STATUS.md` for the detailed build log and
-what's still outstanding (AppImage packaging, further GUI polish).
+Fully built and passing: 111 automated tests, the CLI harness, the GUI smoke test, and a
+native Kali/Linux binary build (`--self-test` reports `tools=26 lessons=14 troubleshooters=5`).
+Released at [github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases](https://github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases)
+— see `docs/PHASE-TWO-STATUS.md` for the detailed build log and what's still outstanding
+(per-tool GUI form polish, more tool coverage).
 
 ## Prerequisites
 

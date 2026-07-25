@@ -1,0 +1,9 @@
+terms:
+  - term: smb
+    definition: "Server Message Block — the Windows file-sharing/RPC protocol. netexec's most-used protocol module for AD testing."
+  - term: password_spray
+    definition: "Trying one (or a few) password(s) against MANY usernames, instead of many passwords against one user — avoids per-account lockout thresholds that a traditional brute force would trip."
+  - term: pwn3d
+    definition: "netexec's own marker (Pwn3d!) meaning the credential you tried has local administrator rights on that host — not just valid, but usable for code execution."
+  - term: sam_lsa_ntds
+    definition: "SAM = local account hashes on one machine. LSA = secrets cached in memory (other services' credentials). NTDS.dit = the WHOLE domain's password database, only on a Domain Controller."

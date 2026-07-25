@@ -46,6 +46,7 @@ Legend: ✅ verified · ✍️ corrected · ⏳ pending · 🔬 expected_output 
 | burpsuite | ✅ | installed `--help`, Burp Suite Community 2026.3.2 | `--project-file=`/`--config-file=` confirmed verbatim |
 | kismet | ✅ | installed `--help`/man, Kismet 2025.09.0 | `-c` (capture source)/`--no-ncurses`/`--log-prefix` confirmed in both help and man |
 | responder | ✅ | installed `--help` (no man page), Responder v3.2.2.0, + `/usr/share/doc/responder/README.md` | `-I/-A/-v/-b/-w` + all other flags confirmed against real help text; log path confirmed as `/usr/share/responder/logs/` (packaged wrapper `cd`s into `/usr/share/responder/` before exec); hashcat `-m 5600` for NetNTLMv2 is well-established public knowledge, not independently re-verified against hashcat's own help in this pass |
+| netexec | ✅ | installed `--help` + `netexec smb --help` (no man page), NetExec v1.5.1 "Yippie-Ki-Yay" | `smb` subcommand + `-u/-p/-H/-d/--local-auth/--shares/--sam/-x` all confirmed against real help text; target is positional (TARGET_PIVOT), protocol is a subcommand. `[+]`/`(Pwn3d!)` output markers and `--sam`/`--ntds` semantics are well-established public knowledge (netexec.wiki, widely documented), not independently re-verified against a live authenticated target in this pass — byte-accuracy of expected_output remains the same deferred item as every other tool |
 
 ### Verification pass 2 (2026-07-24)
 Ran `tools/verify_capture.sh` on this Kali 2026.3 box (read-only `--help`/`--version`/`man`

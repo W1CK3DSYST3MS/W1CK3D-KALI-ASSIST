@@ -1,0 +1,17 @@
+module_id: tool.netexec
+name: "NetExec — network execution / AD testing swiss-army knife"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: netexec
+  flows: [guided, dump]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against installed netexec --help / netexec smb --help (Kali 2026.3, v1.5.1 'Yippie-Ki-Yay')"
+license: "MIT (this repo); NetExec is BSD-2-Clause (referenced, not bundled)"
+checksum: ""
