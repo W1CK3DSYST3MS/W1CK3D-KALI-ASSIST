@@ -1,0 +1,16 @@
+module_id: tool.mdbtools
+name: "mdbtools — Microsoft Access (.mdb/.accdb) file reader"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: mdbtools
+  flows: [guided]
+content:
+  tool: tool.yaml
+source: "authored; verified against installed mdb-tables/mdb-export/mdb-schema/mdb-sql/mdb-ver --help (Kali 2026.3, mdbtools 1.0.1)"
+license: "MIT (this repo); mdbtools is LGPL/GPL (referenced, not bundled)"
+checksum: ""

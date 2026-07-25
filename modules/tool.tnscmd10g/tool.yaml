@@ -1,0 +1,124 @@
+tool_id: tnscmd10g
+display_name: "tnscmd10g"
+binary_candidates: [tnscmd10g]
+categories: [database, reconnaissance]
+os_profile: kali
+one_liner: "Sends raw commands to an Oracle TNS listener — version, status, and service info, without a valid login."
+authorization_gate: true
+authorization_text: >
+  tnscmd10g talks directly to the Oracle TNS listener and can reveal service names, version
+  info, and (on older/misconfigured listeners) trigger administrative commands like log
+  location changes — this is real interaction with a live database service. Only run this
+  against Oracle instances you own or are explicitly authorized to test. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first probe (START HERE)"
+    goal: "From a live TNS listener to its version and status, no credentials needed."
+    command_builder_id: tnscmd10g
+    slots: [PROGRAM, POSITIONAL_ARGS, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm the TNS listener is up"
+        slot_target: null
+        explanation:
+          what: "Oracle's TNS listener normally runs on port 1521. Confirm it's open before probing it."
+          why: "tnscmd10g only makes sense against a live listener."
+          where: "Not part of the tnscmd10g command itself — this is a prep check."
+        find_it: "Scan your authorized network for port 1521."
+        command_anatomy:
+          - {token: "nmap -p 1521 --open", does: "only show hosts with the Oracle listener port open"}
+          - {token: "192.168.1.0/24", does: "your authorized network range — you type this in"}
+        try_this: "nmap -p 1521 --open 192.168.1.0/24"
+        success_criteria: "At least one host shows 1521/tcp open."
+        expected_output: |
+          Nmap scan report for 192.168.1.10
+          PORT     STATE SERVICE
+          1521/tcp open  oracle
+        alternatives:
+          - trigger: "nothing has 1521 open"
+            cause: "No listener here, or firewalled/on a non-default port."
+            fix: "Confirm the segment; try -p on tnscmd10g if the port is non-default."
+            check: "A host answers on 1521."
+      - step_id: g2
+        title: "Grab the listener's version banner"
+        slot_target: null
+        explanation:
+          what: "`tnscmd10g version -h <host>` asks the listener for its version — no login required, this is metadata the listener hands out to anyone who asks."
+          why: "The Oracle version narrows down which known vulnerabilities and default accounts are worth trying next."
+          where: "The command (version) must come immediately after the program name, before any flags; -h names the target host."
+        find_it: "Use the host from step 1."
+        command_anatomy:
+          - {token: "tnscmd10g", does: "the program"}
+          - {token: "version", does: "the TNS command to send"}
+          - {token: "-h 192.168.1.10", does: "the target — you type this in"}
+        try_this: "tnscmd10g version -h 192.168.1.10"
+        success_criteria: "A version string for the TNS listener prints."
+        expected_output: |
+          sending (CONNECT_DATA=(COMMAND=version))
+          ...
+          (DESCRIPTION=(TMP=)(VSNNUM=185600000)(ERR=0)(ALIAS=LISTENER)(SECURITY=OFF)(VERSION=TNSLSNR for Linux: Version 18.0.0.0.0 - Production))
+        alternatives:
+          - trigger: "connection refused / times out"
+            cause: "Wrong port, or the listener rejects unauthenticated commands (some hardened setups do)."
+            fix: "Re-confirm the port with nmap; some hardened listeners disable this entirely (that's actually a good sign for the target)."
+            check: "—"
+      - step_id: g3
+        title: "Ask for status — reveals registered service names (SIDs)"
+        slot_target: null
+        explanation:
+          what: "`tnscmd10g status -h <host>` often lists every service/instance registered with the listener, including their SIDs — information that would otherwise need brute-forcing (see the sidguesser tool)."
+          why: "A free list of real SIDs, straight from the listener, skips the SID-guessing step entirely when it works."
+          where: "status replaces version, same position right after the program name."
+        find_it: "Same host as step 2."
+        command_anatomy:
+          - {token: "tnscmd10g status -h 192.168.1.10", does: "same target, status command"}
+        try_this: "tnscmd10g status -h 192.168.1.10"
+        success_criteria: "Registered services/SIDs are listed, if the listener shares them."
+        expected_output: |
+          Service "orcl.example.com" has 1 instance(s).
+            Instance "orcl", status READY, has 1 handler(s) for this service...
+        alternatives:
+          - trigger: "no services listed / access refused"
+            cause: "The listener is configured not to share this (a security best practice — ADMIN_RESTRICTIONS or similar)."
+            fix: "Fall back to sidguesser to brute-force the SID instead."
+            check: "—"
+      - step_id: g4
+        title: "Build a custom TNS command"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`--rawcmd <command>` sends a hand-built CONNECT_DATA string instead of one of the built-in commands (version/status/ping) — for probing listener behaviors those don't cover."
+          why: "Some assessments/CVEs against older TNS listeners need a specific raw command string that isn't one of the presets."
+          where: "ACTION_OPTIONS."
+        find_it: "Only needed for specific documented probes — the built-in version/status/ping commands cover most day-to-day recon."
+        command_anatomy:
+          - {token: "tnscmd10g -h 192.168.1.10", does: "same target"}
+          - {token: "--rawcmd '(CONNECT_DATA=(COMMAND=ping))'", does: "a hand-built TNS command string — you choose this"}
+        try_this: "tnscmd10g -h 192.168.1.10 --rawcmd '(CONNECT_DATA=(COMMAND=ping))'"
+        success_criteria: "The listener responds to the custom command."
+        expected_output: |
+          sending (CONNECT_DATA=(COMMAND=ping))
+          ...
+          (DESCRIPTION=(TMP=)(VSNNUM=185600000)(ERR=0))
+        alternatives:
+          - trigger: "malformed response / no reply"
+            cause: "Invalid CONNECT_DATA syntax."
+            fix: "Double-check parens are balanced and the command name is one the listener recognizes."
+            check: "—"
+quick_build:
+  builder: tnscmd10g
+  title: "Quick probe"
+  fields:
+    - field_id: command
+      label: "Command"
+      type: choice
+      choices: ["version", "status", "ping"]
+      default: "version"
+    - field_id: host
+      label: "Target (-h)"
+      type: string
+      required: true
+      placeholder: "192.168.1.10"
+    - field_id: port
+      label: "Port (-p)"
+      type: int
+      placeholder: "1521  (optional)"

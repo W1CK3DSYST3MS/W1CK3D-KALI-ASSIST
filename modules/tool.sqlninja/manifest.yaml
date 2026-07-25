@@ -1,0 +1,17 @@
+module_id: tool.sqlninja
+name: "sqlninja — MSSQL injection to OS access"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: sqlninja
+  flows: [guided]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against installed sqlninja -h banner + /usr/share/doc/sqlninja/README + sqlninja.conf.example.gz (Kali 2026.3)"
+license: "MIT (this repo); sqlninja is GPL (referenced, not bundled)"
+checksum: ""

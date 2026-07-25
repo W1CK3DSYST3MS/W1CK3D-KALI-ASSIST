@@ -12,11 +12,11 @@ Issue Log** plus curated trusted links — no live help, no AI, nothing phoned h
 
 ## What's inside
 
-- **26 tool modules** — nmap, sqlmap, gobuster, nikto, hydra, john, hashcat, the aircrack-ng
+- **31 tool modules** — nmap, sqlmap, gobuster, nikto, hydra, john, hashcat, the aircrack-ng
   suite, tshark/wireshark, metasploit, sherlock, dnsmap, bettercap, blueranger, btscanner,
-  gqrx, rfcat, gvm, heartleech, dirb, dirbuster, burpsuite, kismet, photon, responder, netexec
-  — each as a guided walkthrough plus a quick-build form, with an authorization gate before
-  anything offensive is shown.
+  gqrx, rfcat, gvm, heartleech, dirb, dirbuster, burpsuite, kismet, photon, responder, netexec,
+  oscanner, sidguesser, tnscmd10g, sqlninja, mdbtools — each as a guided walkthrough plus a
+  quick-build form, with an authorization gate before anything offensive is shown.
 - **14 fundamentals lessons** (shell grammar, permissions, networking, packages, users/groups,
   and more) and a **full symptom-first troubleshooter** (networking, packages/keys/certs,
   services/systemd, permissions/filesystem, and rare/hard cases).
@@ -28,8 +28,8 @@ Issue Log** plus curated trusted links — no live help, no AI, nothing phoned h
 
 ## Status
 
-Fully built and passing: 111 automated tests, the CLI harness, the GUI smoke test, and a
-native Kali/Linux binary build (`--self-test` reports `tools=26 lessons=14 troubleshooters=5`).
+Fully built and passing: 121 automated tests, the CLI harness, the GUI smoke test, and a
+native Kali/Linux binary build (`--self-test` reports `tools=31 lessons=14 troubleshooters=5`).
 Released at [github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases](https://github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases)
 — see `docs/PHASE-TWO-STATUS.md` for the detailed build log and what's still outstanding
 (per-tool GUI form polish, more tool coverage).

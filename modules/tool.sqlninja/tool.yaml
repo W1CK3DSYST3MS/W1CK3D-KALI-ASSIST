@@ -1,0 +1,159 @@
+tool_id: sqlninja
+display_name: "sqlninja"
+binary_candidates: [sqlninja]
+categories: [database, exploitation]
+os_profile: kali
+one_liner: "Turns a confirmed MS SQL injection point into OS-level access on the database server."
+authorization_gate: true
+authorization_text: >
+  sqlninja goes past finding a SQL injection — its whole purpose is turning one into real
+  command execution on the database server (fingerprinting, brute-forcing the sa account,
+  re-enabling xp_cmdshell, spawning reverse/DNS/ICMP shells). This has direct impact on a
+  live production system if you get the wrong target. Only run this against an MS SQL
+  Server and injection point you own or are explicitly authorized to test. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first run (START HERE)"
+    goal: "From a confirmed MSSQL injection to a working xp_cmdshell — config file first, then attack modes."
+    command_builder_id: sqlninja
+    slots: [PROGRAM, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: g1
+        title: "Confirm you have a real SQL injection point first"
+        slot_target: null
+        glossary_refs: [sqlninja_conf]
+        explanation:
+          what: "sqlninja isn't a scanner — it needs a SQL injection point you've ALREADY confirmed exists, specifically against Microsoft SQL Server."
+          why: "Use the sqlmap tool to find and confirm the injection (and that the backend is MSSQL) before ever touching sqlninja. sqlninja picks up from there to get OS-level access."
+          where: "Not part of the sqlninja command itself — this is a prerequisite."
+        find_it: "See the sqlmap tool's guided flow to find and confirm an injection point, including its DBMS (--dbms should show Microsoft SQL Server)."
+        command_anatomy:
+          - {token: "sqlmap", does: "confirms the injection + DBMS (see the sqlmap tool)"}
+        try_this: "sqlmap -u 'http://target/page?id=1' --dbms=mssql --banner"
+        success_criteria: "sqlmap confirms an injection and reports Microsoft SQL Server as the backend."
+        expected_output: |
+          [INFO] the back-end DBMS is Microsoft SQL Server
+          banner: 'Microsoft SQL Server 2019 ...'
+        alternatives:
+          - trigger: "sqlmap says a different DBMS"
+            cause: "sqlninja is MSSQL-specific; a MySQL/PostgreSQL/Oracle injection needs different tooling (sqlsus for MySQL, sqlmap's own --os-shell for others)."
+            fix: "Confirm the DBMS first — don't proceed with sqlninja against a non-MSSQL target."
+            check: "—"
+      - step_id: g2
+        title: "Build the config file"
+        slot_target: EXTRA_FILES
+        explanation:
+          what: "sqlninja doesn't take a URL/target as a flag — it reads a config file describing the EXACT HTTP request that carries the injection, with a __SQL2INJECT__ marker showing where the SQL command gets inserted."
+          why: "This is a fundamentally different interface from most tools in this app: instead of building one command line, you're authoring a small request template first."
+          where: "EXTRA_FILES; -f names the config file."
+        find_it: >
+          Start from the bundled example and edit it with the real vulnerable request (copy
+          it from Burp Suite's proxy history if you're not sure of the exact request/headers).
+        command_anatomy:
+          - {token: "zcat /usr/share/doc/sqlninja/sqlninja.conf.example.gz", does: "the bundled example template"}
+          - {token: "> sqlninja.conf", does: "save it here to edit"}
+        try_this: "zcat /usr/share/doc/sqlninja/sqlninja.conf.example.gz > sqlninja.conf   # then edit sqlninja.conf"
+        success_criteria: "sqlninja.conf exists with the real HTTP request and __SQL2INJECT__ marker in place of the injection point."
+        expected_output: |
+          (sqlninja.conf now exists in the current directory — no terminal output from this step itself)
+        alternatives:
+          - trigger: "not sure what the exact vulnerable request looks like"
+            cause: "The injection was found by hand or with sqlmap without capturing the raw request."
+            fix: "Re-run sqlmap with -r <request-file> or capture the request in Burp Suite's proxy history and copy it verbatim."
+            check: "sqlninja-howto.html (in /usr/share/doc/sqlninja/) has full worked examples."
+      - step_id: g3
+        title: "Test the injection works"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-m t` (test mode) sends a harmless probe through the config file's injection point to confirm sqlninja can actually reach and use it before trying anything real."
+          why: "Cheap sanity check — if this fails, every later mode will fail for the same reason (bad config, not a bad target)."
+          where: "ACTION_OPTIONS; -m selects the mode, -f the config file from step 2."
+        find_it: "Use the config file from step 2."
+        command_anatomy:
+          - {token: "sqlninja", does: "the program"}
+          - {token: "-m t", does: "test mode"}
+          - {token: "-f sqlninja.conf", does: "the config file from step 2"}
+        try_this: "sqlninja -m t -f sqlninja.conf"
+        success_criteria: "sqlninja reports the injection is working."
+        expected_output: |
+          Sqlninja rel. 0.2.6
+          [+] Testing injection
+          [+] Injection seems to work!
+        alternatives:
+          - trigger: "injection doesn't seem to work"
+            cause: "The config's HTTP request or __SQL2INJECT__ placement doesn't match the real vulnerable request exactly."
+            fix: "Re-check the request against what sqlmap/Burp captured — headers, cookies, and exact injection syntax all matter."
+            check: "sqlninja-howto.html walks through common config mistakes."
+      - step_id: g4
+        title: "Fingerprint the target"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-m f` (fingerprint mode) identifies the SQL Server version, the current user, whether that user has sysadmin rights, and whether xp_cmdshell is already available."
+          why: "This tells you what's actually possible next — sysadmin + xp_cmdshell means you can already run OS commands; anything less means escalation is needed first."
+          where: "ACTION_OPTIONS, same config file as step 3."
+        find_it: "Same config file as before."
+        command_anatomy:
+          - {token: "sqlninja -f sqlninja.conf", does: "same config"}
+          - {token: "-m f", does: "fingerprint mode"}
+        try_this: "sqlninja -m f -f sqlninja.conf"
+        success_criteria: "SQL Server version, current user, and privilege level are reported."
+        expected_output: |
+          [+] Verifying user privileges
+          [+] Current user has SYSADMIN privileges!
+          [+] xp_cmdshell seems disabled
+        alternatives:
+          - trigger: "current user is not sysadmin"
+            cause: "A low-privilege account is running the vulnerable query."
+            fix: "Try -m b (bruteforce the sa account) if you have an authorized password list; otherwise OS-level access via this path may not be possible."
+            check: "—"
+      - step_id: g5
+        title: "Re-enable xp_cmdshell (if you're sysadmin)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: >
+          xp_cmdshell can be disabled again afterward with sp_configure 'xp_cmdshell', 0 —
+          note that changing this setting is a real, visible change to the server's
+          configuration, not something sqlninja hides.
+        glossary_refs: [xp_cmdshell]
+        explanation:
+          what: "`-m x` (resurrectxp) re-enables the xp_cmdshell stored procedure if step 4 showed it disabled and you have sysadmin rights — this is what actually unlocks OS command execution."
+          why: "xp_cmdshell disabled is a common hardening step; sysadmin rights are enough to turn it back on regardless."
+          where: "ACTION_OPTIONS, same config file."
+        find_it: "Only proceed if step 4 confirmed sysadmin privileges."
+        command_anatomy:
+          - {token: "sqlninja -f sqlninja.conf", does: "same config"}
+          - {token: "-m x", does: "resurrectxp mode — re-enable xp_cmdshell"}
+        try_this: "sqlninja -m x -f sqlninja.conf"
+        success_criteria: "sqlninja reports xp_cmdshell is now enabled."
+        expected_output: |
+          [+] Re-enabling xp_cmdshell...
+          [+] xp_cmdshell is now enabled
+        alternatives:
+          - trigger: "access denied / not sysadmin"
+            cause: "The current user lacks the privilege to change server configuration."
+            fix: "Re-check step 4's fingerprint; without sysadmin this mode won't work."
+            check: "—"
+quick_build:
+  builder: sqlninja
+  title: "Quick run"
+  fields:
+    - field_id: mode
+      label: "Mode (-m)"
+      type: choice
+      choices: ["t", "f", "b", "e", "x", "u", "s", "k", "r", "d", "i", "c", "m"]
+      default: "t"
+    - field_id: conf_file
+      label: "Config file (-f)"
+      type: path
+      default: "sqlninja.conf"
+    - field_id: password
+      label: "sa password (-p, bruteforce/escalation modes)"
+      type: string
+      placeholder: "(optional)"
+    - field_id: wordlist
+      label: "Wordlist (-w, bruteforce mode)"
+      type: path
+      placeholder: "(optional)"
+    - field_id: verbose
+      label: "Verbose (-v)"
+      type: bool

@@ -1,0 +1,16 @@
+module_id: tool.oscanner
+name: "oscanner — Oracle account/SID scanner"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: oscanner
+  flows: [guided]
+content:
+  tool: tool.yaml
+source: "authored; verified against installed oscanner usage banner (Kali 2026.3, Oracle Scanner 1.0.6)"
+license: "MIT (this repo); oscanner is GPL (referenced, not bundled)"
+checksum: ""

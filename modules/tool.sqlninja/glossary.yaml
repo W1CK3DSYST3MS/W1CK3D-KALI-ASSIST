@@ -1,0 +1,5 @@
+terms:
+  - term: sqlninja_conf
+    definition: "sqlninja's config file — describes the exact HTTP request that carries the injection (including a __SQL2INJECT__ marker), not a target you just pass on the command line."
+  - term: xp_cmdshell
+    definition: "A built-in MS SQL Server stored procedure that runs OS commands. Often disabled by default; sqlninja can try to re-enable ('resurrect') it if you have sysadmin rights."

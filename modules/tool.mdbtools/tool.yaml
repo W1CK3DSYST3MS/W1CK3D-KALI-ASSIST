@@ -1,0 +1,136 @@
+tool_id: mdbtools
+display_name: "mdbtools"
+binary_candidates: [mdb-ver, mdb-tables, mdb-schema, mdb-export, mdb-sql]
+categories: [database, forensics]
+os_profile: kali
+one_liner: "Reads Microsoft Access (.mdb/.accdb) database files on Linux — list tables, dump schema, export data, run SQL."
+authorization_gate: true
+authorization_text: >
+  mdbtools reads the actual contents of an Access database file — tables, schema, and every
+  row of data. If this file came from a target system, treat what you extract as sensitive
+  data: only inspect files you own or are explicitly authorized to access, and handle any
+  extracted data (which may include credentials, PII, or other sensitive records) accordingly.
+  Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first read (START HERE)"
+    goal: "From a found .mdb/.accdb file to its table list, schema, and exported data."
+    command_builder_id: mdbtools
+    slots: [PROGRAM, POSITIONAL_ARGS, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm it's a readable Access database"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`mdb-ver <file>` reports the Access/Jet database format version, confirming mdbtools can actually parse the file before you try anything else."
+          why: "Cheap sanity check — a corrupted or password-protected file will fail here instead of partway through an export."
+          where: "POSITIONAL_ARGS: the file is the only argument."
+        find_it: "Any .mdb or .accdb file you're authorized to read."
+        command_anatomy:
+          - {token: "mdb-ver", does: "the program"}
+          - {token: "database.mdb", does: "the file — you type this in"}
+        try_this: "mdb-ver database.mdb"
+        success_criteria: "A Jet database format version prints (e.g. JET3, JET4, ACCDB2010)."
+        expected_output: |
+          JET4
+        alternatives:
+          - trigger: "not a valid MDB file / unrecognized format"
+            cause: "Wrong file, corrupted, or an unsupported/encrypted database."
+            fix: "Confirm the file extension and that it opens in a hex viewer as an actual Jet/ACE database (starts with a recognizable header)."
+            check: "mdb-ver reports a version instead of erroring."
+      - step_id: g2
+        title: "List the tables"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`mdb-tables <file>` lists every table in the database. By default it skips Access's internal system tables (MSys*)."
+          why: "You need a table name before you can dump its schema or export its data — this is the map of what's inside."
+          where: "POSITIONAL_ARGS: same file as step 1."
+        find_it: "Same file as step 1."
+        command_anatomy:
+          - {token: "mdb-tables", does: "the program"}
+          - {token: "-1", does: "one table name per line (easier to read/script than the default space-separated list)"}
+          - {token: "database.mdb", does: "the file"}
+        try_this: "mdb-tables -1 database.mdb"
+        success_criteria: "A list of table names prints, one per line."
+        expected_output: |
+          Employees
+          Orders
+          Customers
+        alternatives:
+          - trigger: "no tables listed"
+            cause: "An empty database, or all tables are system tables (hidden by default)."
+            fix: "Add -S to include system tables (MSys*) if you specifically need those."
+            check: "—"
+      - step_id: g3
+        title: "Dump a table's schema"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`mdb-schema -T <table> <file>` prints the column names and types for one table, as a CREATE TABLE statement."
+          why: "Confirms exactly what's in a table (and its data types) before exporting — useful for large databases where you don't want everything at once."
+          where: "ACTION_OPTIONS; -T filters to one table."
+        find_it: "Use a table name from step 2."
+        command_anatomy:
+          - {token: "mdb-schema database.mdb", does: "same file"}
+          - {token: "-T Employees", does: "only this table — you fill in the name from step 2"}
+        try_this: "mdb-schema -T Employees database.mdb"
+        success_criteria: "A CREATE TABLE statement prints with the table's real columns and types."
+        expected_output: |
+          CREATE TABLE Employees
+           (
+                  EmployeeID              Long Integer,
+                  LastName                Text (20),
+                  FirstName               Text (10)
+          );
+        alternatives:
+          - trigger: "table not found"
+            cause: "Typo, or the name needs quoting (spaces/special characters)."
+            fix: "Re-check the exact spelling from mdb-tables' output; quote names with spaces."
+            check: "—"
+      - step_id: g4
+        title: "Export a table's data"
+        slot_target: POSITIONAL_ARGS
+        explanation:
+          what: "`mdb-export <file> <table>` dumps a table's actual rows as CSV to stdout."
+          why: "This is the payoff — the real data, in a format you can open in a spreadsheet or feed into another tool."
+          where: "POSITIONAL_ARGS: file first, then table name."
+        find_it: "Same table name as step 3."
+        command_anatomy:
+          - {token: "mdb-export", does: "the program"}
+          - {token: "database.mdb", does: "the file"}
+          - {token: "Employees", does: "the table — from step 2/3"}
+        try_this: "mdb-export database.mdb Employees > employees.csv"
+        success_criteria: "employees.csv contains a header row plus one row per record."
+        expected_output: |
+          EmployeeID,LastName,FirstName
+          1,Smith,John
+          2,Doe,Jane
+        alternatives:
+          - trigger: "garbled text / wrong characters"
+            cause: "Character encoding mismatch (older Access files sometimes use non-UTF-8 encodings)."
+            fix: "Check the mdbtools documentation for encoding options; try opening the CSV with a different encoding in your spreadsheet tool."
+            check: "—"
+quick_build:
+  builder: mdbtools
+  title: "Quick read"
+  fields:
+    - field_id: action
+      label: "Action"
+      type: choice
+      choices: ["ver", "tables", "schema", "export"]
+      default: "tables"
+    - field_id: file
+      label: "Database file"
+      type: path
+      required: true
+      placeholder: "database.mdb"
+    - field_id: table
+      label: "Table name (schema/export)"
+      type: string
+      placeholder: "Employees  (optional)"
+    - field_id: include_system
+      label: "Include system tables (-S, tables action)"
+      type: bool
+    - field_id: single_column
+      label: "One name per line (-1, tables action)"
+      type: bool
+      default: true

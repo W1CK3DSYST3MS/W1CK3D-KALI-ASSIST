@@ -1,0 +1,128 @@
+tool_id: oscanner
+display_name: "oscanner"
+binary_candidates: [oscanner]
+categories: [database, reconnaissance]
+os_profile: kali
+one_liner: "Tries default Oracle account/password pairs against a live Oracle listener."
+authorization_gate: true
+authorization_text: >
+  oscanner makes REAL login attempts against a live Oracle database using a bundled list of
+  known default account/password pairs — this can trigger account lockouts, flood logs, and
+  trip alerts, exactly like any other credential-testing tool. Only run this against Oracle
+  instances you own or are explicitly authorized to test. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first scan (START HERE)"
+    goal: "From finding an Oracle listener to a report of working default accounts."
+    command_builder_id: oscanner
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Confirm an Oracle listener is up"
+        slot_target: null
+        explanation:
+          what: "Oracle's TNS listener normally runs on port 1521. Confirm it's actually open before pointing oscanner at it."
+          why: "oscanner only makes sense against a live Oracle listener — a closed port just times out."
+          where: "Not part of the oscanner command itself — this is a prep check."
+        find_it: "Scan your authorized network for port 1521."
+        command_anatomy:
+          - {token: "nmap", does: "the port scanner (see the nmap tool)"}
+          - {token: "-p 1521 --open", does: "only show hosts with the Oracle listener port open"}
+          - {token: "192.168.1.0/24", does: "your authorized network range — you type this in"}
+        try_this: "nmap -p 1521 --open 192.168.1.0/24"
+        success_criteria: "At least one host shows 1521/tcp open."
+        expected_output: |
+          Nmap scan report for 192.168.1.10
+          PORT     STATE SERVICE
+          1521/tcp open  oracle
+        alternatives:
+          - trigger: "nothing has 1521 open"
+            cause: "No Oracle listener on this network, or it's firewalled."
+            fix: "Confirm you're on the authorized segment; Oracle listeners are sometimes moved off the default port."
+            check: "A host answers on 1521 (or the actual port in use, if known)."
+      - step_id: g2
+        title: "Run oscanner against one target"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-s <ip>` targets one host; oscanner tries its bundled list of known default Oracle account/password pairs (DBSNMP/DBSNMP, SYSTEM/MANAGER, and dozens more) and reports which ones work."
+          why: "Default Oracle installs historically shipped with well-known default accounts — this checks whether any are still active."
+          where: "ACTION_OPTIONS; -s is the target, -r is the required report file."
+        find_it: "Use the host from step 1. -r (report file) is required — pick any writable filename."
+        command_anatomy:
+          - {token: "oscanner", does: "the program"}
+          - {token: "-s 192.168.1.10", does: "the target — you type this in"}
+          - {token: "-r oscanner-report.txt", does: "required: where results are written"}
+          - {token: "-v", does: "verbose output"}
+        try_this: "oscanner -s 192.168.1.10 -r oscanner-report.txt -v"
+        success_criteria: "oscanner runs through its account list and reports any that authenticated."
+        expected_output: |
+          Connecting to 192.168.1.10:1521...
+          Trying SCOTT/TIGER... failed
+          Trying DBSNMP/DBSNMP... SUCCESS
+        alternatives:
+          - trigger: "connection refused"
+            cause: "Wrong port, or not actually an Oracle listener."
+            fix: "Re-confirm with the nmap step; some Oracle installs run on a non-default port (-P)."
+            check: "oscanner connects instead of erroring immediately."
+      - step_id: g3
+        title: "Read the report"
+        slot_target: null
+        explanation:
+          what: "The report file from step 2 lists every account/password pair tried and which ones succeeded."
+          why: "The live terminal output scrolls by — the report file is what you'll actually act on or include in a finding."
+          where: "The filename you chose with -r."
+        find_it: "The same filename you passed to -r in step 2."
+        command_anatomy:
+          - {token: "cat", does: "print a file"}
+          - {token: "oscanner-report.txt", does: "the report from step 2"}
+        try_this: "cat oscanner-report.txt"
+        success_criteria: "Any working account/password pairs are listed."
+        expected_output: |
+          SUCCESS: DBSNMP/DBSNMP
+        alternatives:
+          - trigger: "file is empty or missing"
+            cause: "The scan didn't actually run, or was interrupted before writing results."
+            fix: "Re-run step 2 and let it finish; check for permission errors on the report path."
+            check: "cat shows the file's contents."
+      - step_id: g4
+        title: "Scan a list of hosts instead of one"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-f <file>` swaps the single target (-s) for a file listing many hosts, one per line — the same account-list check runs against every one."
+          why: "Faster than running oscanner once per host when you have a whole authorized range to check."
+          where: "ACTION_OPTIONS; -f replaces -s (use one or the other)."
+        find_it: "A text file with one IP/hostname per line, all from your authorized scope."
+        command_anatomy:
+          - {token: "oscanner -f oracle_hosts.txt", does: "scan every host listed in this file"}
+          - {token: "-r oscanner-full-report.txt", does: "combined report for all hosts"}
+        try_this: "oscanner -f oracle_hosts.txt -r oscanner-full-report.txt -v"
+        success_criteria: "Every host in the file is checked in turn; the report covers all of them."
+        expected_output: |
+          Connecting to 192.168.1.10:1521... done
+          Connecting to 192.168.1.11:1521... done
+        alternatives:
+          - trigger: "only the first host gets scanned"
+            cause: "Malformed host list (wrong line endings, extra whitespace)."
+            fix: "Confirm the file is plain text, one host per line, no trailing characters."
+            check: "The report covers every host in the file."
+quick_build:
+  builder: oscanner
+  title: "Quick scan"
+  fields:
+    - field_id: target
+      label: "Target (-s)"
+      type: string
+      required: true
+      placeholder: "192.168.1.10"
+    - field_id: report
+      label: "Report file (-r)"
+      type: path
+      default: "oscanner-report.txt"
+    - field_id: port
+      label: "Port (-P)"
+      type: int
+      placeholder: "1521  (optional)"
+    - field_id: verbose
+      label: "Verbose (-v)"
+      type: bool
+      default: true

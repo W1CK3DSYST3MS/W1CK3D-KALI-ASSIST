@@ -1,0 +1,16 @@
+module_id: tool.tnscmd10g
+name: "tnscmd10g — Oracle TNS listener prober"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: tnscmd10g
+  flows: [guided]
+content:
+  tool: tool.yaml
+source: "authored; verified against installed tnscmd10g usage banner (Kali 2026.3)"
+license: "MIT (this repo); tnscmd10g is GPL (referenced, not bundled)"
+checksum: ""
