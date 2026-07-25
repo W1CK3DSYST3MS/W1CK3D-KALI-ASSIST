@@ -34,6 +34,14 @@ Released at [github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases](https://githu
 — see `docs/PHASE-TWO-STATUS.md` for the detailed build log and what's still outstanding
 (per-tool GUI form polish, more tool coverage).
 
+## Staying updated
+
+The app itself never phones home or checks for updates — that's by design (see Principles
+below). To get notified when a new version ships, use GitHub's own notifications instead of
+relying on the app: on this repo, click **Watch → Custom → Releases only** (top of the GitHub
+page). You'll get a notification/email for each new release, with nothing running on your
+machine in the meantime.
+
 ## Prerequisites
 
 - **Kali Linux** (primary target; also runs on Ubuntu desktop) — the app is Linux-only for now.
