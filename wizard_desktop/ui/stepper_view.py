@@ -43,6 +43,8 @@ class StepperView(QWidget):
         self._resources = resources or []
         self._on_milestone = on_milestone
         self._on_finished = on_finished
+        self._review_pos: int | None = None  # None = live/final; int = reviewing that step
+        self._final_notified = False
         self._build()
         self._render()
 
@@ -55,13 +57,32 @@ class StepperView(QWidget):
         self._progress.setObjectName("Muted")
         self._root.addWidget(self._progress)
 
+        # Step review nav: look back at any already-completed step without
+        # losing your place. Hidden gate while reviewing (you're just looking).
+        nav = QHBoxLayout()
+        self._prev_btn = QPushButton("◀ Previous")
+        self._prev_btn.setObjectName("Compact")
+        self._prev_btn.clicked.connect(self._go_previous)
+        nav.addWidget(self._prev_btn)
+        self._review_label = QLabel("")
+        self._review_label.setObjectName("Faint")
+        self._review_label.setAlignment(Qt.AlignCenter)
+        nav.addWidget(self._review_label, 1)
+        self._next_btn = QPushButton("Next ▶")
+        self._next_btn.setObjectName("Compact")
+        self._next_btn.clicked.connect(self._go_next)
+        nav.addWidget(self._next_btn)
+        self._nav_host = QWidget()
+        self._nav_host.setLayout(nav)
+        self._root.addWidget(self._nav_host)
+
         self._title = QLabel("")
         self._title.setObjectName("H1")
         self._title.setWordWrap(True)
         self._root.addWidget(self._title)
 
         self._explain = QFrame()
-        self._explain.setObjectName("Card")
+        self._explain.setObjectName("Info")
         ex = QVBoxLayout(self._explain)
         ex.setContentsMargins(14, 12, 14, 12)
         self._what = self._wrapped(ex, "What")
@@ -75,7 +96,7 @@ class StepperView(QWidget):
         fl = QVBoxLayout(self._find)
         fl.setContentsMargins(14, 12, 14, 12)
         self._find_cap = QLabel("HOW TO GET WHAT YOU NEED")
-        self._find_cap.setObjectName("Faint")
+        self._find_cap.setObjectName("Caption")
         fl.addWidget(self._find_cap)
         self._find_body = QLabel("")
         self._find_body.setObjectName("Body")
@@ -96,7 +117,7 @@ class StepperView(QWidget):
         self._root.addWidget(self._alt)
 
         self._try_label = QLabel("Run this in your own terminal:")
-        self._try_label.setObjectName("Muted")
+        self._try_label.setObjectName("Caption")
         self._root.addWidget(self._try_label)
         self._try = QLabel("")
         self._try.setObjectName("Mono")
@@ -110,7 +131,7 @@ class StepperView(QWidget):
         anl = QVBoxLayout(self._anatomy)
         anl.setContentsMargins(14, 12, 14, 12)
         self._anatomy_cap = QLabel("WHAT EACH PART DOES")
-        self._anatomy_cap.setObjectName("Faint")
+        self._anatomy_cap.setObjectName("Caption")
         anl.addWidget(self._anatomy_cap)
         self._anatomy_body = QLabel("")
         self._anatomy_body.setObjectName("Body")
@@ -126,19 +147,28 @@ class StepperView(QWidget):
 
         # Expected-output reference: what a successful run looks like on screen.
         self._expected_cap = QLabel("EXPECTED — what a successful run looks like:")
-        self._expected_cap.setObjectName("Faint")
+        self._expected_cap.setObjectName("Caption")
         self._root.addWidget(self._expected_cap)
         self._expected = QTextEdit()
         self._expected.setObjectName("Mono")
         self._expected.setReadOnly(True)
         self._expected.setLineWrapMode(QTextEdit.NoWrap)  # preserve terminal columns
-        self._expected.setMaximumHeight(200)
         self._root.addWidget(self._expected)
 
+        # New-term glossary callout — a proper card like every other section,
+        # not a bare unlabeled sentence (that read as a stray line of text).
+        self._new_term = QFrame()
+        self._new_term.setObjectName("Info")
+        nl = QVBoxLayout(self._new_term)
+        nl.setContentsMargins(14, 12, 14, 12)
+        new_term_cap = QLabel("NEW TERM")
+        new_term_cap.setObjectName("Caption")
+        nl.addWidget(new_term_cap)
         self._glossary_box = QLabel("")
-        self._glossary_box.setObjectName("Faint")
+        self._glossary_box.setObjectName("Body")
         self._glossary_box.setWordWrap(True)
-        self._root.addWidget(self._glossary_box)
+        nl.addWidget(self._glossary_box)
+        self._root.addWidget(self._new_term)
 
         # Yes/No gate
         gate = QHBoxLayout()
@@ -169,7 +199,7 @@ class StepperView(QWidget):
     @staticmethod
     def _wrapped(layout: QVBoxLayout, caption: str) -> QLabel:
         cap = QLabel(caption.upper())
-        cap.setObjectName("Faint")
+        cap.setObjectName("Caption")
         body = QLabel("")
         body.setObjectName("Body")
         body.setWordWrap(True)
@@ -179,10 +209,25 @@ class StepperView(QWidget):
 
     # -- rendering --------------------------------------------------------- #
     def _render(self) -> None:
+        self._update_nav()
+        if self._review_pos is not None:
+            self._final.hide()
+            self._gate_host.hide()
+            self._review_label.show()
+            self._paint_step(self._s.review_view(self._review_pos))
+            return
+        self._review_label.hide()
         if self._s.is_done():
             self._render_final()
             return
-        v = self._s.current()
+        self._final.hide()
+        self._gate_host.show()
+        self._paint_step(self._s.current())
+
+    def _paint_step(self, v) -> None:
+        for w in (self._explain, self._find, self._try, self._try_label, self._anatomy,
+                  self._success):
+            w.show()
         self._progress.setText(f"STEP {v.index + 1} / {v.total}")
         self._title.setText(v.title)
         self._what.setText(v.what)
@@ -209,6 +254,7 @@ class StepperView(QWidget):
         self._expected.setVisible(has_expected)
         if has_expected:
             self._expected.setPlainText(v.expected_output)
+            self._fit_expected_height()
 
         if v.on_alternative:
             self._alt.show()
@@ -236,21 +282,28 @@ class StepperView(QWidget):
                 if d:
                     defs.append(f"{term}: {d}")
             self._glossary_box.setText("\n".join(defs))
-            self._glossary_box.setVisible(bool(defs))
+            self._new_term.setVisible(bool(defs))
         else:
-            self._glossary_box.hide()
+            self._new_term.hide()
+
+    def _fit_expected_height(self) -> None:
+        """Size the EXPECTED box to its content (a few lines) instead of always
+        reserving a flat 200px — a 2-line example was leaving a huge dead gap."""
+        line_count = self._expected.toPlainText().count("\n") + 1
+        needed = self._expected.fontMetrics().lineSpacing() * line_count + 40
+        self._expected.setFixedHeight(max(56, min(200, needed)))
 
     def _render_final(self) -> None:
         for w in (self._explain, self._find, self._alt, self._try, self._try_label,
                   self._anatomy, self._success, self._expected_cap, self._expected,
-                  self._gate_host, self._glossary_box):
+                  self._gate_host, self._new_term):
             w.hide()
         self._final.show()
         if self._s.state is StepperState.COMPLETE:
             self._progress.setText("COMPLETE")
             self._title.setText("✔ Done — you completed this flow.")
             self._final.setPlainText(
-                "Every step verified. You can revisit any step from the menu, "
+                "Every step verified. Use ◀ Previous above to look back at any step, "
                 "or move on to the next module."
             )
         else:
@@ -264,8 +317,44 @@ class StepperView(QWidget):
             self._final.setPlainText(
                 log + "\n\nCURATED TRUSTED LINKS (search yourself — no live help):\n" + links
             )
-        if self._on_finished:
+        if self._on_finished and not self._final_notified:
+            self._final_notified = True
             self._on_finished(self._s.state)
+
+    # -- step review (look back without losing your place) ----------------- #
+    def _update_nav(self) -> None:
+        completed = self._s.completed_positions()
+        if self._review_pos is not None:
+            self._prev_btn.setEnabled(self._review_pos > completed[0])
+            self._next_btn.setEnabled(True)
+            self._next_btn.setText("Next ▶" if self._review_pos < completed[-1] else "Return to current ▶▶")
+            self._review_label.setText(
+                f"REVIEWING STEP {self._review_pos + 1} — already completed, not editable"
+            )
+        else:
+            self._prev_btn.setEnabled(bool(completed))
+            self._next_btn.setEnabled(False)
+            self._next_btn.setText("Next ▶")
+
+    def _go_previous(self) -> None:
+        completed = self._s.completed_positions()
+        if not completed:
+            return
+        if self._review_pos is None:
+            self._review_pos = completed[-1]
+        elif self._review_pos > completed[0]:
+            self._review_pos -= 1
+        self._render()
+
+    def _go_next(self) -> None:
+        if self._review_pos is None:
+            return
+        completed = self._s.completed_positions()
+        if self._review_pos < completed[-1]:
+            self._review_pos += 1
+        else:
+            self._review_pos = None  # back to the live step, or the final screen
+        self._render()
 
     # -- gate -------------------------------------------------------------- #
     def _answer_yes(self) -> None:

@@ -103,10 +103,14 @@ Engine additions for M2:
 Known for M4: per-tool input forms in the GUI (right now the simple BUILD form is
 nmap-shaped; the adaptive stepper is the correct path for the other tools).
 
-## Phase Two — remaining (Milestones 3–4)
-- M3: convert troubleshooters T02–T05 + Module-00 setup/securing lesson to runtime.
-- M4: per-tool GUI forms, theme polish, onboarding checklist, settings (output base
-  dir); finalize AppImage; rebuild the binary (now bundles 10 tools).
+## Phase Two — remaining (Milestone 4)
+- M3 (convert troubleshooters T02–T05 + Module-00 setup/securing lesson to runtime): **DONE**
+  — confirmed 2026-07-25, `--self-test` reports `troubleshooters=5` (T01–T05) +
+  `fundamentals.setup_and_securing` present among the 14 lessons.
+- M4: **AppImage packaging DONE** (2026-07-25, `dist/W1CK3D-KALI-ASSIST-x86_64.AppImage`,
+  proven working with and without FUSE — see `packaging/README.md`). Still remaining:
+  per-tool GUI forms (right now the simple BUILD form is nmap-shaped; other tools rely on
+  the adaptive stepper), theme polish, onboarding checklist, settings (output base dir).
 
 ## Distribution model (updated 2026-07-25)
 This repo — source + `docs/specs` blueprints included — is **open source (MIT)**. The paid

@@ -52,6 +52,28 @@ def main() -> int:
     win._open_lesson(lessons, "lesson.shell_grammar")
     print("lesson opened + stepper rendered: OK")
 
+    # Drive the step-review nav directly: answer step 1, look back at it with
+    # Previous, confirm the gate is hidden while reviewing, then Next back to live.
+    from wizard_core.stepper import StepperSession
+    from wizard_desktop.ui.stepper_view import StepperView
+
+    lesson = registry.lessons["lesson.shell_grammar"]
+    assert len(lesson.steps) >= 2, "smoke test needs a lesson with 2+ steps"
+    session = StepperSession(lesson.steps, flow_title=lesson.title)
+    view = StepperView(session, glossary=registry.glossary)
+    first_step_id = session.current().step_id
+    view._answer_yes()  # noqa: SLF001
+    assert session.current().step_id != first_step_id
+    view._go_previous()  # noqa: SLF001
+    # isHidden() reflects our own show()/hide() calls directly, unlike isVisible()
+    # (which also depends on this standalone widget's never-shown top-level window).
+    assert view._review_pos == 0 and view._gate_host.isHidden()
+    assert view._title.text() == lesson.steps[0].title
+    view._go_next()  # noqa: SLF001
+    assert view._review_pos is None and not view._gate_host.isHidden()
+    assert view._title.text() == session.current().title
+    print("step review nav (Previous/Next): OK")
+
     tools = win._tools_tab()
     win._open_tool(tools, "nmap")
     # Build a command directly, force-authorized to skip the modal dialog.

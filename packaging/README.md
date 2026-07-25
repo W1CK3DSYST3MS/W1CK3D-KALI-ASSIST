@@ -29,15 +29,34 @@ This confirms the bundled fonts + modules resolve from inside the binary.
 
 ## Target builds
 - **Windows desktop:** the `.exe` produced here (dev/proof; also usable on Windows).
-- **Kali / Ubuntu desktop (primary target):** run the same `pyinstaller` command **on
-  Kali**. For a portable Linux artifact, wrap the one-dir output as an **AppImage**
-  (e.g. with `appimagetool`) — recommended for distribution. `packaging/w1ck3d-kali-assist.desktop`
-  is ready for this (AppDir-relative `Exec=`/`Icon=` names); pair it with `dist/w1ck3d-kali-assist`
-  renamed/symlinked to `AppRun` and `assets/W1CK3D-KALI-ASSIST-logo.png` as `w1ck3d-kali-assist.png`.
+- **Kali / Ubuntu desktop (primary target):** run the same `pyinstaller` command **on Kali**.
+- **AppImage (portable Linux artifact, proven working 2026-07-25):**
+  ```bash
+  # one-time: get appimagetool (official, from the AppImage project)
+  curl -L -o ~/.local/bin/appimagetool \
+    "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+  chmod +x ~/.local/bin/appimagetool
+
+  # build the AppDir
+  APPDIR=/tmp/W1CK3D-KALI-ASSIST.AppDir
+  rm -rf "$APPDIR" && mkdir -p "$APPDIR"
+  cp dist/w1ck3d-kali-assist "$APPDIR/AppRun" && chmod +x "$APPDIR/AppRun"
+  cp packaging/w1ck3d-kali-assist.desktop "$APPDIR/w1ck3d-kali-assist.desktop"
+  cp assets/W1CK3D-KALI-ASSIST-logo.png "$APPDIR/w1ck3d-kali-assist.png"
+
+  # package it
+  ARCH=x86_64 ~/.local/bin/appimagetool "$APPDIR" dist/W1CK3D-KALI-ASSIST-x86_64.AppImage
+
+  # verify (works with or without FUSE)
+  dist/W1CK3D-KALI-ASSIST-x86_64.AppImage --self-test
+  ```
+  Since the PyInstaller build is already a self-contained one-file binary, the AppDir only
+  needs those three files — no `usr/` tree required. If `appimagetool` warns about missing
+  AppStream metadata, that's expected and harmless (optional metadata, not required to run).
 - **Installed on a regular Kali desktop (not packaged):** a ready-to-copy `.desktop` launcher
-  pointing at your local `dist/w1ck3d-kali-assist` + icon is easiest done by hand — see
-  `~/.local/share/applications/w1ck3d-kali-assist.desktop` for a working example (points to an
-  absolute local path, so it's machine-specific — not what ships in the repo/AppImage).
+  is easiest done by hand — see `~/.local/share/applications/w1ck3d-kali-assist.desktop` for a
+  working example. Point `Exec=` at a stable location (e.g. `~/.local/bin/w1ck3d-kali-assist`,
+  not directly into a project checkout) so it survives the source folder moving.
 
 ## Acceptance (per BUILD-BRIEF, Milestone 1)
 On a clean Kali VM: launch the built binary, pass the login + disclaimer gate, build

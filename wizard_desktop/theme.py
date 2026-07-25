@@ -102,10 +102,20 @@ def build_qss(scale: float = 1.0) -> str:
     QLabel#Faint {{ color: {t['text_faint']}; font-size: {fs(13)}px; }}
     QLabel#Body {{ font-size: {fs(14)}px; }}
 
+    /* Section captions (WHAT/WHY/WHERE, EXPECTED, etc.) — these are scan
+       anchors, so they need to stand out, not disappear like #Faint. */
+    QLabel#Caption {{
+        color: {t['gold']};
+        font-family: {FONT_HEADING};
+        font-size: {fs(11)}px;
+        letter-spacing: 1.5px;
+        font-weight: 600;
+    }}
+
     /* Cards / panels */
     QFrame#Card {{
         background-color: {t['bg_surface']};
-        border: 1px solid {t['line']};
+        border: 1px solid {t['line_strong']};
         border-radius: 8px;
     }}
     QFrame#Raised {{ background-color: {t['bg_raised']}; border: 1px solid {t['line_strong']}; border-radius: 8px; }}

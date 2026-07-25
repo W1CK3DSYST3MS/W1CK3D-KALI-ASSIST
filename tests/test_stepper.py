@@ -61,3 +61,33 @@ def test_cannot_answer_after_done():
     s.answer_yes()
     with pytest.raises(RuntimeError):
         s.answer_yes()
+
+
+def test_review_completed_step_after_advancing():
+    s = StepperSession([_step("a"), _step("b"), _step("c")], flow_title="t")
+    s.answer_yes()  # passes a
+    s.answer_yes()  # passes b, now on c
+    assert s.completed_positions() == [0, 1]
+    v = s.review_view(0)
+    assert v.step_id == "a" and not v.on_alternative
+    v = s.review_view(1)
+    assert v.step_id == "b" and not v.on_alternative
+    # review doesn't disturb the live session
+    assert s.current().step_id == "c"
+
+
+def test_review_reflects_alternative_shown_at_yes():
+    alts = [StepAlternative(cause="c1", fix="f1"), StepAlternative(cause="c2", fix="f2")]
+    s = StepperSession([_step("a", alts), _step("b")], flow_title="t")
+    s.answer_no()   # alternative 0 shown
+    s.answer_yes()  # passed while alternative 0 was on screen
+    v = s.review_view(0)
+    assert v.on_alternative and v.alternative_index == 0 and v.fix == "f1"
+
+
+def test_review_view_rejects_uncompleted_position():
+    s = StepperSession([_step("a"), _step("b")], flow_title="t")
+    with pytest.raises(ValueError):
+        s.review_view(1)  # not reached yet
+    with pytest.raises(ValueError):
+        s.review_view(0)  # reached but not yet answered

@@ -115,6 +115,8 @@ class StepperSession:
         self._state = StepperState.IN_PROGRESS
         self._attempts: list[_Attempt] = []
         self._last_output = ""
+        self._passed: list[int] = []            # step indices answered Yes, in order
+        self._passed_alt: dict[int, int] = {}   # position -> alt shown at Yes (-1 = main)
 
     # -- introspection ----------------------------------------------------- #
     @property
@@ -131,11 +133,26 @@ class StepperSession:
     def current(self) -> StepView:
         if self.is_done():
             raise RuntimeError(f"Stepper is {self._state.value}; no current step.")
-        step = self._steps[self._i]
+        return self._view_for(self._i, self._alt)
+
+    # -- review (already-completed steps; does not touch session state) ---- #
+    def completed_positions(self) -> list[int]:
+        """Step indices already answered Yes, in order — safe to pass to review_view()."""
+        return list(self._passed)
+
+    def review_view(self, position: int) -> StepView:
+        """Read-only StepView for a completed step, exactly as it looked when passed
+        (main step, or whichever alternative was on screen at the time)."""
+        if position not in self._passed_alt:
+            raise ValueError(f"Step at position {position} has not been completed yet.")
+        return self._view_for(position, self._passed_alt[position])
+
+    def _view_for(self, position: int, alt_index: int) -> StepView:
+        step = self._steps[position]
         view = StepView(
             step_id=step.step_id,
             title=step.title,
-            index=self._i,
+            index=position,
             total=len(self._steps),
             what=step.explanation.what,
             why=step.explanation.why,
@@ -150,12 +167,12 @@ class StepperSession:
             destructive=step.destructive,
             recovery=step.recovery,
         )
-        if self._alt >= 0 and self._alt < len(step.alternatives):
-            alt: StepAlternative = step.alternatives[self._alt]
+        if alt_index >= 0 and alt_index < len(step.alternatives):
+            alt: StepAlternative = step.alternatives[alt_index]
             view = StepView(
                 **{**view.__dict__,
                    "on_alternative": True,
-                   "alternative_index": self._alt,
+                   "alternative_index": alt_index,
                    "alternative_total": len(step.alternatives),
                    "cause": alt.cause,
                    "fix": alt.fix,
@@ -175,6 +192,8 @@ class StepperSession:
             raise RuntimeError("Stepper already finished.")
         step = self._steps[self._i]
         self._attempts.append(_Attempt(step.step_id, step.title, "yes", self._alt, self._last_output))
+        self._passed.append(self._i)
+        self._passed_alt[self._i] = self._alt
         self._last_output = ""
         self._alt = -1
         self._i += 1
