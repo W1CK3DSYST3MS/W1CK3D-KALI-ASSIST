@@ -1,0 +1,17 @@
+module_id: tool.responder
+name: "Responder — LLMNR/NBT-NS/mDNS poisoner"
+version: "1.0.0"
+type: tool
+os_profile: kali
+requires:
+  base_api: ">=1.0"
+  modules: []
+provides:
+  tool: responder
+  flows: [guided, crack]
+content:
+  tool: tool.yaml
+  glossary: glossary.yaml
+source: "authored; verified against installed responder --help (Kali 2026.3, v3.2.2.0) + /usr/share/doc/responder/README.md"
+license: "MIT (this repo); Responder is GPLv3 (referenced, not bundled)"
+checksum: ""

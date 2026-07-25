@@ -45,6 +45,7 @@ Legend: ✅ verified · ✍️ corrected · ⏳ pending · 🔬 expected_output 
 | dirbuster | ✅ | installed `-h` fallback (real DirBuster 1.0-RC1 usage text; `--version` only printed a GUI startup banner) | `-H/-u/-l/-e/-r` confirmed verbatim |
 | burpsuite | ✅ | installed `--help`, Burp Suite Community 2026.3.2 | `--project-file=`/`--config-file=` confirmed verbatim |
 | kismet | ✅ | installed `--help`/man, Kismet 2025.09.0 | `-c` (capture source)/`--no-ncurses`/`--log-prefix` confirmed in both help and man |
+| responder | ✅ | installed `--help` (no man page), Responder v3.2.2.0, + `/usr/share/doc/responder/README.md` | `-I/-A/-v/-b/-w` + all other flags confirmed against real help text; log path confirmed as `/usr/share/responder/logs/` (packaged wrapper `cd`s into `/usr/share/responder/` before exec); hashcat `-m 5600` for NetNTLMv2 is well-established public knowledge, not independently re-verified against hashcat's own help in this pass |
 
 ### Verification pass 2 (2026-07-24)
 Ran `tools/verify_capture.sh` on this Kali 2026.3 box (read-only `--help`/`--version`/`man`

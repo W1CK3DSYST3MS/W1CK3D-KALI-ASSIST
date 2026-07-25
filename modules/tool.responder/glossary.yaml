@@ -1,0 +1,11 @@
+terms:
+  - term: llmnr
+    definition: "Link-Local Multicast Name Resolution — Windows' fallback name lookup when DNS fails. It's a broadcast, so anyone on the segment can answer it."
+  - term: nbt_ns
+    definition: "NetBIOS Name Service — an older Windows broadcast name-lookup protocol with the same weakness as LLMNR."
+  - term: ntlmv2
+    definition: "A challenge-response Windows auth hash. Not the password itself, but crackable offline (hashcat -m 5600)."
+  - term: poisoning
+    definition: "Answering a broadcast name-lookup request before the real service can, so the client authenticates to you instead of who it meant to reach."
+  - term: wpad
+    definition: "Web Proxy Auto-Discovery — a legacy protocol that finds proxy settings automatically. Frequently abused to intercept HTTP traffic."
