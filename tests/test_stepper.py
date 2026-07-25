@@ -91,3 +91,16 @@ def test_review_view_rejects_uncompleted_position():
         s.review_view(1)  # not reached yet
     with pytest.raises(ValueError):
         s.review_view(0)  # reached but not yet answered
+
+
+def test_flow_goal_survives_to_completion():
+    # Regression: the completion screen used to show only a hardcoded generic
+    # message with no way to point at a related flow (e.g. sherlock's
+    # next_steps) -- flow_goal must still be readable once the session is
+    # actually COMPLETE, not just while a step is still in progress.
+    s = StepperSession([_step("a"), _step("b")], flow_title="t",
+                        flow_goal="see the next_steps flow for what's next")
+    s.answer_yes()
+    s.answer_yes()
+    assert s.is_done() and s.state is StepperState.COMPLETE
+    assert s.flow_goal == "see the next_steps flow for what's next"

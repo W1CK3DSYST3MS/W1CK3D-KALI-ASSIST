@@ -269,7 +269,8 @@ class MainWindow(QMainWindow):
                 self._progress.mark_complete(lesson_id, sid)
                 self._refresh_lessons_list()
 
-        session = StepperSession(lesson.steps, flow_title=lesson.title, start_index=start)
+        session = StepperSession(lesson.steps, flow_title=lesson.title, flow_goal=lesson.goal,
+                                  start_index=start)
         view = StepperView(session, glossary=self._reg.glossary, on_milestone=_milestone)
         sec.show_detail(view)
 
@@ -303,7 +304,7 @@ class MainWindow(QMainWindow):
         if not flow.steps:
             return
         self._reg.glossary.reset_seen()
-        session = StepperSession(flow.steps, flow_title=flow.title)
+        session = StepperSession(flow.steps, flow_title=flow.title, flow_goal=flow.goal)
         view = StepperView(
             session,
             glossary=self._reg.glossary,

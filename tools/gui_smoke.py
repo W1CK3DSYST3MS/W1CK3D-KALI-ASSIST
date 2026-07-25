@@ -74,6 +74,23 @@ def main() -> int:
     assert view._title.text() == session.current().title
     print("step review nav (Previous/Next): OK")
 
+    # Regression: the completion screen used to show a hardcoded generic
+    # message no matter what, silently dropping any flow_goal pointer to a
+    # related flow (this shipped broken once already - sherlock's "now what"
+    # pointer never actually reached the screen the user lands on after
+    # finishing). Drive a flow to completion for real and check the ACTUAL
+    # rendered completion text, not just the pre-completion step.
+    sherlock = registry.tools["sherlock"]
+    guided = next(f for f in sherlock.flows if f.flow_id == "guided")
+    assert guided.goal, "sherlock's guided flow should have a goal to test with"
+    s2 = StepperSession(guided.steps, flow_title=guided.title, flow_goal=guided.goal)
+    for _ in guided.steps:
+        s2.answer_yes()
+    assert s2.is_done()
+    view2 = StepperView(s2, glossary=registry.glossary)
+    assert guided.goal in view2._final.toPlainText()  # noqa: SLF001
+    print("flow_goal reaches the actual completion screen: OK")
+
     tools = win._tools_tab()
     win._open_tool(tools, "nmap")
     # Build a command directly, force-authorized to skip the modal dialog.

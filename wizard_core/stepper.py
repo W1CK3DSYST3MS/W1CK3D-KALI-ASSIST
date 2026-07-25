@@ -102,12 +102,13 @@ class IssueLog:
 class StepperSession:
     """Drives one flow's steps. Front-end calls current()/answer_yes()/answer_no()."""
 
-    def __init__(self, steps: Sequence[StepSpec], *, flow_title: str = "",
+    def __init__(self, steps: Sequence[StepSpec], *, flow_title: str = "", flow_goal: str = "",
                  context: dict[str, str] | None = None, start_index: int = 0) -> None:
         if not steps:
             raise ValueError("StepperSession requires at least one step.")
         self._steps: list[StepSpec] = list(steps)
         self._flow_title = flow_title
+        self._flow_goal = flow_goal
         self._context = dict(context or {})
         # Resume support: clamp into range; len(steps) would mean already complete.
         self._i = max(0, min(start_index, len(self._steps) - 1))  # current step index
@@ -122,6 +123,12 @@ class StepperSession:
     @property
     def state(self) -> StepperState:
         return self._state
+
+    @property
+    def flow_goal(self) -> str:
+        """The flow's own goal text, shown again on completion (it's the natural place
+        to point at a related flow — see sherlock's next_steps, for example)."""
+        return self._flow_goal
 
     @property
     def attempts(self) -> list[_Attempt]:

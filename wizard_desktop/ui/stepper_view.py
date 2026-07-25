@@ -302,10 +302,12 @@ class StepperView(QWidget):
         if self._s.state is StepperState.COMPLETE:
             self._progress.setText("COMPLETE")
             self._title.setText("✔ Done — you completed this flow.")
-            self._final.setPlainText(
-                "Every step verified. Use ◀ Previous above to look back at any step, "
-                "or move on to the next module."
-            )
+            msg = "Every step verified. Use ◀ Previous above to look back at any step."
+            if self._s.flow_goal:
+                msg += f"\n\n{self._s.flow_goal}"
+            else:
+                msg += " Or move on to the next module."
+            self._final.setPlainText(msg)
         else:
             self._progress.setText("UNRESOLVED")
             self._title.setText("Authored fixes exhausted — here is your Issue Log.")
