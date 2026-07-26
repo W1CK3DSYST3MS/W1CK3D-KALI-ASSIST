@@ -23,3 +23,7 @@ terms:
     definition: "A file locked from change until `chattr -i` clears the bit."
   - term: acl
     definition: "Access Control List — fine-grained per-user/group permissions beyond classic rwx."
+  - term: newgrp
+    definition: "A command that starts a new shell with a just-added group applied immediately, so you don't have to fully log out and back in for a group change to take effect."
+  - term: shebang
+    definition: "The #!/path/to/interpreter on a script's very first line, telling the shell which program should run it (e.g. #!/bin/bash, #!/usr/bin/env python3)."

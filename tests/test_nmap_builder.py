@@ -59,3 +59,21 @@ def test_missing_targets_is_noted_not_crashed():
     plan = build({"profile": "quick"})
     assert any("No targets" in n for n in plan.notes)
     assert Slot.TARGET_PIVOT not in plan.slot_values
+
+
+def test_evasion_flags_build_correctly():
+    plan = build({
+        "targets": "x", "fragment": True, "decoys": "RND:5",
+        "source_port": 53, "spoof_mac": "0",
+    })
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == [
+        "-f", "-D", "RND:5", "-g", "53", "--spoof-mac", "0",
+    ]
+    # these all need raw-socket privileges, same as -sS/-O/-sU
+    assert any("needs privileges" in n for n in plan.notes)
+
+
+def test_spoof_source_ip_warns_about_interface_and_pn():
+    plan = build({"targets": "x", "spoof_source_ip": "10.0.0.99"})
+    assert "-S" in plan.array_form and "10.0.0.99" in plan.array_form
+    assert any("-e <interface>" in n for n in plan.notes)

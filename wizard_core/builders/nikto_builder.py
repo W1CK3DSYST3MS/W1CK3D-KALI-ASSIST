@@ -2,6 +2,11 @@
 
 Target is always `-h` (never a bare argument). Generate-only. nikto is noisy by
 design — the module's authorization gate and pacing flags reflect that.
+
+Recognised keys (all optional except ``host``): profile, host, port, ssl, nossl,
+tuning, vhost, evasion, plugins, mutate, mutate_options, output, format, save,
+timeout, pause, maxtime, verbose, proxy, auth_id, rsacert, key, update,
+list_plugins. Verified against the installed build (``nikto -H``, Nikto 2.6.0).
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ _PROFILES: dict[str, dict[str, list[str]]] = {
     "tuned": {"action": ["-Tuning", "1234"]},
     "reported": {"action": [], "output": ["-o", "report.html", "-Format", "htm"]},
 }
-_FORMATS = {"htm", "csv", "xml", "json", "txt"}
+_FORMATS = {"htm", "csv", "xml", "json", "txt", "sql"}
 
 
 def _truthy(v: object) -> bool:
@@ -95,6 +100,14 @@ def build_nikto(inputs: Mapping[str, object]) -> CommandPlan:
     if inputs.get("plugins"):
         a.extend(["-Plugins", str(inputs["plugins"])])
 
+    # Deeper enumeration (spec gap fix): -mutate makes nikto actively GUESS extra
+    # files/usernames/directories instead of only checking its built-in signatures.
+    # Sub-options on this installed build (nikto -H): 1,2,3,4,6 — there is no 5.
+    if inputs.get("mutate"):
+        a.extend(["-mutate", str(inputs["mutate"])])
+    if inputs.get("mutate_options"):
+        a.extend(["-mutate-options", str(inputs["mutate_options"])])
+
     # OUTPUT
     if inputs.get("output"):
         fmt = str(inputs.get("format") or "").strip()
@@ -103,12 +116,19 @@ def build_nikto(inputs: Mapping[str, object]) -> CommandPlan:
         o.extend(["-o", str(inputs["output"])])
         if fmt:
             o.extend(["-Format", fmt])
+    if inputs.get("save"):
+        val = inputs.get("save")
+        o.extend(["-Save", "." if val is True or str(val).lower() in {"true", "1", "yes"} else str(val)])
 
-    # ENV / proxy / auth
+    # ENV / proxy / auth / client-certificate auth
     if inputs.get("proxy"):
         env.extend(["-useproxy", str(inputs["proxy"])])
     if inputs.get("auth_id"):
         env.extend(["-id", str(inputs["auth_id"])])
+    if inputs.get("rsacert"):
+        env.extend(["-RSAcert", str(inputs["rsacert"])])
+    if inputs.get("key"):
+        env.extend(["-key", str(inputs["key"])])
 
     slot_values = {
         Slot.GLOBAL_OPTIONS: g,

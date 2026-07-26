@@ -32,7 +32,7 @@ symptoms:
       - step_id: pm_look
         title: "Who owns it, and who are you?"
         slot_target: null
-        glossary_refs: [permissions_rwx, owner_group]
+        glossary_refs: [permissions_rwx, owner_group, group_membership, newgrp]
         explanation:
           what: "`ls -l <path>` (or `ls -ld <dir>`) shows owner/group + rwx; `id` shows your user and groups."
           why: "If you're not the owner and not in the group, you only get 'others' permissions — often the whole problem."
@@ -51,6 +51,18 @@ symptoms:
             cause: "Missing the specific rwx bit for you."
             fix: "Add just that bit: `chmod u+w <path>` (or u+rwx)."
             check: "ls -l shows the added bit; the action works."
+          - trigger: "`id` DOES show you in the right group, but the action still fails"
+            cause: "Group changes only apply to NEW sessions — the terminal/session you're using was opened before you were added to the group, so it's still using your old group list."
+            fix: "Run `newgrp <group>` to pick up the new group in this shell, or fully log out and back in (GUI: log out of the desktop, not just close the terminal)."
+            check: "`id` in a freshly-opened terminal (or after `newgrp`) lists the group."
+          - trigger: "you have full rwx on the target itself, but access still fails"
+            cause: "A directory somewhere ABOVE the target in the path is missing the execute (x) bit for you — you can't even pass through it to reach the target."
+            fix: "Check every parent directory, not just the file (see the intermediate fix below)."
+            check: "Each parent directory shows x for you; then access works."
+          - trigger: "some files in the SAME folder work, others in that same folder don't"
+            cause: "Not a folder-wide problem — those specific files have different ownership/permissions, often left over from copying or downloading files as root."
+            fix: "Check the SPECIFIC failing file's owner with `ls -l`, not just the folder — it likely just needs its own chown/chmod."
+            check: "ls -l on the failing file shows different owner/mode than the working ones next to it."
     fixes:
       - fix_id: narrow_bit
         tier: basic
@@ -94,6 +106,12 @@ symptoms:
         command: "su -    # as root: usermod -aG sudo <user>   # then log out and back in"
         why: "The user lacks sudo rights; only root can grant them; group change needs a re-login."
         verify: "After re-login, `sudo whoami` -> root."
+      - fix_id: unable_resolve_host
+        tier: intermediate
+        title: "'sudo: unable to resolve host <name>' warning"
+        command: "hostname; grep \"$(hostname)\" /etc/hosts   # if missing, add a line: 127.0.1.1 <hostname>"
+        why: "sudo looks up your machine's own hostname every time it runs. If it's missing from /etc/hosts (common after renaming the machine or a fresh VM clone), you get this noisy warning even though sudo still basically works."
+        verify: "The warning stops; sudo runs cleanly."
       - fix_id: visudo
         tier: extensive
         title: "Edit sudo config SAFELY"
@@ -105,6 +123,26 @@ symptoms:
   - symptom_id: ownership
     label: "Can't edit a file I think is mine (ownership)"
     aliases: [ownership, owned by root, chown, cant edit my file, sudo created file]
+    diagnosis:
+      - step_id: pm_own_check
+        title: "Is it the FILE that's root-owned, the FOLDER, or both?"
+        slot_target: null
+        glossary_refs: [owner_group]
+        explanation:
+          what: "`ls -l <file>` shows the file's own owner; `ls -ld <dir>` shows the containing folder's owner separately — they can differ."
+          why: "Owning the file but not its folder (or the other way round) points at a different, narrower fix than owning neither."
+          where: "Diagnostic."
+        try_this: "ls -l <path>; ls -ld $(dirname <path>)"
+        success_criteria: "You know whether the FILE, the FOLDER, or both are root-owned."
+        alternatives:
+          - trigger: "the file is root-owned but the folder is yours"
+            cause: "Created with sudo inside your own directory — very common (e.g. `sudo nano somefile`, or a tool run with sudo that wrote output there)."
+            fix: "Reassign just that one file: `sudo chown <you>:<you> <path>`."
+            check: "ls -l shows your name as owner; editing works."
+          - trigger: "both the file AND its folder are root-owned"
+            cause: "An entire tree was created or copied while running as root."
+            fix: "Only chown -R the exact intended directory (see the extensive fix below) — never a broader path like your whole home folder or /."
+            check: "ls -ld shows your ownership on the folder and everything inside it."
     fixes:
       - fix_id: whose
         tier: basic
@@ -157,6 +195,10 @@ symptoms:
             cause: "Not detected — cable/port/power."
             fix: "Check `dmesg | tail` right after plugging in; try another port/cable."
             check: "dmesg should log the device on insert."
+          - trigger: "the partition IS listed with a filesystem type, but the mount command itself fails"
+            cause: "Detection isn't the problem — the failure is in mounting: a missing driver for that filesystem (NTFS/exFAT), the disk already mounted elsewhere, or a damaged filesystem."
+            fix: "Read the exact mount error. For NTFS/exFAT, install the driver packages (see the intermediate fix below). For 'already mounted', check `mount | grep sdX1`. For corruption, repair it with the drive's native OS (Windows/macOS) or an appropriate fsck."
+            check: "mount succeeds, or the specific error now names the real cause."
     fixes:
       - fix_id: mount_basic
         tier: basic
@@ -203,6 +245,30 @@ symptoms:
   - symptom_id: wont_execute
     label: "My script/binary won't run"
     aliases: [wont run, permission denied script, command not found, bad interpreter, crlf, exec]
+    diagnosis:
+      - step_id: pm_exec_error
+        title: "What is the EXACT error you get?"
+        slot_target: null
+        glossary_refs: [shebang]
+        explanation:
+          what: "Run it and read the exact wording of the error."
+          why: "'Permission denied' and 'No such file or directory' sound similar to a beginner but point at two completely different problems."
+          where: "Diagnostic."
+        try_this: "./<file>"
+        success_criteria: "You can read the exact error text."
+        alternatives:
+          - trigger: "'Permission denied'"
+            cause: "The execute bit isn't set on the file."
+            fix: "chmod +x it (see the basic fix below)."
+            check: "ls -l shows an x; it now runs."
+          - trigger: "'No such file or directory' — even though `ls` shows the file is right there"
+            cause: "Confusing but common: this actually means the script's SHEBANG interpreter (the #!/path/to/... on line 1) doesn't exist on your system — not that the script file itself is missing."
+            fix: "Check the shebang line and fix/install the interpreter path, or fix Windows-style line endings (see the intermediate fix below)."
+            check: "`head -1 <file>` names an interpreter that actually exists at that exact path."
+          - trigger: "it starts running, then errors out partway through"
+            cause: "The permissions problem is already solved — this is now a bug in the script's own logic, not a permissions issue."
+            fix: "Debug the script itself; getting it to run at all (this troubleshooter's job) is done."
+            check: "Not applicable to this troubleshooter."
     fixes:
       - fix_id: chmod_x
         tier: basic
@@ -238,6 +304,12 @@ symptoms:
         command: "lsattr <file>    # if it shows i: sudo chattr -i <file>"
         why: "The immutable bit blocks changes until cleared."
         verify: "After chattr -i, you can modify the file."
+      - fix_id: append_only
+        tier: intermediate
+        title: "Can add to a file but not overwrite/delete it -> append-only"
+        command: "lsattr <file>    # if it shows a: sudo chattr -a <file>"
+        why: "The append-only attribute is a lesser-known cousin of immutable — it lets data be ADDED to a file (e.g. by a logging process) but blocks overwriting or deleting it."
+        verify: "After chattr -a, normal edits and deletes work again."
       - fix_id: audit_suid
         tier: extensive
         title: "Audit SUID binaries (authorized review)"
@@ -247,6 +319,26 @@ symptoms:
   - symptom_id: readonly_fs
     label: "'Read-only filesystem' errors"
     aliases: [read-only filesystem, readonly, remount, cannot write ro, fsck]
+    diagnosis:
+      - step_id: pm_ro_scope
+        title: "Is it the WHOLE filesystem, or just one path?"
+        slot_target: null
+        glossary_refs: [mount]
+        explanation:
+          what: "`mount` lists every mounted filesystem and its options — check whether `ro` applies to the root filesystem ( / ) or just one specific mountpoint."
+          why: "A single read-only subfolder (a separately-mounted USB drive or network share) is a far less serious problem than the whole root filesystem going read-only."
+          where: "Diagnostic."
+        try_this: "mount | grep -E ' / |<path>'"
+        success_criteria: "You can see exactly which mountpoint is marked ro."
+        alternatives:
+          - trigger: "only a specific subfolder/mountpoint shows ro; root ( / ) is rw"
+            cause: "That's a separately-mounted filesystem (USB drive, network share) — not a system-wide problem."
+            fix: "Remount just that mountpoint (`sudo mount -o remount,rw <that-path>`), or check whether the source drive is physically write-protected (some SD cards/USB sticks have a lock switch)."
+            check: "That mountpoint's own entry no longer shows ro."
+          - trigger: "the root filesystem ( / ) itself shows ro"
+            cause: "The more serious case — usually an automatic safety remount the kernel triggers after a disk error."
+            fix: "Find out why first (see the basic fix below) before forcing it back to read-write."
+            check: "dmesg explains whether it was an error-triggered remount."
     fixes:
       - fix_id: why_ro
         tier: basic
@@ -260,6 +352,12 @@ symptoms:
         command: "sudo mount -o remount,rw /    # or the affected mountpoint"
         why: "Restores write access if it was a transient remount."
         verify: "You can write again."
+      - fix_id: fstab_ro_option
+        tier: intermediate
+        title: "Keeps reverting to ro after every remount/reboot"
+        command: "grep <mountpoint> /etc/fstab   # if it lists 'ro' as a mount option, that's forcing it"
+        why: "If /etc/fstab explicitly sets ro for that mount, a manual remount just gets overridden again at the next boot or automount."
+        verify: "The fstab line no longer forces ro (or you've confirmed it's intentional and left it alone)."
       - fix_id: fsck
         tier: extensive
         title: "Recurring read-only = filesystem check needed"

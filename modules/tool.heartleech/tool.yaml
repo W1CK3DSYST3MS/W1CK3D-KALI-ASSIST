@@ -166,3 +166,7 @@ quick_build:
       label: "Dump memory to file (--dump)"
       type: path
       placeholder: "~/bleed.bin  (authorized only)"
+    - field_id: autopwn
+      label: "Auto-extract private key (--autopwn)"
+      type: bool
+      help: "Automatically leaks memory AND tries to recover the server's TLS private key from it, instead of you dumping and searching manually. Authorized targets only."

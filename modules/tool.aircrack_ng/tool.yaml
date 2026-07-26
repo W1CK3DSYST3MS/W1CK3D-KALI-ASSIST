@@ -307,6 +307,82 @@ flows:
             cause: "Adapter/driver doesn't support injection."
             fix: "Test with `sudo aireplay-ng --test wlan0mon`; use a compatible adapter."
             check: "Review monitor-mode adapter support."
+  - flow_id: advanced_attacks
+    title: "Fake auth & ARP replay (reference, advanced) — ACTIVE"
+    goal: "Associate with the AP directly, and (for legacy WEP) speed up IV collection."
+    command_builder_id: aircrack-ng
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: ac9
+        title: "Fake authenticate with the AP (often required before injection)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Fake auth actively associates your adapter with a real AP — your own network / authorized lab only. It doesn't disrupt other users like a deauth does, but it does touch the live AP."
+        glossary_refs: [fakeauth, injection]
+        explanation:
+          what: "`aireplay-ng --fakeauth <delay> -a <AP> -e <ESSID> -h <your_MAC> wlan0mon` performs an 802.11 open-system association with the AP — proving to it (and to you) that your adapter can talk to it, without needing the real Wi-Fi password."
+          why: "Some APs silently drop injected packets from an adapter they've never 'seen' associate. Fake auth establishes that association first, and it's the standard way to confirm your injection setup actually reaches the AP before trying ARP replay or other attacks."
+          where: "ACTION_OPTIONS; the monitor interface is POSITIONAL, same as the deauth step."
+        find_it: "BSSID from the discover step. Pick any MAC for -h (or your adapter's real one) — you'll reuse the SAME MAC in the ARP replay step next."
+        command_anatomy:
+          - {token: "sudo aireplay-ng", does: "the injection tool"}
+          - {token: "--fakeauth 0", does: "attempt one open-system association (0 = don't keep re-trying)"}
+          - {token: "-a AA:BB:CC:DD:EE:FF", does: "the target access point"}
+          - {token: "-e MyHomeWiFi", does: "the network name (needed if the SSID is hidden/cloaked)"}
+          - {token: "-h 00:11:22:33:44:55", does: "the source MAC your card presents — remember this for later steps"}
+          - {token: "wlan0mon", does: "the monitor interface"}
+        try_this: "sudo aireplay-ng --fakeauth 0 -a AA:BB:CC:DD:EE:FF -e MyHomeWiFi -h 00:11:22:33:44:55 wlan0mon"
+        success_criteria: "It prints 'Association successful' rather than a rejection."
+        expected_output: |
+          12:34:56  Sending Authentication Request (Open System) [ACK]
+          12:34:56  Authentication successful
+          12:34:56  Sending Association Request [ACK]
+          12:34:56  Association successful :-)
+        alternatives:
+          - trigger: "'AP rejects open-system authentication' or repeated 'Association failed'"
+            cause: "MAC filtering on the AP, or the AP requires WPA/WPA2 authentication that open-system fake auth can't satisfy."
+            fix: "Try a different -h MAC, or accept that on WPA/WPA2 fake auth mainly just proves injection works — you still need the real handshake+password for actual access. It's not required for passively capturing a handshake."
+            check: "Does the deauth flow still work without fake auth? If capturing already succeeds, you may not need this step at all."
+          - trigger: "'Association successful' but later injection still doesn't work"
+            cause: "Fake auth succeeded at the 802.11 layer but the adapter still can't inject (driver/chipset limitation)."
+            fix: "Run `sudo aireplay-ng --test wlan0mon` to isolate whether injection itself works, independent of fake auth."
+            check: "The injection test passes."
+      - step_id: ac10
+        title: "Speed up WEP IV collection with ARP replay (legacy WEP only)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "ARP replay generates a flood of traffic against a live AP — your own network / authorized lab only. It's only meaningful against legacy WEP; running it against WPA/WPA2 does nothing useful."
+        glossary_refs: [arpreplay, iv]
+        explanation:
+          what: "`aireplay-ng --arpreplay -b <AP> -h <same_MAC_as_fakeauth> wlan0mon` waits for one ARP packet, then rebroadcasts it to the AP thousands of times per minute. Each replay makes the AP emit a new IV (initialization vector) — the raw material aircrack-ng needs to crack a WEP key."
+          why: "WEP is only crackable once you've captured enough IVs (tens of thousands). Passively waiting for that much real traffic can take hours; ARP replay forces the AP to generate them in minutes."
+          where: "ACTION_OPTIONS; the monitor interface is POSITIONAL. Run airodump-ng (capture flow) in parallel and watch its '#Data' column climb."
+        find_it: "The AP's BSSID from the discover step, and the SAME source MAC (-h) you used for fake auth — the AP only accepts replayed packets from a MAC it has already associated."
+        command_anatomy:
+          - {token: "sudo aireplay-ng", does: "the injection tool"}
+          - {token: "--arpreplay", does: "capture one ARP request, then replay it repeatedly"}
+          - {token: "-b AA:BB:CC:DD:EE:FF", does: "only replay packets seen from/to this AP"}
+          - {token: "-h 00:11:22:33:44:55", does: "the source MAC — must match the MAC fake-authed in the previous step"}
+          - {token: "wlan0mon", does: "the monitor interface"}
+        try_this: "sudo aireplay-ng --arpreplay -b AA:BB:CC:DD:EE:FF -h 00:11:22:33:44:55 wlan0mon"
+        success_criteria: "It reports 'Read X packets, sent Y ARP requests' with Y climbing quickly, and airodump-ng's #Data column rises fast."
+        expected_output: |
+          Saving ARP requests in replay_arp-0101-123456.cap
+          You should also start airodump-ng to capture replies.
+          Read 1094 packets (got 421 ARP requests and 189 ACKs), sent 3811 packets...
+        alternatives:
+          - trigger: "'got 0 ARP requests' / stuck at 0 for a long time"
+            cause: "No ARP traffic has crossed the network yet for aireplay to capture and replay."
+            fix: "Generate some traffic (a device browsing, or a targeted deauth to force a reconnect) so at least one ARP packet appears; wait longer on a busier network."
+            check: "The 'got N ARP requests' count moves above 0."
+          - trigger: "packets sent but #Data isn't climbing in airodump"
+            cause: "The -h source MAC doesn't match an associated client (fake auth wasn't done, or used a different MAC), so the AP silently drops the replays."
+            fix: "Re-run the fake auth step with the exact same -h MAC as this step, then retry."
+            check: "Fake auth reports 'Association successful' using the same MAC."
+          - trigger: "target is WPA/WPA2, not WEP"
+            cause: "ARP replay only matters for WEP's IV-based crack — WPA/WPA2 doesn't work this way at all."
+            fix: "Use the normal capture + deauth + crack flows (4-way handshake) instead — ARP replay has no purpose here."
+            check: "Confirm the AP's encryption type from the discover step (ENC column: WEP vs WPA2)."
   - flow_id: crack
     title: "Crack the handshake (reference)"
     goal: "Test the captured handshake against a wordlist."
@@ -446,6 +522,49 @@ quick_build:
       label: "Channel"
       type: int
       placeholder: "6"
+    - field_id: action
+      label: "airmon-ng action"
+      type: choice
+      default: start
+      choices: [start, stop, check]
+      help: "start = enable monitor mode, stop = disable it, check = list interfering processes (add Kill below to stop them)."
+    - field_id: kill
+      label: "Kill interfering processes (check kill)"
+      type: bool
+      help: "Only applies when airmon-ng action is 'check'. Stops NetworkManager/wpa_supplicant so monitor mode sticks — you lose normal Wi-Fi until you restart NetworkManager."
+    - field_id: write_prefix
+      label: "Capture file prefix (-w, airodump-ng)"
+      type: path
+      placeholder: "~/capture  (writes ~/capture-01.cap etc.)"
+      help: "Without this, airodump-ng only shows a live table and SAVES NOTHING — set this to actually keep a handshake/capture to crack later."
+    - field_id: attack_mode
+      label: "aireplay-ng attack mode"
+      type: choice
+      default: deauth
+      choices: [deauth, fakeauth, arpreplay]
+      help: "deauth = disconnect a client to force a reconnect. fakeauth = associate with the AP without the real password (often required before other injection attacks). arpreplay = replay a captured ARP packet to speed up WEP IV collection (legacy WEP only)."
+    - field_id: client
+      label: "Client MAC to target (-c, deauth)"
+      type: string
+      placeholder: "99:88:77:66:55:44  (optional — omit to broadcast to all clients)"
+      help: "Targeting one client is quieter than a broadcast deauth."
+    - field_id: deauth_count
+      label: "Deauth burst count (--deauth)"
+      type: int
+      placeholder: "5  (0 = continuous, very disruptive)"
+    - field_id: essid
+      label: "Network name / ESSID (-e, fake auth)"
+      type: string
+      placeholder: "MyHomeWiFi  (needed for fake auth if the SSID is hidden)"
+    - field_id: fakeauth_delay
+      label: "Fake auth reassociation delay, seconds (--fakeauth)"
+      type: int
+      placeholder: "0  (0 = try once and exit; e.g. 30 = re-associate every 30s)"
+    - field_id: source_mac
+      label: "Source MAC to use (-h, fake auth / ARP replay)"
+      type: string
+      placeholder: "00:11:22:33:44:55  (your adapter's MAC)"
+      help: "Fake auth and ARP replay must use the SAME source MAC so the AP recognizes your card as already authenticated."
     - field_id: wordlist
       label: "Wordlist (aircrack-ng)"
       type: path

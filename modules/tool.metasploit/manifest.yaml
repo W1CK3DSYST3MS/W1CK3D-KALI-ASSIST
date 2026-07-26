@@ -9,7 +9,7 @@ requires:
 provides:
   tool: metasploit
   flows: [setup_db, search_use, configure_run, auxiliary, sessions_meterpreter, post, payloads, msfvenom, handler, workflow_db, maintenance]
-  glossary_terms: [framework, module_types, exploit, payload, auxiliary, post, meterpreter, rhosts_lhost, staged_stageless, reverse_bind, session, job, handler, datastore, workspace, msfvenom, msfdb]
+  glossary_terms: [framework, module_types, exploit, payload, auxiliary, post, meterpreter, rhosts_lhost, staged_stageless, reverse_bind, session, job, handler, datastore, workspace, msfvenom, msfdb, template_injection]
 content:
   tool: tool.yaml
   glossary: glossary.yaml

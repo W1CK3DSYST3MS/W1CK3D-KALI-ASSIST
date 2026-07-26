@@ -8,10 +8,11 @@ requires:
   modules: []
 provides:
   tool: responder
-  flows: [guided, crack]
+  flows: [guided, crack, advanced_high_risk]
+  glossary_terms: [llmnr, nbt_ns, ntlmv2, poisoning, wpad, rogue_proxy_auth, dhcp_poisoning]
 content:
   tool: tool.yaml
   glossary: glossary.yaml
-source: "authored; verified against installed responder --help (Kali 2026.3, v3.2.2.0) + /usr/share/doc/responder/README.md"
+source: "authored; verified against installed responder --help (Kali 2026.3) + /usr/share/doc/responder/README.md"
 license: "MIT (this repo); Responder is GPLv3 (referenced, not bundled)"
 checksum: ""

@@ -19,3 +19,5 @@ terms:
     definition: "Transformations that mangle wordlist entries to catch variations."
   - term: format
     definition: "The hash type (--format=); listed via john --list=formats."
+  - term: mask_mode
+    definition: "A hashcat-style pattern (--mask=) that tries every combination matching placeholders: ?d digit, ?l lowercase, ?u uppercase, ?s symbol — targeted brute force when you know a password's shape."

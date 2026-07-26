@@ -8,9 +8,11 @@ requires:
   modules: []
 provides:
   tool: dirb
-  flows: [guided, wordlist_ext]
+  flows: [guided, wordlist_ext, proxy_auth_throttle]
+  glossary_terms: [proxy, basic_auth, throttle]
 content:
   tool: tool.yaml
+  glossary: glossary.yaml
 source: "authored; verified against dirb usage (dirb <url> [wordlist] [options])"
 license: "MIT-licensed project text (this repo); dirb is GPL (referenced, not bundled)"
 checksum: ""

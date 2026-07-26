@@ -169,6 +169,8 @@ flows:
         command_anatomy:
           - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same admin credential"}
           - {token: "--sam", does: "dump local SAM account hashes"}
+          - {token: "--lsa", does: "(alternative) dump LSA secrets — other services' cached credentials"}
+          - {token: "--ntds", does: "(alternative, DC only) dump the whole domain's password database"}
         try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL --sam"
         success_criteria: "Username:RID:LMHash:NTHash lines print for local accounts."
         expected_output: |
@@ -179,6 +181,99 @@ flows:
             cause: "Credential isn't actually local admin on this host."
             fix: "Re-confirm Pwn3d! for this exact credential/host in the guided flow first."
             check: "--sam only works with a genuinely admin-equivalent credential."
+  - flow_id: modules
+    title: "The -M module system (reference)"
+    goal: "Load purpose-built modules for enumeration and credential dumping — netexec's headline feature."
+    command_builder_id: netexec
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: m1
+        title: "See what modules exist for this protocol"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [nxc_module]
+        explanation:
+          what: "`-M <name>` loads a MODULE — a purpose-built script for one job (dump credentials, check a specific CVE, enumerate something niche) — instead of using netexec's built-in top-level flags. `-L` lists every module available for the protocol you're using."
+          why: "Modules are netexec's headline feature — most of its advanced capability lives in modules, not top-level flags. This is the same idea as Metasploit's module system, just for network authentication/execution."
+          where: "ACTION_OPTIONS; -L needs no credentials at all."
+        find_it: "Just pick a protocol (smb is the most common for AD) — no credentials needed to list modules."
+        command_anatomy:
+          - {token: "netexec smb", does: "the program + protocol"}
+          - {token: "-L", does: "list every module available for smb"}
+        try_this: "netexec smb -L"
+        success_criteria: "A categorized list of modules prints, split into LOW PRIVILEGE and HIGH PRIVILEGE (requires admin) sections."
+        expected_output: |
+          LOW PRIVILEGE MODULES
+          ENUMERATION
+          [*] enum_av              Gathers information on all endpoint protection solutions installed...
+          HIGH PRIVILEGE MODULES (requires admin privs)
+          CREDENTIAL_DUMPING
+          [*] lsassy               Dump lsass and parse the result remotely with lsassy
+        alternatives:
+          - trigger: "the list looks huge and you're not sure which one to use"
+            cause: "There are 60+ modules covering many niche cases."
+            fix: "Start with the two in the next steps (enum_av, lsassy) — most day-to-day work only needs a handful of modules."
+            check: "—"
+      - step_id: m2
+        title: "Run a low-privilege module: enum_av (no admin needed)"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-M enum_av` checks what endpoint protection (antivirus/EDR) is installed on each target — and it works with ANY valid credential, not just an admin one."
+          why: "Knowing what defenses are running before you do anything louder (like a credential dump) helps you plan and understand what might get flagged."
+          where: "ACTION_OPTIONS, alongside your working credential from the guided flow."
+        find_it: "Reuse a working credential from the guided flow — this module doesn't need admin rights, just a valid login."
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same working credential as the guided flow"}
+          - {token: "-M enum_av", does: "load the enum_av module"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL -M enum_av"
+        success_criteria: "The module reports installed AV/EDR products for the target."
+        expected_output: |
+          SMB      192.168.1.10  445  DC01  [+] CORP.LOCAL\jdoe:Password123
+          ENUM_AV  192.168.1.10  445  DC01  [*] Windows Defender
+        alternatives:
+          - trigger: "module reports nothing / an empty result"
+            cause: "No recognizable AV/EDR product installed, or it's hidden from this lookup method."
+            fix: "Treat 'nothing found' as inconclusive, not proof there's no protection — that's still useful information for planning next steps."
+            check: "—"
+      - step_id: m3
+        title: "High-privilege module: lsassy (credential dumping — admin required)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: >
+          No persistent change is made to the target — lsassy reads lsass.exe memory
+          remotely and cleans up after itself. Handle the dumped credentials/hashes as
+          sensitive data: secure storage, don't leave them on disk unencrypted, delete
+          them once the engagement is done.
+        glossary_refs: [nxc_module]
+        explanation:
+          what: "`-M lsassy` remotely dumps the LSASS process — where Windows keeps logged-on users' credentials in memory — and parses out plaintext passwords, hashes, and Kerberos tickets. This is the same category of attack as running Mimikatz, done remotely through netexec."
+          why: "This is real, high-impact credential theft against a live system. It can recover OTHER users' credentials, not just the one you authenticated with — including domain admins if they're logged on. Only run this with clear written authorization for this exact host."
+          where: "ACTION_OPTIONS; requires a local-admin-equivalent credential (Pwn3d! from the guided flow)."
+        find_it: "Only proceed if your credential showed (Pwn3d!) on this host. Check a module's own options first with: netexec smb -M lsassy --options."
+        command_anatomy:
+          - {token: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL", does: "same ADMIN credential (Pwn3d!)"}
+          - {token: "-M lsassy", does: "load the lsassy module — dumps and parses LSASS memory"}
+        try_this: "netexec smb 192.168.1.10 -u jdoe -p 'Password123' -d CORP.LOCAL -M lsassy"
+        success_criteria: "Usernames with plaintext passwords, NTLM hashes, or Kerberos tickets print for accounts logged on to that host."
+        expected_output: |
+          SMB      192.168.1.10  445  DC01  [+] CORP.LOCAL\jdoe:Password123 (Pwn3d!)
+          LSASSY   192.168.1.10  445  DC01  CORP.LOCAL\svc_backup:aad3b435b51404eeaad3b435b51404ee:8846f7eaee8fb117ad06bdd830b7586c
+        alternatives:
+          - trigger: "STATUS_ACCESS_DENIED / module fails to start"
+            cause: "The credential isn't actually local admin on this host (no Pwn3d!)."
+            fix: "Re-confirm Pwn3d! for this exact credential/host in the guided flow before retrying."
+            check: "Pwn3d! must appear for this credential/host pair."
+          - trigger: "module runs but returns no credentials"
+            cause: "No other user is currently logged on to this host — lsass only holds what's actively in memory."
+            fix: "Try a host where more users are logged on (a jump box or shared server), or try a different high-value target."
+            check: "—"
+          - trigger: "AV/EDR blocks the dump or flags it"
+            cause: "lsassy touches lsass.exe memory, which most endpoint protection watches closely."
+            fix: "This is expected on protected hosts — check with enum_av (previous step) first, and know that detection is likely."
+            check: "—"
+          - trigger: "want a specific dump technique (e.g. to avoid a particular EDR trigger)"
+            cause: "lsassy supports multiple dump methods via a module option, not just the default."
+            fix: "Check available options with `netexec smb -M lsassy --options`, then add -o METHOD=<value> to the command."
+            check: "—"
 quick_build:
   builder: netexec
   title: "Quick run"
@@ -218,7 +313,41 @@ quick_build:
     - field_id: sam
       label: "Dump SAM hashes (--sam)"
       type: bool
+    - field_id: lsa
+      label: "Dump LSA secrets (--lsa)"
+      type: bool
+      help: "Other services' cached credentials, kept in memory. Needs an admin credential."
+    - field_id: ntds
+      label: "Dump the domain's password database (--ntds)"
+      type: bool
+      help: "The WHOLE domain's password database — Domain Controller only. High legal exposure; authorized engagements only."
+    - field_id: module
+      label: "Load a module (-M)"
+      type: string
+      placeholder: "lsassy  (optional — see 'netexec smb -L' for the full list)"
+      help: "Purpose-built scripts for enumeration/credential-dumping/etc. — netexec's headline feature."
+    - field_id: module_options
+      label: "Module options (-o)"
+      type: string
+      placeholder: "KEY=VALUE KEY2=VALUE2  (optional)"
+      help: "Space-separated KEY=VALUE pairs for the module above. Check what a module accepts with: netexec <protocol> -M <module> --options."
+    - field_id: list_modules
+      label: "List modules for this protocol instead of running (-L)"
+      type: bool
+      help: "Prints every available module and exits — doesn't authenticate or need credentials."
     - field_id: exec_command
       label: "Run a CMD command if admin (-x)"
       type: string
       placeholder: "whoami  (optional)"
+    - field_id: ps_command
+      label: "Run a PowerShell command if admin (-X)"
+      type: string
+      placeholder: "whoami  (optional — use this OR the CMD field above, not both)"
+    - field_id: spider
+      label: "Spider a share (--spider)"
+      type: string
+      placeholder: "C$  (optional — share name to crawl)"
+    - field_id: spider_content
+      label: "Also search file contents while spidering (--content)"
+      type: bool
+      help: "Slower — reads inside files, not just filenames, while spidering the share above."

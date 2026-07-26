@@ -1,0 +1,3 @@
+terms:
+  - term: sql_query
+    definition: "A request written in SQL (Structured Query Language) that asks a database for specific data — e.g. 'give me these columns, from this table, where this condition is true' — instead of dumping everything."

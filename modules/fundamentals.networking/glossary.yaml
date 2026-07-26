@@ -35,3 +35,5 @@ terms:
     definition: "The back-and-forth a connection does to set itself up before real data flows (e.g. TCP's SYN/SYN-ACK/ACK) — this is the 'connection overhead' TCP has and UDP skips."
   - term: packet
     definition: "One unit of data sent over a network — a message has a header (addressing info) and a payload (the actual content), like an envelope and a letter."
+  - term: lan
+    definition: "LAN (Local Area Network) — the network inside your building/home (your Wi-Fi/ethernet segment). Reaching your LAN just needs a link; reaching beyond it (the internet) needs the gateway too."

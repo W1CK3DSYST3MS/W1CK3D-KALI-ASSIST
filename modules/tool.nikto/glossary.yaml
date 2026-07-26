@@ -15,3 +15,5 @@ terms:
     definition: "-vhost scans a named virtual host on a shared IP."
   - term: cgidirs
     definition: "Where nikto looks for CGI scripts (-Cgidirs)."
+  - term: mutate
+    definition: "-mutate makes nikto actively GUESS extra files/usernames/directories beyond its built-in checks (numbered sub-options select the guessing strategy)."

@@ -88,11 +88,53 @@ def build_sqlmap(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-C", str(inputs["cols"])])
     if _truthy(inputs.get("dump")) and "--dump" not in a:
         a.append("--dump")
+    if _truthy(inputs.get("dump_all")):
+        a.append("--dump-all")
+    if _truthy(inputs.get("all")):
+        a.append("--all")
+        notes.append("--all retrieves everything (banner/users/passwords/dbs/tables/dump) in one run. Slow and very noisy.")
+    if _truthy(inputs.get("exclude_sysdbs")):
+        a.append("--exclude-sysdbs")
+    if inputs.get("search"):
+        a.extend(["--search", str(inputs["search"])])
+
+    # Actual data extraction — this is usually what people expect sqlmap to DO
+    # once an injection point is confirmed, not just find that one exists.
+    if _truthy(inputs.get("banner")):
+        a.append("--banner")
+    if _truthy(inputs.get("current_user")):
+        a.append("--current-user")
+    if _truthy(inputs.get("current_db")):
+        a.append("--current-db")
+    if _truthy(inputs.get("hostname")):
+        a.append("--hostname")
+    if _truthy(inputs.get("is_dba")):
+        a.append("--is-dba")
+    if _truthy(inputs.get("users")):
+        a.append("--users")
+    if _truthy(inputs.get("passwords")):
+        a.append("--passwords")
+    if _truthy(inputs.get("privileges")):
+        a.append("--privileges")
+    if _truthy(inputs.get("roles")):
+        a.append("--roles")
+    if _truthy(inputs.get("schema")):
+        a.append("--schema")
+    if _truthy(inputs.get("count")):
+        a.append("--count")
+
     if _truthy(inputs.get("sql_shell")):
         a.append("--sql-shell")
     if _truthy(inputs.get("os_shell")):
         a.append("--os-shell")
         notes.append("High-impact: --os-shell executes commands on the target. Authorized engagements only.")
+    if _truthy(inputs.get("os_pwn")):
+        a.append("--os-pwn")
+        notes.append(
+            "High-impact: --os-pwn attempts a full out-of-band shell (Meterpreter/VNC) on the "
+            "target via Metasploit. This is exploitation, not just data extraction — authorized "
+            "engagements only, and needs Metasploit installed (--msf-path if not auto-detected)."
+        )
 
     # OUTPUT
     if inputs.get("output_dir"):

@@ -2,6 +2,12 @@
 
 Shape: dirb <url> [<wordlist>] [options] — url and wordlist must come first, so
 both go in TARGET_PIVOT (which sorts before the option slots). Generate-only.
+
+Recognised keys (all optional except ``url``):
+  url, wordlist, extensions(-X), cookie(-c), agent(-a), http_auth(-u),
+  header(-H), proxy(-p), proxy_auth(-P), delay_ms(-z), no_recursion(-r),
+  silent(-S), output(-o). Verified against the installed dirb v2.22 usage
+  banner (`dirb` with no args).
 """
 
 from __future__ import annotations
@@ -38,6 +44,19 @@ def build_dirb(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-c", str(inputs["cookie"])])
     if inputs.get("agent"):
         a.extend(["-a", str(inputs["agent"])])
+    if inputs.get("http_auth"):
+        a.extend(["-u", str(inputs["http_auth"])])
+    if inputs.get("header"):
+        a.extend(["-H", str(inputs["header"])])
+    if inputs.get("proxy"):
+        a.extend(["-p", str(inputs["proxy"])])
+    if inputs.get("proxy_auth"):
+        if not inputs.get("proxy"):
+            notes.append("-P (proxy auth) only takes effect together with -p (Proxy) — set the Proxy field too.")
+        a.extend(["-P", str(inputs["proxy_auth"])])
+    delay_ms = inputs.get("delay_ms")
+    if delay_ms not in (None, ""):
+        a.extend(["-z", str(int(delay_ms))])
     if _truthy(inputs.get("no_recursion")):
         a.append("-r")
     if _truthy(inputs.get("silent")):

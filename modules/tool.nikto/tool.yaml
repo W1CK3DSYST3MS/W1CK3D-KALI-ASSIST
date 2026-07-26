@@ -206,6 +206,46 @@ flows:
             cause: "Running all categories."
             fix: "Tune to what you care about; skip 6 (DoS) on anything you can't disrupt."
             check: "Re-run with a narrower -Tuning."
+  - flow_id: mutate
+    title: "Deeper enumeration with -mutate (reference)"
+    goal: "Actively guess extra files, directories, and usernames instead of only checking known signatures."
+    command_builder_id: nikto
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: nk9
+        title: "Guess more files/usernames with -mutate"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [mutate]
+        explanation:
+          what: "-mutate makes nikto GUESS additional targets instead of only checking its built-in signature list. On this installed build the sub-options are: 1 = test every found file against every discovered root directory, 2 = guess common password-file names, 3 = enumerate Apache usernames via /~user requests, 4 = the same via cgiwrap, 6 = guess directory names from a dictionary file you supply."
+          why: "A default scan only checks known signatures. -mutate actively tries combinations nikto wouldn't otherwise guess — it finds more, but sends a lot more requests and takes longer."
+          where: "ACTION_OPTIONS, alongside your normal scan flags."
+        find_it: >
+          Pick the sub-option that matches what you're missing: usernames on an Apache
+          box -> 3; a custom directory wordlist -> 6, paired with -mutate-options
+          pointing at that dictionary file. Run `nikto -H` any time to confirm the
+          current sub-options for your installed version.
+        command_anatomy:
+          - {token: "nikto -h http://TARGET", does: "the scan from earlier steps"}
+          - {token: "-mutate 3", does: "enumerate usernames via Apache /~user requests"}
+        try_this: "nikto -h http://TARGET -mutate 3"
+        success_criteria: "Additional + findings appear for guessed usernames/files that a plain scan wouldn't have tried."
+        expected_output: |
+          + Apache Users: root admin jdoe
+          + /~jdoe : Enumerated user 'jdoe' via /~user request
+        alternatives:
+          - trigger: "scan takes much longer than usual"
+            cause: "-mutate multiplies the number of requests nikto sends — it's now guessing, not just checking a fixed list."
+            fix: "Cap it with -maxtime, or run one narrower sub-option at a time instead of several together."
+            check: "The scan finishes within your time cap."
+          - trigger: "using -mutate 6 but nothing extra is found"
+            cause: "-mutate 6 needs a dictionary file supplied separately — it has no built-in list of directory names."
+            fix: "Add -mutate-options <dictionary-file> pointing at a wordlist of likely directory names."
+            check: "Re-run with -mutate-options set to a real wordlist file."
+          - trigger: "-mutate 5 doesn't work"
+            cause: "This installed nikto build only supports sub-options 1, 2, 3, 4, 6 — there is no 5."
+            fix: "Use one of the supported numbers; run `nikto -H` to see the current list for your version."
+            check: "Only documented sub-options are accepted."
   - flow_id: output
     title: "Output & reports (reference)"
     goal: "Save a shareable report."
@@ -368,7 +408,84 @@ quick_build:
     - field_id: ssl
       label: "Force SSL (-ssl)"
       type: bool
+    - field_id: nossl
+      label: "Force plain HTTP, no SSL (-nossl)"
+      type: bool
+      help: "Use when a port only speaks plain HTTP and nikto is wrongly trying TLS on it."
     - field_id: output
       label: "Output file"
       type: path
       placeholder: "report.html  (optional)"
+    - field_id: format
+      label: "Report format (-Format)"
+      type: choice
+      choices: [htm, csv, xml, json, sql, txt]
+      help: "Must match the Output file's extension, e.g. .html with htm, .csv with csv. Only used together with Output file above."
+    - field_id: timeout
+      label: "Request timeout in seconds (-timeout)"
+      type: int
+      placeholder: "10  (nikto's default)"
+    - field_id: pause
+      label: "Pause between requests, seconds (-Pause)"
+      type: int
+      placeholder: "optional — be gentler on the target"
+    - field_id: maxtime
+      label: "Stop after this long (-maxtime)"
+      type: string
+      placeholder: "5m  or  1h  or  3600s"
+      help: "Caps the whole run — useful if a scan is hanging or you have a fixed testing window."
+    - field_id: tuning
+      label: "Test categories (-Tuning)"
+      type: string
+      placeholder: "1234  (files, misconfig, info, XSS)"
+      help: "Digits pick which categories run: 1 files, 2 misconfig, 3 info disclosure, 4 XSS, 5 remote file, 6 DoS, 9 SQLi. Combine digits, e.g. 1234. Avoid 6 unless you're allowed to disrupt the target."
+    - field_id: vhost
+      label: "Virtual host / Host header (-vhost)"
+      type: string
+      placeholder: "admin.site.local  (optional — shared-IP hosting)"
+    - field_id: evasion
+      label: "IDS evasion technique (-evasion)"
+      type: string
+      placeholder: "1  (optional — see the evasion & pacing flow)"
+      help: "Mangles requests to study IDS behaviour. nikto is NOT stealthy regardless — this is not invisibility."
+    - field_id: plugins
+      label: "Restrict which plugins run (-Plugins)"
+      type: string
+      placeholder: "optional — default is ALL"
+    - field_id: mutate
+      label: "Guess extra files/usernames (-mutate)"
+      type: choice
+      choices: ["1", "2", "3", "4", "6"]
+      help: "1=every file against every root dir, 2=guess password-file names, 3=Apache usernames, 4=cgiwrap usernames, 6=directory names from a dictionary (pair with the option below). Slower and much noisier than a default scan."
+    - field_id: mutate_options
+      label: "Dictionary file for -mutate 6 (-mutate-options)"
+      type: path
+      placeholder: "optional — only needed with -mutate 6"
+    - field_id: save
+      label: "Save full session to resume later (-Save)"
+      type: path
+      placeholder: "optional — a directory, or leave blank"
+      help: "Saves the full session to a directory so a long/interrupted scan's positive responses aren't lost."
+    - field_id: proxy
+      label: "Route through a proxy (-useproxy)"
+      type: string
+      placeholder: "http://127.0.0.1:8080  (optional, e.g. Burp/ZAP)"
+    - field_id: auth_id
+      label: "HTTP basic-auth credentials (-id)"
+      type: string
+      placeholder: "user:pass  (optional)"
+    - field_id: rsacert
+      label: "Client certificate file (-RSAcert)"
+      type: path
+      placeholder: "optional — for client-certificate auth"
+    - field_id: key
+      label: "Client certificate key file (-key)"
+      type: path
+      placeholder: "optional — pairs with the certificate file above"
+    - field_id: verbose
+      label: "Verbose output (-Display V)"
+      type: bool
+    - field_id: list_plugins
+      label: "List available plugins instead of scanning (-list-plugins)"
+      type: bool
+      help: "Prints every installed plugin and exits — doesn't scan anything. Ignores the other fields above."

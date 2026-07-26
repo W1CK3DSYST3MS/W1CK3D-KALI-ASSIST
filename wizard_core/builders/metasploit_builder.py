@@ -23,6 +23,13 @@ def _truthy(v: object) -> bool:
 
 @register_builder("msfvenom")
 def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
+    """Build a msfvenom CommandPlan from validated inputs.
+
+    Recognised keys (all optional except ``payload``):
+      payload, lhost, lport, options(dict or "KEY=VAL,KEY2=VAL2" string),
+      arch, platform, encoder, iterations, badchars, template, keep,
+      encrypt, format, outfile, list (shortcut: overrides everything else).
+    """
     notes: list[str] = []
 
     if inputs.get("list"):
@@ -46,6 +53,12 @@ def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
     if isinstance(extra_opts, Mapping):
         for k, v in extra_opts.items():
             a.append(f"{k}={v}")
+    elif isinstance(extra_opts, str) and extra_opts.strip():
+        # Quick-build form has no dict widget — accept "KEY=VAL,KEY2=VAL2" too.
+        for pair in extra_opts.split(","):
+            pair = pair.strip()
+            if pair:
+                a.append(pair)
 
     # Shaping (honesty: encoders are not reliable AV evasion).
     if inputs.get("arch"):
@@ -59,6 +72,26 @@ def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-i", str(int(inputs["iterations"]))])
     if inputs.get("badchars"):
         a.extend(["-b", str(inputs["badchars"])])
+    if inputs.get("encrypt"):
+        a.extend(["--encrypt", str(inputs["encrypt"])])
+
+    # Template injection: wrap the payload inside an existing executable so it
+    # keeps looking (and, with -k, working) like the original program. This is
+    # literal trojan-creation technique — authorized lab/engagement files only.
+    template = inputs.get("template")
+    keep = _truthy(inputs.get("keep"))
+    if template:
+        a.extend(["-x", str(template)])
+        if keep:
+            a.append("-k")
+        notes.append(
+            "-x/--template injects the payload into an existing executable — the file you "
+            "produce will look (and, with -k, still work) like a real program. Only use this "
+            "on files you own, in an authorized lab/engagement — never against real "
+            "third-party software."
+        )
+    elif keep:
+        notes.append("-k (--keep) only has an effect together with a Template (-x) file — ignored without one.")
 
     # OUTPUT format + file
     if inputs.get("format"):

@@ -21,3 +21,5 @@ terms:
     definition: "A package pinned from upgrading (apt-mark hold)."
   - term: pep668
     definition: "The rule that blocks system-wide pip ('externally-managed'); use pipx or a venv instead."
+  - term: candidate_version
+    definition: "The version apt would install right now for a package, based on your configured repos and their priorities — shown by `apt policy <pkg>`."

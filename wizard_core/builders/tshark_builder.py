@@ -3,7 +3,14 @@
 Shape: tshark [global] -i <iface> | -r <file> [filters] [output]. The source is
 EXACTLY ONE of -i (live) or -r (file) — the builder refuses both. Teaches the
 capture-filter (-f, BPF) vs display-filter (-Y, Wireshark) distinction by keeping
-them separate. Generate-only; capture is privacy-sensitive.
+them separate. Also covers ring-buffer file rotation (-b), autostop conditions
+beyond packet count (-a filesize/files/duration), and Decode-As (-d). Generate-
+only; capture is privacy-sensitive.
+
+Recognised keys (all optional except a source): list_interfaces, source_iface,
+read_file, no_resolve, quiet, count, duration, autostop_filesize, autostop_files,
+capture_filter, display_filter, decode_as, stats, fields, csv_header, write,
+ring_filesize, ring_files, snaplen, no_promiscuous.
 """
 
 from __future__ import annotations
@@ -56,6 +63,14 @@ def build_tshark(inputs: Mapping[str, object]) -> CommandPlan:
     if inputs.get("duration") not in (None, ""):
         g.extend(["-a", f"duration:{int(inputs['duration'])}"])
 
+    # Autostop conditions beyond packet count/duration — each -a is a separate
+    # "stop the whole capture when..." condition (any one of them ends the run).
+    # Not to be confused with -b (ring buffer), which rotates files forever.
+    if inputs.get("autostop_filesize") not in (None, ""):
+        g.extend(["-a", f"filesize:{int(inputs['autostop_filesize'])}"])
+    if inputs.get("autostop_files") not in (None, ""):
+        g.extend(["-a", f"files:{int(inputs['autostop_files'])}"])
+
     # ACTION: capture filter (BPF) vs display filter (Wireshark)
     if inputs.get("capture_filter"):
         if read_file:
@@ -63,6 +78,8 @@ def build_tshark(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-f", str(inputs["capture_filter"])])
     if inputs.get("display_filter"):
         a.extend(["-Y", str(inputs["display_filter"])])
+    if inputs.get("decode_as"):
+        a.extend(["-d", str(inputs["decode_as"])])
     if inputs.get("stats"):
         a.extend(["-z", str(inputs["stats"])])
         if "-q" not in g:
@@ -83,6 +100,20 @@ def build_tshark(inputs: Mapping[str, object]) -> CommandPlan:
     # OUTPUT
     if inputs.get("write"):
         o.extend(["-w", str(inputs["write"])])
+
+    # Ring buffer / file rotation — keeps a bounded window of recent traffic
+    # instead of one ever-growing file. Needs -w (a base filename to rotate).
+    ring_filesize = inputs.get("ring_filesize")
+    ring_files = inputs.get("ring_files")
+    if ring_filesize not in (None, ""):
+        o.extend(["-b", f"filesize:{int(ring_filesize)}"])
+    if ring_files not in (None, ""):
+        o.extend(["-b", f"files:{int(ring_files)}"])
+    if (ring_filesize or ring_files) and not inputs.get("write"):
+        notes.append(
+            "-b (ring buffer) rotates the file named by -w — set Write to file, or -b has "
+            "nothing to rotate."
+        )
 
     # ENV / capture setup
     if inputs.get("snaplen"):

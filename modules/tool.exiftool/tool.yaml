@@ -113,6 +113,41 @@ flows:
             cause: "No matching files in the folder, or wrong path."
             fix: "Confirm the folder path and that it actually contains image/document files."
             check: "—"
+      - step_id: g5
+        title: "Strip metadata before you share a file (privacy)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [exif]
+        destructive: true
+        recovery: >
+          -all= / -gps:all= actually rewrite the file. By default exiftool is safe: it renames
+          the untouched original to <file>_original alongside the cleaned file, so you can
+          always recover by deleting the stripped version and renaming the _original back (e.g.
+          `mv photo.jpg_original photo.jpg`). Only tick "Overwrite original" once you're sure —
+          that skips the backup and the change is then permanent.
+        explanation:
+          what: "Everything so far has been READING metadata. `exiftool -all= photo.jpg` goes the other way: it deletes every metadata tag from the file (GPS, camera model, timestamps, author, software — everything you've been reading in steps 1-4). `exiftool -gps:all= photo.jpg` is narrower — it deletes only the GPS group, leaving camera/date info intact."
+          why: "This is the flip side of everything you just learned to extract: before you post a photo publicly, hand over a document, or send a file to someone you don't want to have your location, stripping metadata is the standard defensive/privacy step. It's the same idea as step 2's GPS extraction, just in reverse."
+          where: "ACTION_OPTIONS. -all= and -gps:all= use exiftool's -TAG=[VALUE] assignment syntax — an empty VALUE after '=' means 'delete this tag'."
+        find_it: "Any file you own and want to clean before sharing. Test on a COPY first if you're not using the default backup behaviour."
+        command_anatomy:
+          - {token: "exiftool", does: "the program"}
+          - {token: "-all=", does: "delete every metadata tag (the trailing '=' with nothing after it means 'delete')"}
+          - {token: "photo.jpg", does: "the file to clean"}
+        try_this: "cp photo.jpg photo_test.jpg && exiftool -all= photo_test.jpg && exiftool photo_test.jpg"
+        success_criteria: "exiftool reports '1 image files updated', a photo_test.jpg_original backup appears, and re-running `exiftool photo_test.jpg` on the cleaned file shows little to no metadata left."
+        expected_output: |
+          1 image files updated
+          File Name                      : photo_test.jpg
+          (no Camera Model, GPS, or Create Date lines remain)
+        alternatives:
+          - trigger: "you only want to remove location, not everything"
+            cause: "Some metadata (camera model, dates) is useful to keep; GPS is the sensitive part."
+            fix: "Use the narrower `exiftool -gps:all= photo.jpg` instead of -all= — it removes just the GPS group."
+            check: "Re-run `exiftool -gps:all photo.jpg` (read mode) and confirm no GPS tags print, while other tags like Create Date still do."
+          - trigger: "you don't see a _original backup file"
+            cause: "Overwrite original was enabled, or -overwrite_original was already used."
+            fix: "That's expected once Overwrite original is ticked — it trades the safety backup for not leaving a duplicate file around. Only use it once you're confident."
+            check: "Decide up front which behaviour you want before running on originals you can't replace."
 quick_build:
   builder: exiftool
   title: "Quick read"
@@ -139,3 +174,15 @@ quick_build:
       label: "Save output to file"
       type: path
       placeholder: "metadata.json  (optional, use with > redirection)"
+    - field_id: strip_all
+      label: "Strip ALL metadata (-all=)"
+      type: bool
+      help: "Privacy: deletes every metadata tag before sharing a file. Overrides the read-only options above."
+    - field_id: strip_gps
+      label: "Strip GPS only (-gps:all=)"
+      type: bool
+      help: "Privacy: deletes only GPS location tags, keeps camera/date info. Overrides the read-only options above."
+    - field_id: overwrite_original
+      label: "Overwrite original, no backup (-overwrite_original)"
+      type: bool
+      help: "Only used with Strip ALL / Strip GPS. Skips the safety <file>_original backup — permanent."

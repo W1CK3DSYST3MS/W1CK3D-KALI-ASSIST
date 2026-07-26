@@ -494,6 +494,120 @@ flows:
             fix: "Run the failing piece on its own via its reference flow (service_version / os_detect / nse) to see the specific error."
             check: "Re-run that single behaviour in isolation."
 
+  - flow_id: evasion
+    title: "Firewall/IDS evasion — scan quietly (reference, advanced)"
+    goal: "Change how your scan LOOKS to a firewall or IDS, without changing what it finds."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: e1
+        title: "Fragment your packets"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [packet_fragmentation, firewall_evasion]
+        explanation:
+          what: "`-f` splits each probe into several small pieces before sending, instead of one normal-sized packet."
+          why: "Some older or simply-configured firewalls only inspect the FIRST fragment of a packet and wave the rest through — splitting can slip past that kind of filter. It won't help against a modern, properly-configured firewall that reassembles fragments first."
+          where: "ACTION_OPTIONS; needs sudo (raw packet crafting)."
+        find_it: "No new input — add -f to a scan you already know how to run, e.g. the basic port scan from the guided flow."
+        command_anatomy:
+          - {token: "sudo", does: "root privileges (required to craft raw packets)"}
+          - {token: "nmap", does: "the program"}
+          - {token: "-f", does: "fragment each probe into smaller pieces"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "sudo nmap -f scanme.nmap.org"
+        success_criteria: "The scan completes and returns the same kind of port table as an unfragmented scan — fragmentation changes HOW the packets look, not what nmap reports back to you."
+        expected_output: |
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          80/tcp open  http
+        alternatives:
+          - trigger: "results look identical to a normal scan and nothing seems different"
+            cause: "That's actually expected — you won't SEE evasion working from here. It only matters to whatever firewall/IDS is watching the traffic in between, which you have no visibility into from the scanning machine."
+            fix: "If you're doing this for a real assessment, compare notes with defenders/logs on the other side (only in an authorized engagement) to see whether fragmentation actually changed detection."
+            check: "No local change expected — this is normal, not a failure."
+          - trigger: "requires root privileges"
+            cause: "-f needs raw-socket access."
+            fix: "Run with `sudo`."
+            check: "Re-run with sudo."
+      - step_id: e2
+        title: "Hide among decoys"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [decoy]
+        explanation:
+          what: "`-D RND:5` (or a manual list like `-D 10.0.0.5,10.0.0.6,ME`) makes the scan appear to come from several addresses at once, yours mixed in among fake ones."
+          why: "A target's logs will show 6 different 'attackers' instead of 1, adding noise and doubt about which was real. It is NOT true anonymity — a skilled analyst can often still work out which source was genuine from timing or response handling."
+          where: "ACTION_OPTIONS; needs sudo."
+        find_it: "RND:5 auto-generates 5 random decoy IPs for you — no need to invent your own for practice. Include ME in a manual list to control where your real IP sits in the sequence (default: random position)."
+        command_anatomy:
+          - {token: "sudo", does: "root privileges"}
+          - {token: "nmap", does: "the program"}
+          - {token: "-D RND:5", does: "scan alongside 5 randomly-generated decoy addresses"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "sudo nmap -D RND:5 scanme.nmap.org"
+        success_criteria: "The scan runs and returns results normally — decoys change what the TARGET sees in its logs, not what you see in your terminal."
+        expected_output: |
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          80/tcp open  http
+        alternatives:
+          - trigger: "scan takes noticeably longer"
+            cause: "Each decoy adds extra traffic nmap has to send alongside your real probes."
+            fix: "Use fewer decoys (e.g. RND:2) if speed matters more than cover."
+            check: "Expected trade-off — not a fault."
+          - trigger: "requires root privileges"
+            cause: "-D needs raw-socket access."
+            fix: "Run with `sudo`."
+            check: "Re-run with sudo."
+      - step_id: e3
+        title: "Spoof your source port"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-g 53` (or `--source-port 53`) makes your probes appear to originate from port 53 (DNS) instead of a random high port."
+          why: "Some older firewalls are configured to automatically trust traffic FROM certain 'well-known' ports like 53 (DNS) or 80 (HTTP), assuming it's a reply to something they asked for. Faking the source port can exploit that misplaced trust."
+          where: "ACTION_OPTIONS; needs sudo."
+        find_it: "53 (DNS) and 88 (Kerberos) are common choices in write-ups — any port number 1-65535 works."
+        command_anatomy:
+          - {token: "sudo", does: "root privileges"}
+          - {token: "nmap", does: "the program"}
+          - {token: "-g 53", does: "make probes look like they're coming from port 53"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "sudo nmap -g 53 scanme.nmap.org"
+        success_criteria: "Scan completes normally."
+        expected_output: |
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          80/tcp open  http
+        alternatives:
+          - trigger: "no visible difference from a normal scan"
+            cause: "Expected — this only matters if a firewall in the path specifically trusts that source port. Most modern firewalls don't."
+            fix: "Treat this as a targeted technique for specific known-misconfigured environments, not a general speed/stealth boost."
+            check: "Not a failure — informational technique."
+      - step_id: e4
+        title: "Spoof your MAC address (local network only)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [mac_spoofing]
+        explanation:
+          what: "`--spoof-mac 0` fakes the hardware (MAC) address your machine appears to use; `0` means 'pick a random one for me'. You can also give a vendor name (e.g. `Apple`) or a real MAC address."
+          why: "Useful for local-network engagements where you don't want your real laptop's MAC logged. It has NO effect on remote/internet targets — routers strip and replace MAC addresses at every hop, so this only matters on the same physical/Wi-Fi network segment."
+          where: "ACTION_OPTIONS; needs sudo."
+        find_it: "0 is the easy option (random). Only target hosts on your OWN local network/lab for this to matter at all."
+        command_anatomy:
+          - {token: "sudo", does: "root privileges"}
+          - {token: "nmap", does: "the program"}
+          - {token: "--spoof-mac 0", does: "use a random MAC address instead of your real one"}
+          - {token: "<target>", does: "the host to scan (must be on the same local network)"}
+        try_this: "sudo nmap --spoof-mac 0 192.168.1.10"
+        success_criteria: "nmap prints the spoofed MAC it's using near the top of its output, then scans normally."
+        expected_output: |
+          Spoofing MAC address 8A:1F:C2:AA:11:02 (Unknown)
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+        alternatives:
+          - trigger: "target is not on your local network and nothing seems to change"
+            cause: "MAC addresses never leave the local network segment — this is expected, not a bug."
+            fix: "Only use this against local/lab targets if you want it to matter."
+            check: "Confirm the target is on the same subnet as you (compare with `ip a`)."
+
 quick_build:
   builder: nmap
   title: "Quick scan"
@@ -503,16 +617,104 @@ quick_build:
       type: choice
       default: standard
       choices: [quick, standard, thorough, quiet]
-      help: "Preset scan intensity (timing + scan type)."
+      help: "Preset scan intensity (timing + scan type). Leave as-is unless you want to set scan type/ports yourself below."
     - field_id: targets
       label: "Targets"
       type: string
       required: true
       placeholder: "scanme.nmap.org  or  192.168.1.0/24"
+    - field_id: scan_type
+      label: "Scan type (overrides profile)"
+      type: choice
+      choices: ["-sS", "-sT", "-sU", "-sn"]
+      help: "-sS SYN (needs sudo), -sT connect (no sudo needed), -sU UDP, -sn ping only/no ports. Leave blank to use the profile's default."
     - field_id: ports
       label: "Ports"
       type: string
       placeholder: "22,80,443  (optional)"
+    - field_id: all_ports
+      label: "Scan all 65535 ports (-p-)"
+      type: bool
+      help: "Overrides Ports/Top ports above. Slow."
+    - field_id: top_ports
+      label: "Top N most common ports (--top-ports)"
+      type: int
+      placeholder: "e.g. 100  (optional)"
+    - field_id: fast
+      label: "Fast mode — top 100 ports only (-F)"
+      type: bool
+    - field_id: service_version
+      label: "Detect service versions (-sV)"
+      type: bool
+    - field_id: os_detect
+      label: "Detect operating system (-O, needs sudo)"
+      type: bool
+    - field_id: aggressive
+      label: "Aggressive: OS + version + scripts + traceroute (-A)"
+      type: bool
+      help: "Bundles service_version + os_detect + default NSE scripts + traceroute into one flag. Thorough but loud/slow."
+    - field_id: scripts
+      label: "NSE script(s) or category (--script)"
+      type: string
+      placeholder: "default, safe, vuln, or a script name  (optional)"
+    - field_id: script_args
+      label: "NSE script arguments (--script-args)"
+      type: string
+      placeholder: "optional, only if a script needs them"
+    - field_id: timing
+      label: "Timing template 0-5 (-T)"
+      type: int
+      placeholder: "0=slowest/stealthiest, 5=fastest/loudest — profile already sets one"
+    - field_id: no_dns
+      label: "Skip DNS lookups (-n)"
+      type: bool
+      help: "Faster; use when you already have IPs."
+    - field_id: skip_host_discovery
+      label: "Skip the up-check, assume host is up (-Pn)"
+      type: bool
+      help: "Use when a target blocks ping but you know it's live."
+    - field_id: verbose
+      label: "Verbose output (-v)"
+      type: bool
+    - field_id: reason
+      label: "Show WHY each port was marked that state (--reason)"
+      type: bool
+    - field_id: interface
+      label: "Network interface (-e)"
+      type: string
+      placeholder: "eth0  (optional — auto-detected normally)"
+    - field_id: input_list
+      label: "Read targets from a file (-iL)"
+      type: path
+      placeholder: "~/targets.txt  (optional, overrides/adds to Targets)"
+    - field_id: privileged
+      label: "Run with sudo"
+      type: bool
+      help: "Needed for -sS/-O/-sU and every evasion option below. If left off, the app still tells you when a scan needs it."
+    - field_id: fragment
+      label: "Fragment packets (-f)"
+      type: bool
+      help: "Splits probes into smaller pieces — may slip past older/simpler firewalls. Needs sudo."
+    - field_id: decoys
+      label: "Decoy addresses (-D)"
+      type: string
+      placeholder: "RND:5  or  decoy1,decoy2,ME  (optional)"
+      help: "Hides your real IP among fake ones in the target's logs. RND:5 generates 5 random decoys. Needs sudo."
+    - field_id: source_port
+      label: "Spoof source port (-g)"
+      type: int
+      placeholder: "e.g. 53  (optional)"
+      help: "Some firewalls trust traffic FROM certain ports (like 53/DNS). Needs sudo."
+    - field_id: spoof_mac
+      label: "Spoof MAC address (--spoof-mac)"
+      type: string
+      placeholder: "0 = random, or a vendor name, or a real MAC  (optional)"
+      help: "Only affects the local network segment (MAC addresses don't cross routers). Needs sudo."
+    - field_id: spoof_source_ip
+      label: "Spoof source IP (-S)"
+      type: string
+      placeholder: "10.0.0.99  (optional, advanced)"
+      help: "Replies won't come back to you — mainly for triggering IDS alerts under a different identity, not for getting real results. Set Interface + Skip host discovery too. Needs sudo."
     - field_id: output_format
       label: "Save output as"
       type: choice

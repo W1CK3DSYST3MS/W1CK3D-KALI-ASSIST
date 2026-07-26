@@ -1,6 +1,6 @@
 terms:
   - term: mode
-    definition: "gobuster's first argument: dir, dns, vhost, or fuzz."
+    definition: "gobuster's first argument, deciding what it enumerates: dir (web paths), dns (subdomains), vhost (virtual hosts), fuzz (custom keyword), tftp (files on a TFTP server), s3/gcs (cloud storage buckets)."
   - term: wordlist
     definition: "The list of candidates tried (dirb/SecLists on Kali)."
   - term: extension
@@ -17,3 +17,7 @@ terms:
     definition: "-r follows 3xx responses instead of just reporting them."
   - term: seclists
     definition: "The big wordlist collection (sudo apt install seclists)."
+  - term: bucket
+    definition: "A cloud storage container (AWS S3 or Google Cloud Storage). Bucket NAMES are often guessable (company-backup, company-dev) and misconfigured ones can be publicly readable — a common real-world data leak."
+  - term: tftp
+    definition: "Trivial File Transfer Protocol — an old, simple, UNAUTHENTICATED file-transfer protocol (UDP port 69) still found on routers, switches, and VoIP phones for config/firmware transfer."

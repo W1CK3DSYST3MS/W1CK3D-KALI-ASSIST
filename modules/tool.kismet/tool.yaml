@@ -147,4 +147,20 @@ quick_build:
     - field_id: log_prefix
       label: "Log directory (--log-prefix)"
       type: path
+    - field_id: log_types
+      label: "Log types (--log-types)"
+      type: string
+      placeholder: "kismet,pcapng  (optional — comma-separated, defaults set in kismet.conf)"
+    - field_id: config_file
+      label: "Alternate config file (-f)"
+      type: path
+      placeholder: "optional — overrides kismet.conf"
+    - field_id: daemonize
+      label: "Run in background (--daemonize)"
+      type: bool
+      help: "Detach and run as a background service instead of staying in the foreground."
+    - field_id: no_sudo
+      label: "Don't prefix with sudo"
+      type: bool
+      help: "Kismet normally needs root to put a wireless card into monitor mode — only untick sudo if you've set up capture permissions another way."
       placeholder: "~/kismet-logs  (optional)"

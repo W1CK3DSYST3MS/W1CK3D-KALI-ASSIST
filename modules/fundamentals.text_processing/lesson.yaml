@@ -22,7 +22,7 @@ steps:
   - step_id: tp0
     title: "Make a sample file to work on"
     slot_target: null
-    glossary_refs: []
+    glossary_refs: [heredoc]
     explanation:
       what: "A heredoc (`cat > file <<'EOF' ... EOF`) writes the lines between the markers into a file. We build a small colon-separated dataset to practise on."
       why: "So every later command has predictable input and your EXPECTED blocks match exactly."
@@ -180,7 +180,7 @@ steps:
   - step_id: tp7
     title: "Translate and delete characters (tr)"
     slot_target: null
-    glossary_refs: [character_class]
+    glossary_refs: [character_class, stdin]
     explanation:
       what: "`tr` maps or deletes characters from stdin: `tr a-z A-Z` upper-cases, `tr -d '\\r'` strips carriage returns, `tr -s ' '` squeezes repeats."
       why: "Great for normalising text: fixing Windows line endings, changing delimiters, uppercasing."

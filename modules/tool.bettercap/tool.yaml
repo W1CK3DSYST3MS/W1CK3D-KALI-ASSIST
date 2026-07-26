@@ -127,6 +127,46 @@ flows:
             cause: "Target idle, or HTTPS (encrypted)."
             fix: "Generate traffic on the target; remember HTTPS payloads are encrypted — you'll see destinations, not contents, without further (authorized) TLS work."
             check: "Some packets appear in net.sniff."
+      - step_id: g5
+        title: "(Authorized) Spoof DNS for a domain"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: >
+          dns.spoof forges DNS replies so a chosen domain resolves to an address YOU control —
+          the target's browser lands on your machine instead of the real site. This can be used
+          to phish credentials or serve malware, and is illegal against anyone who hasn't given
+          written permission. Stop with `dns.spoof off` (and `arp.spoof off`) as soon as you're
+          done — bettercap restores ARP tables on exit. Lab/authorized only.
+        explanation:
+          what: "`dns.spoof` is a bettercap module that answers DNS queries for chosen domains with a fake IP instead of forwarding the real answer, while `arp.spoof` (from the last step) makes the target's traffic pass through you so it actually sees those forged replies."
+          why: "This is how a MITM turns 'I can see your traffic' into 'I can redirect you' — e.g. sending login.example.com to a page you control. It's one of the most illustrative, and dangerous, bettercap modules — and the classic example the bettercap docs themselves use."
+          where: "ACTION_OPTIONS via -eval; run after arp.spoof is already active."
+        find_it: >
+          Reuse the target IP from step 4 (a device YOU control). Pick a domain to spoof (make
+          one up for a lab test, e.g. test.local) and an address for it to resolve to — your own
+          machine's IP works for a lab demo.
+        command_anatomy:
+          - {token: "sudo bettercap -iface eth0", does: "launch on your interface"}
+          - {token: "set arp.spoof.targets 192.168.1.50", does: "victim IP from the previous step"}
+          - {token: "arp.spoof on", does: "become the MITM for that target"}
+          - {token: "set dns.spoof.domains test.local", does: "only forge replies for this domain (comma-separated list)"}
+          - {token: "set dns.spoof.address 192.168.1.24", does: "the IP forged replies point to — your own machine for a lab test"}
+          - {token: "dns.spoof on", does: "start answering matching DNS queries with the forged address"}
+        try_this: "sudo bettercap -iface eth0 -eval \"set arp.spoof.targets 192.168.1.50; arp.spoof on; set dns.spoof.domains test.local; set dns.spoof.address 192.168.1.24; dns.spoof on\""
+        success_criteria: "On the target, `nslookup test.local` (or a browser visit to test.local) resolves to your chosen address instead of the real one."
+        expected_output: |
+          » [arp.spoof] arp spoofer started, probing 1 targets.
+          » [dns.spoof] dns.spoof enabling forwarding
+          » [dns.spoof] 192.168.1.50 -> test.local -> 192.168.1.24
+        alternatives:
+          - trigger: "target still resolves the real address"
+            cause: "arp.spoof isn't active yet, or dns.spoof.domains doesn't match the queried name."
+            fix: "Confirm arp.spoof reports it started successfully first; check the domain spelling matches exactly; for a controlled lab test only, `set dns.spoof.all true` spoofs every query instead of a specific domain."
+            check: "nslookup (or a browser) on the target now resolves to your address."
+          - trigger: "nothing happens on HTTPS sites"
+            cause: "A forged DNS answer sends the browser to your box, but TLS certificate validation will still fail unless you also present a trusted cert for that name — DNS spoofing alone doesn't defeat HTTPS."
+            fix: "Treat this step as demonstrating DNS-layer redirection only, not certificate/TLS bypass — that's a separate, more advanced (and even more sensitive) topic."
+            check: "You understand DNS spoofing redirects traffic; it doesn't decrypt or forge HTTPS trust by itself."
   - flow_id: recon
     title: "Network recon (reference)"
     goal: "Map hosts on the LAN."

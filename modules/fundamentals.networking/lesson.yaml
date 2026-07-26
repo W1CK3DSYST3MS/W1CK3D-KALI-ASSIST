@@ -44,7 +44,7 @@ steps:
   - step_id: w2
     title: "How traffic leaves — the default route (ip route)"
     slot_target: ACTION_OPTIONS
-    glossary_refs: [gateway, cidr]
+    glossary_refs: [gateway, cidr, lan]
     explanation:
       what: "`ip route` shows routing. The `default via <gateway>` line is how packets reach the internet."
       why: "No default route = you can reach your LAN but not the outside world."
@@ -86,6 +86,10 @@ steps:
         cause: "Without -c it pings forever."
         fix: "Press Ctrl+C, or always pass `-c4`."
         check: "-c limits the count."
+      - trigger: "SOME replies come back, some say 'Request timeout' — e.g. 2 received, 2 lost, 50% packet loss"
+        cause: "This is a PARTIAL result, not a clean pass or fail: the path works some of the time. Usually Wi-Fi interference, an overloaded link, or a host/firewall that only sometimes drops probes."
+        fix: "Run a bigger sample to see the real rate: `ping -c20 1.1.1.1`. Any sustained loss (not just 1-2 out of 20) points to a flaky link, not a one-off blip."
+        check: "0% loss = healthy. Occasional loss under load can be normal; steady loss (>10-20%) is a real problem worth chasing."
   - step_id: w4
     title: "Can I reach it by name? (DNS)"
     slot_target: POSITIONAL_ARGS
@@ -108,6 +112,10 @@ steps:
         cause: "dnsutils not installed."
         fix: "`sudo apt install dnsutils` (or use `host`/`nslookup`)."
         check: "host and nslookup do the same job."
+      - trigger: "you get a name back but no IP address (e.g. a CNAME line, then nothing)"
+        cause: "The name is an ALIAS for another name (a CNAME) — resolution is only half-done. Usually the alias target itself is broken, slow, or also failing."
+        fix: "Follow the chain manually: `dig example.com` (without +short) shows the full ANSWER SECTION, including the CNAME and what it points to. Then look up that target name too."
+        check: "+short hides the chain; the full `dig` output shows every hop."
   - step_id: w5
     title: "Who resolves my names? (resolv.conf)"
     slot_target: POSITIONAL_ARGS
@@ -157,7 +165,7 @@ steps:
   - step_id: w7
     title: "Fetch a URL (curl)"
     slot_target: ACTION_OPTIONS
-    glossary_refs: [curl_wget]
+    glossary_refs: [curl_wget, http_https]
     explanation:
       what: "`curl -I <url>` fetches just the HTTP headers; `curl <url>` prints the body. Great for testing web services."
       why: "Quickly check if a web server is up and what it returns, without a browser."
@@ -182,6 +190,10 @@ steps:
         cause: "Self-signed or untrusted cert."
         fix: "For testing only, `curl -k` skips verification (never for real secrets)."
         check: "-k ignores cert errors — use sparingly."
+      - trigger: "curl connects fine and prints headers, but the status line says HTTP/1.1 403 Forbidden (or 404, 500...)"
+        cause: "This is NOT a curl failure — curl did its job perfectly and reported exactly what the server said. The server itself is refusing/failing the request (blocked, missing page, or broken)."
+        fix: "Read the status code: 403 = blocked/no permission, 404 = page doesn't exist, 500 = server-side error. Don't treat this as 'the command didn't work' — it worked; the answer is just 'no'."
+        check: "Only HTTP/2 200 or HTTP/1.1 200 OK means 'here is the content you asked for'."
   - step_id: w8
     title: "Download a file (wget)"
     slot_target: POSITIONAL_ARGS

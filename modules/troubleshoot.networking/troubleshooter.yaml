@@ -36,7 +36,7 @@ symptoms:
       - step_id: l1
         title: "Do you have an IP address?"
         slot_target: null
-        glossary_refs: [ip_address, interface]
+        glossary_refs: [ip_address, interface, dhcp, link_state, link_local_address]
         explanation:
           what: "`ip a` shows your interfaces and their addresses."
           why: "An `inet 192.168.x.x` line (not just 127.0.0.1) means link + DHCP worked."
@@ -48,6 +48,14 @@ symptoms:
             cause: "Link down or DHCP didn't assign an address."
             fix: "Bring the interface up and restart NetworkManager (see Basic fixes)."
             check: "Re-run `ip a` after the fix."
+          - trigger: "only an inet6 fe80:: address, no inet (IPv4) line"
+            cause: "That fe80:: address is link-local — your device gave it to itself. It does not mean you're online; IPv4 DHCP simply never completed even though the link is up."
+            fix: "Same fix as no address at all: restart the network stack / reconnect (see Basic fixes below)."
+            check: "Re-run `ip a` and look specifically for an `inet` (not `inet6 fe80`) line."
+          - trigger: "the interface shows `state DOWN` or `NO-CARRIER`"
+            cause: "Wired: the cable is unplugged or the port is dead. Wi-Fi: it was never associated to an access point."
+            fix: "Check the physical cable/port, or work the Wi-Fi symptom to associate first."
+            check: "`ip a` shows `state UP` with `LOWER_UP` once there's a real link."
       - step_id: l2
         title: "Is there a default route?"
         slot_target: null
@@ -63,6 +71,10 @@ symptoms:
             cause: "DHCP didn't provide a gateway."
             fix: "Reconnect the interface, or (lab only) add a static route."
             check: "Re-run `ip route`."
+          - trigger: "a default route exists but nothing actually reaches the internet"
+            cause: "The route is stale (leftover from a previous network) or there's more than one default route fighting for priority — common right after switching Wi-Fi networks or connecting a VPN."
+            fix: "Reconnect the interface for a fresh route; if `ip route` lists two `default` lines, that's the conflict — disconnect the one you're not using."
+            check: "`ip route` shows exactly one `default via` line, pointing at the gateway you expect."
       - step_id: l3
         title: "Can you reach the internet by number?"
         slot_target: null
@@ -81,6 +93,10 @@ symptoms:
             cause: "Link/route still broken."
             fix: "Work the Basic/Intermediate fixes below."
             check: "Recheck `ip a` / `ip route`."
+          - trigger: "some replies arrive, some time out (partial loss, not a clean pass/fail)"
+            cause: "Not a hard failure — a weak Wi-Fi signal, a flaky cable/driver, or wireless interference."
+            fix: "Switch to the 'connects but is slow or keeps dropping' symptom."
+            check: "Run a longer test — `ping -c20 1.1.1.1` — and look at the loss percentage in the summary."
     fixes:
       - fix_id: nm_restart
         tier: basic
@@ -139,6 +155,10 @@ symptoms:
             cause: "This is a connectivity problem, not DNS."
             fix: "Switch to the 'no internet at all' symptom."
             check: "Recheck `ip a` / `ip route`."
+          - trigger: "some domains resolve fine, others don't (not all-or-nothing)"
+            cause: "Not total DNS failure — likely a specific resolver having trouble with that domain, a stale cached answer, or (on some networks) a captive portal/filter only intercepting certain lookups."
+            fix: "Query the failing domain against a public resolver directly: `dig @1.1.1.1 <domain>`. If that works, your configured resolver is the problem — switch resolvers (see fixes below)."
+            check: "The direct `dig @1.1.1.1` query succeeds even when the normal lookup didn't."
     fixes:
       - fix_id: check_resolvers
         tier: basic
@@ -164,9 +184,39 @@ symptoms:
         command: "dig @1.1.1.1 example.com  # or: nslookup example.com 1.1.1.1"
         why: "Separates 'DNS server down' from 'local config wrong'."
         verify: "A direct query resolves."
+      - fix_id: flush_cache
+        tier: extensive
+        title: "Stale cached answer (especially after switching networks/VPN)"
+        command: "sudo resolvectl flush-caches  # or: sudo systemctl restart systemd-resolved"
+        why: "A cached bad or 'no such domain' answer can keep failing even after the real cause is fixed."
+        verify: "The previously-failing domain now resolves."
   - symptom_id: wifi_connect
     label: "My Wi-Fi won't connect / I see no networks"
     aliases: [wifi, wireless, ssid, no networks, wont connect, wlan]
+    diagnosis:
+      - step_id: wc1
+        title: "Does it see networks at all, or fail after you pick one?"
+        slot_target: null
+        glossary_refs: [ssid]
+        explanation:
+          what: "`nmcli device wifi list` scans and shows nearby networks (SSIDs) with their signal strength."
+          why: "This splits two very different problems: 'I can't even see my network' (radio/driver/range) vs 'I see it but can't join' (wrong password/stale profile)."
+          where: "Diagnostic."
+        try_this: "nmcli device wifi list"
+        success_criteria: "Your network's name (SSID) appears in the list."
+        alternatives:
+          - trigger: "your SSID never appears, but neighboring networks do"
+            cause: "Hidden network, your router is 5GHz-only and your adapter can't see 5GHz, or you're out of range."
+            fix: "For a hidden network: `nmcli device wifi connect \"<SSID>\" password \"<password>\" hidden yes`. Otherwise move closer to the router or check which bands your adapter supports."
+            check: "The SSID appears, or the hidden-network connect command succeeds."
+          - trigger: "no networks appear at all, not even neighbors'"
+            cause: "This isn't about your specific network — the radio is blocked or the adapter/driver isn't working."
+            fix: "Run the 'unblock radios' fix below; if still nothing, switch to the 'adapter isn't showing up' symptom."
+            check: "`rfkill list` shows no blocks and `iw dev` lists the interface."
+          - trigger: "you see it, try to connect, and it fails or loops asking for the password again"
+            cause: "Wrong password, or a stale saved connection profile from a previous attempt."
+            fix: "See the 'Wrong password / auth loop' fix below."
+            check: "`nmcli connection show` reports it connected after retrying."
     fixes:
       - fix_id: unblock
         tier: basic
@@ -195,6 +245,30 @@ symptoms:
   - symptom_id: adapter_missing
     label: "My Wi-Fi/network adapter isn't showing up at all"
     aliases: [adapter, interface missing, no wlan0, driver, firmware, not recognized]
+    diagnosis:
+      - step_id: am1
+        title: "Is the hardware detected at all?"
+        slot_target: null
+        glossary_refs: [driver, firmware]
+        explanation:
+          what: "`lspci -nnk | grep -iA3 net` (built-in adapters) or `lsusb` (USB adapters) shows whether Linux sees the chip at all."
+          why: "This splits 'hardware not detected' (cable/BIOS/dead port) from 'detected but not working' (missing driver/firmware) — the fixes are completely different."
+          where: "Diagnostic."
+        try_this: "lspci -nnk | grep -iA3 net   # USB: lsusb"
+        success_criteria: "Your adapter's make/model is listed."
+        alternatives:
+          - trigger: "listed, WITH a 'Kernel driver in use' line, but still no wlan0/eth0 interface"
+            cause: "A driver is bound but its firmware failed to load, or the interface exists under a different name than expected."
+            fix: "Check for firmware load errors (see below) and confirm the real interface name with `ip a` — it isn't always wlan0."
+            check: "A firmware line appears in `dmesg`, or `ip a` lists an interface for this device once fixed."
+          - trigger: "listed, but NO 'Kernel driver in use' line, or not recognized as a network device at all"
+            cause: "No driver is bound to this chipset yet."
+            fix: "Install the matching firmware package (see below). Some USB Wi-Fi chipsets popular for security testing aren't in Kali's default kernel and need a separate driver."
+            check: "'Kernel driver in use' now appears; the interface shows up in `ip a`."
+          - trigger: "not listed anywhere — not even as generic/unknown hardware"
+            cause: "Hardware fault, disabled in BIOS/UEFI, or (USB) a dead port/cable."
+            fix: "Try a different USB port/cable, and check your BIOS/UEFI settings for a disabled network device."
+            check: "The device now appears in `lspci`/`lsusb`."
     fixes:
       - fix_id: seen
         tier: basic
@@ -214,6 +288,12 @@ symptoms:
         command: "sudo apt update && sudo apt install firmware-iwlwifi  # or firmware-realtek / firmware-atheros"
         why: "Fresh Kali often lacks vendor firmware."
         verify: "`ip a` / `iw dev` now lists the interface."
+      - fix_id: thirdparty_driver
+        tier: extensive
+        title: "Chipset needs a third-party driver (not in the kernel)"
+        command: "sudo apt install dkms build-essential linux-headers-$(uname -r)  # then follow that chipset's driver install steps"
+        why: "Some USB Wi-Fi adapters marketed for security testing use chipsets that aren't in the mainline kernel and need a DKMS-built driver matched to your exact kernel version."
+        verify: "The interface appears once the driver builds and loads; `iw list` shows it."
   - symptom_id: monitor_mode
     label: "I can't get monitor mode working (security tooling)"
     aliases: [monitor mode, airmon, injection, capture, wlan0mon]
@@ -234,10 +314,18 @@ symptoms:
         tier: intermediate
         title: "Stop interfering processes"
         command: "sudo airmon-ng check; sudo airmon-ng check kill"
-        why: "NetworkManager/wpa_supplicant grab the adapter."
+        why: "NetworkManager and wpa_supplicant (the background programs that normally manage Wi-Fi) keep trying to reassert control of the adapter and will fight monitor mode."
         verify: "Interfering processes are stopped."
         destructive: true
         recovery: "This stops NetworkManager -> you lose normal Wi-Fi/internet until you run `sudo systemctl start NetworkManager`."
+      - fix_id: persist_unmanaged
+        tier: extensive
+        title: "NetworkManager keeps re-grabbing the adapter every time"
+        command: "printf '[keyfile]\\nunmanaged-devices=interface-name:wlan0\\n' | sudo tee /etc/NetworkManager/conf.d/unmanaged.conf; sudo systemctl restart NetworkManager"
+        why: "`airmon-ng check kill` only helps for the current session — this permanently tells NetworkManager to leave this one interface alone, so it stops reverting your monitor-mode interface back to managed Wi-Fi."
+        verify: "wlan0 no longer flips back to 'managed' on its own; monitor mode stays set after reboot."
+        destructive: true
+        recovery: "Remove /etc/NetworkManager/conf.d/unmanaged.conf and restart NetworkManager to let it manage the interface normally again."
   - symptom_id: slow_intermittent
     label: "It connects but is slow or keeps dropping"
     aliases: [slow, dropping, intermittent, lag, unstable, keeps disconnecting]
@@ -254,3 +342,9 @@ symptoms:
         command: "iw dev <iface> get power_save  # disable via NetworkManager wifi.powersave"
         why: "Aggressive power save can drop the link."
         verify: "Stability improves with power save off."
+      - fix_id: driver_resets
+        tier: extensive
+        title: "Adapter silently resets/reconnects under load"
+        command: "dmesg -T | grep -iE 'reset|firmware|disconnect' | tail -30"
+        why: "Some USB Wi-Fi chipsets crash their firmware and silently reassociate under load — it looks like random dropping, but the kernel log shows the real cause."
+        verify: "No repeating reset/firmware-crash lines during the period it dropped."

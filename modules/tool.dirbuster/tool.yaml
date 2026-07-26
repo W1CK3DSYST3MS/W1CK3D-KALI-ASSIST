@@ -136,6 +136,36 @@ flows:
             cause: "DirBuster's CLI is dated."
             fix: "Prefer gobuster or dirb for reliable CLI scanning; use DirBuster's GUI for interactive work."
             check: "Switch tools if the CLI misbehaves."
+      - step_id: dbu2
+        title: "Tune the headless scan: threads, start point, GET-only, non-recursive, verbose"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-t <n>` sets the number of connection threads (default 10). `-s <path>` sets the start point of the scan instead of / (e.g. resume partway through a wordlist run, or start inside a known subdirectory). `-g` restricts DirBuster to GET requests only (default also tries HEAD). `-R` disables recursion, so it only checks the given start point instead of descending into every found directory. `-v` prints verbose per-request output."
+          why: "The defaults (10 threads, recursive, from /) are fine for a first look, but a real engagement usually needs more control: fewer threads to be gentler on a fragile server, more threads for speed on a robust one, a narrower non-recursive scan of one folder, or GET-only when HEAD requests behave oddly on the target."
+          where: "ACTION_OPTIONS (-t/-s/-g/-R), alongside -e; -v is a GLOBAL_OPTIONS run-wide flag."
+        find_it: "No new input required beyond what you already picked (target, wordlist). Pick a thread count (10-50 is typical), and a start path if you want to scan inside a known subdirectory instead of /."
+        command_anatomy:
+          - {token: "-t 50", does: "use 50 connection threads (default is 10)"}
+          - {token: "-s /admin/", does: "start the scan at /admin/ instead of the site root /"}
+          - {token: "-g", does: "GET requests only (skip HEAD probing)"}
+          - {token: "-R", does: "don't recurse into found directories — only scan the start point"}
+          - {token: "-v", does: "verbose output — print each request as it's made"}
+        try_this: "dirbuster -H -u http://TARGET:80/ -l /usr/share/dirbuster/wordlists/directory-list-2.3-medium.txt -t 50 -R -v -r ~/dirbuster.txt"
+        success_criteria: "The scan runs with your chosen thread count, stays within the start point (non-recursive), and prints verbose per-request lines."
+        expected_output: |
+          Starting OWASP DirBuster 1.0-RC1 (headless)
+          Testing: /admin/config.php - 403
+          Testing: /admin/backup/ - 404
+          Report written to ~/dirbuster.txt
+        alternatives:
+          - trigger: "scan feels too aggressive / server errors out"
+            cause: "Too many threads for a fragile server."
+            fix: "Lower -t (e.g. -t 10 or fewer)."
+            check: "Fewer connection errors / timeouts."
+          - trigger: "you only want gobuster/dirb after all"
+            cause: "DirBuster's headless CLI is legacy and less actively maintained."
+            fix: "gobuster and dirb are the modern preferred CLI alternatives — faster, simpler flags, actively maintained. Use DirBuster mainly for its GUI-driven recursive tree view."
+            check: "You have a working scan either way."
 
 quick_build:
   builder: dirbuster
@@ -160,3 +190,25 @@ quick_build:
       label: "Report file (-r)"
       type: path
       placeholder: "~/dirbuster.txt  (optional)"
+    - field_id: threads
+      label: "Threads (-t)"
+      type: int
+      placeholder: "10  (default)"
+      help: "Number of connection threads. Lower for fragile servers, higher for speed."
+    - field_id: start_point
+      label: "Start point (-s)"
+      type: string
+      placeholder: "/admin/  (default: /)"
+      help: "Scan starting from this path instead of the site root."
+    - field_id: get_only
+      label: "GET requests only (-g)"
+      type: bool
+      help: "Skip HEAD probing, use GET only."
+    - field_id: non_recursive
+      label: "Don't be recursive (-R)"
+      type: bool
+      help: "Only scan the start point, don't descend into found directories."
+    - field_id: verbose
+      label: "Verbose (-v)"
+      type: bool
+      help: "Print each request as it happens."

@@ -19,3 +19,9 @@ terms:
     definition: "Module format path:body(^USER^/^PASS^):failure-or-success marker."
   - term: null_login
     definition: "-e n also tries an empty password (s=same as login, r=reversed)."
+  - term: bruteforce_generation
+    definition: "-x MIN:MAX:CHARSET — hydra GENERATES password candidates from a length/charset range, instead of reading them from a -P wordlist."
+  - term: explicit_ssl
+    definition: "-S forces an SSL/TLS connect for a service that isn't already an -s (SSL) variant."
+  - term: module_options
+    definition: "-m OPT passes module-specific settings (see hydra -U <service> for what a module accepts)."

@@ -45,6 +45,10 @@ steps:
         cause: "Another apt/dpkg is running (or crashed)."
         fix: "Wait for it to finish; if none, see the dpkg-lock troubleshooter before forcing."
         check: "`ps aux | grep -i apt` shows any running apt."
+      - trigger: "most 'Get:' lines succeed, but ONE says '404 Not Found', ending in 'W: Some index files failed to download. They have been ignored, or old ones used instead.'"
+        cause: "A PARTIAL update: most repositories refreshed fine, but one mirror/component didn't. apt will still work using whatever index it already had for that one — which may be stale."
+        fix: "Usually harmless and temporary (a mirror hiccup) — re-run `sudo apt update` in a minute. If it's the SAME source failing repeatedly, check that source's line in /etc/apt/sources.list (step k9) for a typo or a dead URL."
+        check: "A clean run shows no 404/failed lines and ends with 'Reading package lists... Done' and no warnings."
   - step_id: k2
     title: "Apply updates (apt full-upgrade)"
     slot_target: ACTION_OPTIONS
@@ -138,6 +142,10 @@ steps:
         cause: "A dependency conflict (can happen on rolling)."
         fix: "Try `sudo apt --fix-broken install`; see the Packages troubleshooter for stubborn cases."
         check: "Don't force with dpkg unless you understand the risk."
+      - trigger: "next apt run says 'dpkg was interrupted, you must manually run sudo dpkg --configure -a'"
+        cause: "A PARTIALLY-installed package: a previous install/upgrade got interrupted (closed terminal, power loss, Ctrl+C) mid-way, leaving one package 'half-configured' instead of fully installed or fully absent."
+        fix: "Run exactly what it suggests: `sudo dpkg --configure -a` to finish the interrupted setup, then retry your original `apt install`."
+        check: "After `dpkg --configure -a` completes with no errors, a normal `sudo apt install <pkg>` should work again."
   - step_id: k6
     title: "Remove software (remove / purge / autoremove)"
     slot_target: ACTION_OPTIONS
@@ -161,6 +169,10 @@ steps:
         cause: "It flags packages nothing depends on."
         fix: "Read the list; cancel with n if unsure, or mark it manual: `sudo apt-mark manual <pkg>`."
         check: "apt-mark manual protects a package from autoremove."
+      - trigger: "you asked to remove several packages; most go, but one fails with 'package X is a dependency of Y'"
+        cause: "A PARTIAL removal: apt processes packages in order and stops that one specific removal when something else still needs it — the others you listed are already gone."
+        fix: "Decide: either also remove Y first (if you don't need it either), or leave X installed. Don't force-remove a dependency something else relies on."
+        check: "`dpkg -l | grep <pkg>` shows which of your requested removals actually completed."
   - step_id: k7
     title: "Query installed packages (dpkg)"
     slot_target: ACTION_OPTIONS

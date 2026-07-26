@@ -19,3 +19,11 @@ terms:
     definition: "`-T0..5`: preset speed/stealth trade-off (paranoid -> insane)."
   - term: privileged_scan
     definition: "Scans (e.g. -sS, -O, -sU) that need root/sudo."
+  - term: firewall_evasion
+    definition: "Techniques that change how a scan LOOKS to a firewall/IDS (fragmenting packets, using decoys, spoofing addresses) — they don't make nmap find more, they make the scan harder to notice or block."
+  - term: decoy
+    definition: "A fake source address nmap mixes in with your real one (`-D`), so the target's logs show many possible scanners instead of just you. It doesn't hide you completely — a skilled analyst can often still tell — it adds noise and doubt."
+  - term: mac_spoofing
+    definition: "`--spoof-mac`: fakes the MAC (hardware) address your packets appear to come from. Only matters on the same local network segment — routers strip/replace MAC addresses, so this has no effect on remote/internet targets."
+  - term: packet_fragmentation
+    definition: "`-f`: splits each probe into several smaller pieces before sending. Some older or simply-configured firewalls only inspect the first fragment and let the rest through unchecked."

@@ -15,3 +15,5 @@ terms:
     definition: "A symbolic link — a file that points at another path (ls -l shows it with ->)."
   - term: inode
     definition: "The filesystem's internal record for a file (its metadata + data location)."
+  - term: ctf
+    definition: "CTF (Capture The Flag) — a hands-on security exercise/competition where you find hidden 'flags' by exploring and exploiting deliberately vulnerable systems. A common, safe way to practise the skills this app teaches."

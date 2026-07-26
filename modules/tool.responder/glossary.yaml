@@ -9,3 +9,7 @@ terms:
     definition: "Answering a broadcast name-lookup request before the real service can, so the client authenticates to you instead of who it meant to reach."
   - term: wpad
     definition: "Web Proxy Auto-Discovery — a legacy protocol that finds proxy settings automatically. Frequently abused to intercept HTTP traffic."
+  - term: rogue_proxy_auth
+    definition: "Responder's -P feature: forcing NTLM/Basic proxy authentication from any client that tries to use a network proxy, independent of LLMNR/NBT-NS — captures credentials even from clients that never send a name-resolution lookup at all."
+  - term: dhcp_poisoning
+    definition: "Answering DHCP (or DHCPv6) lease requests before the real DHCP server can, competing to control clients' network/DNS/proxy configuration. Unlike LLMNR/NBT-NS poisoning, this can break a client's normal connectivity, not just capture credentials — disruptive to the whole segment, not just eavesdropping."

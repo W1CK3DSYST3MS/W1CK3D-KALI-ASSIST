@@ -16,17 +16,32 @@ and `expected_output` against authoritative documentation.
 - **expected_output** — SHAPE verified against docs; byte-accuracy pending a real Kali run
   (marked `expected: shape-only` until reconciled with `verify_capture.sh` output).
 
+## 2026-07-26 depth-audit pass
+
+Separately from the flag-verification pass below, every tool module (34/34)
+was audited for *completeness* — not just "are the flags we used correct" but
+"does this cover everything the real tool can do." New flags/modes added in
+this pass (wireshark ring-buffer/Decode-As, hydra `-x` bruteforce-generation,
+hashcat combinator attack, john `--mask`, nikto `-mutate`, netexec `-M`
+modules, photon `--keys`/`--dns`, responder DHCP-poisoning/rogue-proxy-auth,
+msfvenom template injection, dirb proxy/auth, aircrack_ng fake-auth/ARP-replay,
+mdbtools `mdb-sql`, rfcat spectrum-analyzer, and more) were verified against
+the real installed binary's `--help`/`-h`/usage banner on this Kali box at
+time of writing, same method as below. Full per-tool detail — what was
+missing, what was added, before/after quick_build field counts — lives in
+`docs/DEPTH-AUDIT.md` rather than duplicated here.
+
 ## Status
 Legend: ✅ verified · ✍️ corrected · ⏳ pending · 🔬 expected_output needs a real Kali run
 
 | Tool | Flags/syntax | Source | Notes |
 |------|--------------|--------|-------|
 | dnsmap | ✅ | kali.org/tools/dnsmap | domain-first + -w/-r/-c/-d/-i all correct |
-| gobuster | ✅ | github OJ/gobuster README | -u/-w/-x/-t/-k/-o/-a/-c/-H/-r/-s confirmed; -b blacklist; "can't set both -s and -b" + version-default note accurate |
+| gobuster | ✅ | github OJ/gobuster README | -u/-w/-x/-t/-k/-o/-a/-c/-H/-r/-s confirmed; -b blacklist; "can't set both -s and -b" + version-default note accurate. 2026-07-25 depth-audit follow-up: installed gobuster v3.8.2 `--help` per-mode confirmed `-U/-P` Basic Auth (dir/vhost/fuzz only), `tftp` mode's `-s` server flag, `s3`/`gcs` modes have NO target flag (wordlist-only); quick_build form expanded from 5 to 21 fields |
 | photon | ✅ | github s0md3v/Photon wiki (Usage) | -u/-l/-t/-d/-o/--wayback confirmed; output categories internal/external/robots/scripts/etc. match |
 | btscanner | ✍️ | manpages.debian.org/btscanner | **CORRECTED**: removed invented `-o`; real options are only `--help`/`--cfg`/`--no-reset`; dumps go to config `device_path` |
-| nmap | ✅ | installed `--help`/man, Nmap 7.99 (Kali 2026.3) | all flags (`-sn/-Pn/-n/-T0-5/-sV/--version-all/-sS/-sT/-sU/-p/--top-ports/-p-/-O/-A/--script/-oN/-oX/-oG/-oA/--reason/-F/-iL/-e`) confirmed |
-| sqlmap | ✅ | installed `--help`/`-hh`/man, sqlmap 1.10.6#stable | `-u/-g/--data/--cookie/--random-agent/--proxy/--tor/--check-tor/-p/--dbms/--level/--risk/--technique/-a/-b/--dump[-all]/-D/-T/-C/--os-shell/--os-pwn/--batch/--flush-session/--wizard` confirmed via `-hh` advanced help |
+| nmap | ✅ | installed `--help`/man, Nmap 7.99 (Kali 2026.3) | all flags (`-sn/-Pn/-n/-T0-5/-sV/--version-all/-sS/-sT/-sU/-p/--top-ports/-p-/-O/-A/--script/-oN/-oX/-oG/-oA/--reason/-F/-iL/-e`) confirmed. 2026-07-25 depth-audit follow-up: added evasion/spoofing flags `-f/-D/-g/--spoof-mac/-S` confirmed against `nmap --help`'s "FIREWALL/IDS EVASION AND SPOOFING" section; quick_build form expanded from 5 to 27 fields (was hiding ~16 already-builder-supported inputs) |
+| sqlmap | ✅ | installed `--help`/`-hh`/man, sqlmap 1.10.6#stable | `-u/-g/--data/--cookie/--random-agent/--proxy/--tor/--check-tor/-p/--dbms/--level/--risk/--technique/-a/-b/--dump[-all]/-D/-T/-C/--os-shell/--os-pwn/--batch/--flush-session/--wizard` confirmed via `-hh` advanced help. 2026-07-25 depth-audit follow-up: builder now also emits `--current-user/--current-db/--hostname/--is-dba/--users/--passwords/--privileges/--roles/--schema/--count/--search/--exclude-sysdbs` (previously `-a`/`-b`/`--os-pwn` were confirmed in this log but never wired into the builder — form gap fixed); quick_build expanded 6→44 fields |
 | nikto | ✍️ | installed nikto (no `--version`; single-dash parser) + `/var/lib/nikto/nikto.pl`/`nikto_core.plugin` source | **CORRECTED**: removed invented `-update` flag — real nikto has none; it only silently checks CIRT.net for a newer *nikto* version at startup (`-nocheck`/`-ask`), never fetches signatures. DB/plugins ship in the Kali package, so "update" now means `sudo apt update && sudo apt install --only-upgrade nikto`. `-Tuning/-Format/-ssl/-nossl/-vhost/-evasion/-Plugins/-id/-useproxy/-Pause/-maxtime/-timeout/-Display V/-list-plugins` all confirmed correct. Builder + test updated (`test_nikto_update_has_no_such_flag`) |
 | hydra | ✅ | installed `--version`/help/man + `-U http-post-form`, Hydra v9.7 | `-l/-L/-p/-P/-C/-M/-o/-b/-f/-F/-t/-w/-e/-V/-R/-s` + http-post-form string format all confirmed |
 | john | ✅ | installed `--help` (John 1.9.0-jumbo-1) — man page is stale non-jumbo, help used as authoritative per source hierarchy | `--format=/--wordlist=/--rules[=]/--single/--incremental[=]/--show/--session=/--restore[=]/--fork=/--pot=/--list=` confirmed; hash file positional per real usage line |

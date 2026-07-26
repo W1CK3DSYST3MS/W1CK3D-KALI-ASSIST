@@ -19,3 +19,9 @@ terms:
     definition: "-s how many bytes of each packet to keep."
   - term: protocol_hierarchy
     definition: "-z io,phs a breakdown of protocols in a capture."
+  - term: ring_buffer
+    definition: "-b rotates capture files (e.g. by size), overwriting the oldest — loops forever unless paired with -a."
+  - term: autostop
+    definition: "-a ends the WHOLE capture on a condition (duration/filesize/files/packets) — unlike -b, which just rotates."
+  - term: decode_as
+    definition: "-d <layer>==<selector>,<protocol> forces a dissector, overriding tshark's port-based protocol guess."

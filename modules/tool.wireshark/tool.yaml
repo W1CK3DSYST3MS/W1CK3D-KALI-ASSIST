@@ -428,28 +428,176 @@ flows:
             cause: "Wrong/missing key material."
             fix: "Modern PFS ciphers need the key log, not just a server key."
             check: "Confirm SSLKEYLOGFILE captured the session keys."
+  - flow_id: ring_buffer
+    title: "Ring buffer / file rotation (reference)"
+    goal: "Capture continuously without filling the disk, by rotating capture files."
+    command_builder_id: tshark
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, OUTPUT_OPTIONS]
+    steps:
+      - step_id: ts11
+        title: "Rotate files with -b, and optionally bound the whole run with -a"
+        slot_target: OUTPUT_OPTIONS
+        glossary_refs: [ring_buffer, autostop]
+        explanation:
+          what: "`-b filesize:1000 -b files:5` writes 1000KB files and keeps only the newest 5, silently overwriting the oldest — a ring buffer. That's DIFFERENT from `-a files:5` (autostop), which STOPS the whole capture after 5 files instead of looping forever."
+          why: "A capture left running for hours/days would eventually fill your disk. Ring buffer rotation keeps a bounded, always-recent window of traffic instead of one huge growing file."
+          where: "-b flags are OUTPUT_OPTIONS, alongside -w (which supplies the base filename each rotated file is numbered from)."
+        find_it: >
+          Decide how much traffic you can afford to keep on disk: e.g. five 1MB files ~= the
+          last 5MB of traffic, rotating. -b needs -w set — without a base filename there's
+          nothing to rotate.
+        command_anatomy:
+          - {token: "sudo tshark -i eth0", does: "capture on eth0"}
+          - {token: "-w ~/rolling.pcapng", does: "base filename — each rotated file gets a number and timestamp appended"}
+          - {token: "-b filesize:1000", does: "start a new file every 1000 KB"}
+          - {token: "-b files:5", does: "ring buffer: keep only the newest 5 files, overwrite the oldest"}
+        try_this: "sudo tshark -i eth0 -w ~/rolling.pcapng -b filesize:1000 -b files:5"
+        success_criteria: "Multiple numbered files appear (rolling_00001_...pcapng, rolling_00002_...pcapng) and once you have 5, the oldest gets replaced instead of a 6th appearing."
+        expected_output: |
+          $ ls ~/rolling_*
+          rolling_00001_20260725120000.pcapng
+          rolling_00002_20260725120130.pcapng
+          rolling_00003_20260725120301.pcapng
+        alternatives:
+          - trigger: "only one file ever appears and it just keeps growing"
+            cause: "-b was set without -w — there's no base filename for it to rotate, so tshark falls back to one continuous capture (or errors, depending on version)."
+            fix: "Add -w <path> alongside -b (set Save capture to file in the form)."
+            check: "A numbered file (e.g. _00001_) appears after the first rotation."
+          - trigger: "it still fills the disk eventually"
+            cause: "-b files:N (ring buffer) loops forever by design — you actually wanted the capture to STOP, which is a different flag."
+            fix: "Use -a files:N (autostop) instead of, or together with, -b — autostop ends the process; ring buffer only rotates it."
+            check: "The tshark process exits on its own after N files, rather than continuing to run."
+  - flow_id: decode_as
+    title: "Decode-As: force a dissector (reference)"
+    goal: "Read traffic on a non-standard port correctly."
+    command_builder_id: tshark
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: ts12
+        title: "Tell tshark which protocol to use with -d"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [decode_as]
+        explanation:
+          what: "`-d <layer_type>==<selector>,<protocol>` forces tshark to decode matching traffic as a specific protocol — e.g. `-d tcp.port==8888,http` treats anything on TCP port 8888 as HTTP, regardless of what port-based guessing would normally pick."
+          why: "tshark normally guesses the protocol from the port number (port 80 = HTTP, port 53 = DNS...). If a service runs HTTP on a non-standard port, or you're reverse-engineering an unfamiliar protocol, that guess is wrong and the traffic shows as raw/unparsed TCP instead of something readable."
+          where: "ACTION_OPTIONS, alongside the display filter — it changes how tshark PARSES packets, not which ones it shows."
+        find_it: >
+          Find the real port from your own capture (`tshark -r cap.pcapng -Y tcp` and look at
+          the port numbers), and the protocol you already know it actually is (e.g. a web admin
+          panel that happens to run on 8888 instead of 80).
+        command_anatomy:
+          - {token: "tshark -r ~/cap.pcapng", does: "read the saved capture"}
+          - {token: "-d tcp.port==8888,http", does: "decode anything on TCP port 8888 as HTTP"}
+          - {token: "-Y http", does: "now this display filter actually matches, because tshark parsed the traffic as HTTP first"}
+        try_this: "tshark -r ~/cap.pcapng -d tcp.port==8888,http -Y http"
+        success_criteria: "Packets on that port now show as HTTP (readable GET/POST request lines) instead of raw/unparsed TCP."
+        expected_output: |
+          12 1.204 192.168.1.24 -> 192.168.1.50 HTTP GET /admin HTTP/1.1
+        alternatives:
+          - trigger: "still shows as plain TCP, nothing changes"
+            cause: "Wrong layer/selector (e.g. udp.port when it's actually TCP), or the traffic genuinely isn't that protocol."
+            fix: "Confirm the transport and exact port first with a plain `-Y tcp.port==8888` filter; run `tshark -d help` to see the exact list of valid layer types and protocol names it accepts."
+            check: "tshark -d help lists valid <layer_type> values (the command errors, but still prints the reference list)."
+          - trigger: "'-d' argument rejected / parse error"
+            cause: "Typo in the layer_type==selector,protocol form — it needs exactly '==' and a comma, no spaces."
+            fix: "Match the exact form: tcp.port==8888,http — no spaces anywhere in the value."
+            check: "Compare your value character-for-character against the tshark --help example."
 
 quick_build:
   builder: tshark
   title: "Quick capture"
   fields:
+    - field_id: list_interfaces
+      label: "Just list interfaces (-D)"
+      type: bool
+      help: "Ignores everything else below and runs tshark -D, so you can find your interface name first."
     - field_id: source_iface
       label: "Capture interface"
       type: string
       placeholder: "eth0"
+      help: "Live-capture on this interface. Leave blank if you're reading a saved file instead."
     - field_id: read_file
       label: "Read from file (-r)"
       type: path
       placeholder: "capture.pcap  (instead of live)"
+      help: "Analyse a saved capture instead of capturing live. Set EITHER this OR Capture interface, not both."
     - field_id: display_filter
       label: "Display filter (-Y)"
       type: string
       placeholder: "http  or  tcp.port==443"
+      help: "Wireshark's own filter language. Shows only matching packets AFTER capture — works live or on a file."
     - field_id: capture_filter
       label: "Capture filter (-f)"
       type: string
       placeholder: "tcp port 80"
+      help: "BPF language, live capture ONLY. Drops non-matching packets before they're even saved — different syntax than the display filter."
+    - field_id: decode_as
+      label: "Decode-As (-d)"
+      type: string
+      placeholder: "tcp.port==8888,http  (optional)"
+      help: "Force tshark to treat traffic on a given port as a specific protocol, when auto-detection by port number guesses wrong."
     - field_id: count
       label: "Stop after N packets (-c)"
       type: int
       placeholder: "100"
+    - field_id: duration
+      label: "Stop after N seconds (-a duration:)"
+      type: int
+      placeholder: "30  (optional)"
+      help: "Autostop: ends the whole capture after this many seconds."
+    - field_id: autostop_filesize
+      label: "Stop after file reaches N KB (-a filesize:)"
+      type: int
+      placeholder: "10000  (optional)"
+      help: "Autostop: ends the whole capture once the file hits this size in KB."
+    - field_id: autostop_files
+      label: "Stop after N ring-buffer files (-a files:)"
+      type: int
+      placeholder: "5  (optional)"
+      help: "Autostop: ends the capture after this many rotated files, instead of rotating forever. Use with the ring-buffer fields below."
+    - field_id: no_resolve
+      label: "Skip name resolution (-n)"
+      type: bool
+      help: "Faster; shows raw IPs/ports instead of hostnames/service names."
+    - field_id: quiet
+      label: "Quiet — suppress packet output (-q)"
+      type: bool
+      help: "Use with Statistics below, so only the summary prints, not every packet."
+    - field_id: stats
+      label: "Statistics report (-z)"
+      type: string
+      placeholder: "io,phs  or  conv,tcp  (optional)"
+      help: "Print a summary instead of packet-by-packet output, e.g. io,phs for a protocol breakdown."
+    - field_id: fields
+      label: "Extract fields as columns (-T fields -e ...)"
+      type: string
+      placeholder: "ip.src,ip.dst,http.host  (comma-separated, optional)"
+      help: "Prints just these fields as columns instead of full packet summaries — good for CSV-style output."
+    - field_id: csv_header
+      label: "Add CSV header + comma separator (-E header=y -E separator=,)"
+      type: bool
+      help: "Only applies when Extract fields above is set."
+    - field_id: write
+      label: "Save capture to file (-w)"
+      type: path
+      placeholder: "~/cap.pcapng"
+      help: "Write packets to this file instead of printing them to the screen."
+    - field_id: ring_filesize
+      label: "Ring buffer: new file every N KB (-b filesize:)"
+      type: int
+      placeholder: "1000  (optional)"
+      help: "Rotates to a new capture file once the current one hits this size. Needs Save capture to file set above."
+    - field_id: ring_files
+      label: "Ring buffer: keep only the newest N files (-b files:)"
+      type: int
+      placeholder: "5  (optional)"
+      help: "Loops forever, overwriting the oldest file once you have this many. Pair with Stop after N ring-buffer files above if you want it to eventually stop instead."
+    - field_id: snaplen
+      label: "Snapshot length in bytes (-s)"
+      type: int
+      placeholder: "0 = full packet  (optional)"
+      help: "How many bytes of each packet to keep. Leave blank to capture full packets."
+    - field_id: no_promiscuous
+      label: "Don't use promiscuous mode (-p)"
+      type: bool
+      help: "Capture only traffic addressed to your own interface, not everything the NIC can see."

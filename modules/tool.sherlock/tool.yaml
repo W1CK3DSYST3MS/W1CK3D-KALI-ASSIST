@@ -318,12 +318,25 @@ quick_build:
       type: int
       placeholder: "60"
     - field_id: output
-      label: "Save to file (--output)"
+      label: "Save to file (--output, single username)"
       type: path
       placeholder: "johndoe.txt  (optional)"
+    - field_id: folder_output
+      label: "Save to folder (--folderoutput, multiple usernames)"
+      type: path
+      placeholder: "results/  (optional)"
+      help: "Use this instead of Save to file when searching more than one username — each gets its own report inside this folder."
     - field_id: csv
       label: "Also write CSV (--csv)"
       type: bool
+    - field_id: nsfw
+      label: "Include NSFW sites (--nsfw)"
+      type: bool
+      help: "Sherlock skips adult/NSFW sites by default. Only enable this if that's relevant to your authorized investigation."
     - field_id: tor
       label: "Route via Tor (--tor)"
       type: bool
+    - field_id: proxy
+      label: "Proxy URL (--proxy)"
+      type: string
+      placeholder: "socks5://127.0.0.1:1080  (optional)"

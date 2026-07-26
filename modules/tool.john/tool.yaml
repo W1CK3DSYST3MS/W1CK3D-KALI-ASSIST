@@ -353,6 +353,51 @@ flows:
             cause: "Slow hash on CPU."
             fix: "This is where hashcat + GPU wins."
             check: "Switch engine to hashcat."
+  - flow_id: mask
+    title: "Mask attack — known-format passwords (reference)"
+    goal: "Try every combination that matches a pattern, e.g. an 8-digit PIN."
+    command_builder_id: john
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: jm1
+        title: "Crack a known-format password with --mask"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [mask_mode]
+        explanation:
+          what: "A MASK is a pattern built from placeholders: ?d = any digit, ?l = any lowercase letter, ?u = any uppercase letter, ?s = any symbol. `--mask='?d?d?d?d?d?d?d?d'` tries every 8-digit combination from 00000000 to 99999999. You can mix in literal characters too."
+          why: "When you know the SHAPE of a password (an 8-digit PIN, a 4-digit year, 'Word' plus 2 digits) but not the exact value, a mask is far faster and more targeted than a full wordlist or a blind --incremental brute force."
+          where: "ACTION_OPTIONS, alongside (or instead of) --wordlist / --incremental, before the positional hash file."
+        find_it: >
+          Look at how the password is described or required: "must be 8 digits" -> ?d
+          repeated 8 times; "starts with a capital letter then 5 lowercase" -> ?u?l?l?l?l?l.
+          Mix in literal characters for a known prefix/suffix, e.g. a password you know
+          starts with "Summer" plus 2 digits is Summer?d?d.
+        command_anatomy:
+          - {token: "john", does: "the program"}
+          - {token: "--format=raw-md5", does: "the hash type (identify it first, see the formats flow)"}
+          - {token: "--mask='?d?d?d?d?d?d?d?d'", does: "try every combination of 8 digits — single-quote it so the shell doesn't try to expand the '?' characters itself"}
+          - {token: "hashes.txt", does: "the hash file"}
+        try_this: "echo -n '12345678' | md5sum | cut -d' ' -f1 > pin.hash && john --format=raw-md5 --mask='?d?d?d?d?d?d?d?d' pin.hash"
+        success_criteria: "john reports the 8-digit PIN cracked (up to 100 million combinations, so it may take a little while on CPU)."
+        expected_output: |
+          Using default input encoding: UTF-8
+          Loaded 1 password hash (Raw-MD5 [MD5 256/256 AVX2 8x3])
+          Press 'q' or Ctrl-C to abort, almost any other key for status
+          12345678         (?)
+          1g 0:00:00:03 DONE (2026-07-25 12:00) 0.3125g/s 8467Kp/s 8467Kc/s 8467KC/s
+        alternatives:
+          - trigger: "it's still running after a long time"
+            cause: "The mask's keyspace is bigger than expected — every extra ?d/?l/?u multiplies the runtime by 10x/26x/26x."
+            fix: "Narrow the mask if you know more about the password (a fixed prefix/suffix), add --fork=<cpu-cores> to use all your cores, or move to hashcat + GPU for real speed on a big keyspace."
+            check: "Press any key to see a status line and compare the 'done' percentage to elapsed time."
+          - trigger: "'Invalid mask' or it doesn't seem to try what you'd expect"
+            cause: "The shell expanded the '?' characters (a glob wildcard) before john ever saw them, because the mask wasn't quoted."
+            fix: "Always single-quote the mask: --mask='?d?d?d?d?d?d?d?d', never --mask=?d?d?d?d?d?d?d?d bare."
+            check: "Re-run with the mask wrapped in single quotes."
+          - trigger: "it cracks nothing and finishes almost instantly"
+            cause: "The password doesn't actually match the mask's length or character set."
+            fix: "Double-check your assumption about the password's shape; widen the mask (e.g. mix in ?u?l for mixed case) or fall back to wordlist+rules."
+            check: "Confirm the assumption about length/character-set is actually correct before retrying."
 
 quick_build:
   builder: john
@@ -379,3 +424,56 @@ quick_build:
       label: "Hash format (--format=)"
       type: string
       placeholder: "e.g. raw-md5, nt, sha512crypt"
+    - field_id: mask
+      label: "Mask pattern (--mask=)"
+      type: string
+      placeholder: "?d?d?d?d?d?d?d?d  (e.g. an 8-digit PIN)"
+      help: "Hashcat-style pattern: try every combination matching it. ?d=digit ?l=lowercase ?u=uppercase ?s=symbol — mix in known literal characters too, e.g. Summer?d?d."
+    - field_id: single
+      label: "Single crack mode (--single)"
+      type: bool
+      help: "Quick pass that guesses from the usernames/GECOS info already in the hash file. Needs a file that includes usernames (e.g. unshadow output)."
+    - field_id: incremental
+      label: "Brute-force all combinations (--incremental)"
+      type: bool
+      help: "Exhaustive character-by-character brute force. Slow — only realistic for short passwords or fast hashes; for a known password shape, use the Mask pattern above instead."
+    - field_id: show
+      label: "Show cracked passwords (--show)"
+      type: bool
+      help: "Skip cracking — just print passwords already cracked and stored in john's pot file for this hash file."
+    - field_id: session
+      label: "Name this run (--session=)"
+      type: string
+      placeholder: "crackA  (optional)"
+      help: "Names the run so you can check its status or resume it later if it gets interrupted."
+    - field_id: fork
+      label: "Parallel processes (--fork=)"
+      type: int
+      placeholder: "4"
+      help: "Split the cracking work across this many CPU cores. Check your core count with nproc."
+    - field_id: restore
+      label: "Resume last interrupted run (--restore)"
+      type: bool
+      help: "Continues a previous session where it left off, using its saved state (needs the same --session name it was started with)."
+    - field_id: pot
+      label: "Pot file (--pot=)"
+      type: path
+      placeholder: "optional — defaults to ~/.john/john.pot"
+      help: "Where cracked results are stored/read from. Only change this if you're keeping separate crack jobs apart."
+    - field_id: list
+      label: "List capability instead of cracking (--list=)"
+      type: choice
+      choices: [formats, subformats, "hidden-options", encodings, "build-info"]
+      help: "Prints information instead of cracking anything — e.g. 'formats' shows every supported hash type name for --format=. Leave blank for a normal crack run."
+    - field_id: prince
+      label: "PRINCE mode (--prince)"
+      type: bool
+      help: "Combines words from a wordlist into chains (like a smarter wordlist mode). Lower-priority/advanced — most beginners want Wordlist + rules above instead."
+    - field_id: loopback
+      label: "Loopback mode (--loopback)"
+      type: bool
+      help: "Reuses already-cracked passwords (from the pot file) as a new wordlist — useful for a second pass after an initial crack."
+    - field_id: markov
+      label: "Markov mode (--markov)"
+      type: bool
+      help: "Statistical brute force that tries more-likely character sequences first. Advanced/lower-priority — Wordlist + rules or Mask above cover most real passwords."

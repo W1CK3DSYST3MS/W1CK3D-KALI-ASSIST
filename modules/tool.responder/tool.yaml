@@ -147,6 +147,126 @@ flows:
             cause: "The password isn't in the wordlist."
             fix: "Try a bigger wordlist or rules (-r) — see the hashcat tool for details."
             check: "—"
+  - flow_id: advanced_high_risk
+    title: "Advanced poisoning modes (high risk, reference)"
+    goal: "Go beyond LLMNR/NBT-NS: rogue proxy auth capture, forced WPAD auth, and DHCP poisoning — each riskier and noisier than the guided flow's default poisoning."
+    command_builder_id: responder
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS]
+    steps:
+      - step_id: adv1
+        title: "Rogue proxy authentication capture (-P)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Ctrl+C stops Responder immediately. -P captures real credentials from anything that tries to use a proxy on this segment — treat any captured creds exactly like the guided flow's captures: authorized scope only, handle and delete the logs responsibly."
+        glossary_refs: [rogue_proxy_auth]
+        explanation:
+          what: "`-P` (--ProxyAuth) makes Responder force NTLM or Basic proxy authentication from any client that attempts to use a proxy on the network — Responder's own help calls this out as a standout, 'Highly effective' feature."
+          why: "Some clients (scripts, services, background apps) never send an LLMNR/NBT-NS lookup at all, so the guided flow's poisoning never touches them — but almost everything that goes through a proxy WILL respond to a proxy-auth challenge, so -P captures credentials the default flow misses entirely."
+          where: "ACTION_OPTIONS; cannot be combined with -w (rogue WPAD proxy) — Responder's own help says so, and this app enforces it too."
+        find_it: "Same interface as the guided flow. Make sure 'Start rogue WPAD proxy' is switched off — it conflicts with this mode."
+        command_anatomy:
+          - {token: "sudo responder -I <interface>", does: "same base command as the guided flow"}
+          - {token: "-P", does: "force rogue proxy authentication capture"}
+          - {token: "-v", does: "verbose — see captures live"}
+        try_this: "sudo responder -I <interface> -P -v"
+        success_criteria: "Proxy-auth attempts from clients on the segment are captured and printed, without needing any LLMNR/NBT-NS lookup to happen first."
+        expected_output: |
+          [+] Listening for events...
+          [PROXY] NTLM Auth  : CORP\jdoe
+          [PROXY] NTLM Hash  : jdoe::CORP:1122334455667788:...
+        alternatives:
+          - trigger: "\"can't use with -w\" or a similar conflict message"
+            cause: "-P and -w (rogue WPAD proxy) are mutually exclusive in Responder itself."
+            fix: "Run with only one of -P or -w active at a time — turn off WPAD to use Proxy auth capture."
+            check: "Re-run with -P alone (no -w)."
+          - trigger: "no captures after a reasonable wait"
+            cause: "No client on the segment tried to use a proxy during that window."
+            fix: "This is opportunistic, same as the guided flow — a proxy-using client (browser, updater, script) has to actually try to connect. In a lab, configure a test client to use a proxy."
+            check: "Wait longer, or trigger a proxy connection yourself in a lab."
+      - step_id: adv2
+        title: "Force authentication on WPAD retrieval (-F)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Ctrl+C stops Responder immediately. -F can trigger a VISIBLE authentication prompt on the victim's machine — far noisier/more detectable than passive poisoning. Authorized scope only, and consider whether a visible prompt could alarm real users before using it on a live engagement."
+        glossary_refs: [wpad]
+        explanation:
+          what: "`-F` (--ForceWpadAuth) makes Responder require NTLM/Basic authentication when a client fetches the wpad.dat proxy-configuration file, instead of serving it freely."
+          why: "This can pull a credential out of a client that would otherwise just silently accept the proxy config — but it can also pop a visible login prompt on the user's screen, a real tell that something is wrong. It's a deliberate trade-off: more captures, more chance of being noticed."
+          where: "ACTION_OPTIONS; typically combined with -w (start the rogue WPAD proxy) so there's something to force auth on."
+        find_it: "Same interface. Usually paired with -w so Responder is actually serving wpad.dat to force auth on."
+        command_anatomy:
+          - {token: "sudo responder -I <interface>", does: "same base command"}
+          - {token: "-w", does: "start the rogue WPAD proxy"}
+          - {token: "-F", does: "force NTLM/Basic auth on wpad.dat retrieval"}
+          - {token: "-v", does: "verbose"}
+        try_this: "sudo responder -I <interface> -w -F -v"
+        success_criteria: "Clients fetching WPAD are challenged for authentication, and captures print."
+        expected_output: |
+          [+] Listening for events...
+          [WPAD] NTLMv2 Client   : 192.168.1.55
+          [WPAD] NTLMv2 Username : CORP\asmith
+        alternatives:
+          - trigger: "a visible login prompt appeared on a test machine and startled the user"
+            cause: "That's -F working as documented — Responder's own help says it 'may show prompt'."
+            fix: "Expected behaviour, not a bug. Weigh stealth vs capture rate before using -F on a live engagement, and disclose to your point of contact if a visible prompt could alarm real users."
+            check: "Not a fault — a known trade-off of this flag."
+          - trigger: "no captures"
+            cause: "No client requested wpad.dat during the window, or the client doesn't use WPAD at all."
+            fix: "Confirm test clients are set to 'auto-detect proxy settings' (the WPAD-using default on many Windows machines); wait longer."
+            check: "Check the client's proxy settings for auto-detection."
+      - step_id: adv3
+        title: "DHCP / DHCPv6 poisoning (highest risk — network-wide disruption)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Ctrl+C stops Responder, but any client that already accepted a poisoned DHCP lease keeps using it until that lease expires or the client is reconfigured — this can leave hosts unable to reach the real network even after you stop. DHCP poisoning is advanced/high-risk even by Responder's already-high bar: lab networks or explicitly DHCP-scoped written authorization only, never on a network you can't afford to disrupt."
+        glossary_refs: [dhcp_poisoning]
+        explanation:
+          what: "`-d` (--DHCP) injects a rogue WPAD entry into DHCP responses; `-D` (--DHCP-DNS) injects a rogue DNS server instead of WPAD; `--dhcpv6` does the IPv6 equivalent — Responder's own help literally warns '--dhcpv6 ... May disrupt network.'"
+          why: "Unlike LLMNR/NBT-NS poisoning (which only answers requests that already failed), DHCP poisoning competes with the network's REAL DHCP server to answer new address requests. If a client accepts Responder's rogue offer instead of the real one, it can lose normal network/DNS connectivity entirely, not just have its credentials captured — disruptive to the whole segment, not just eavesdropping."
+          where: "ACTION_OPTIONS. Needs sudo like everything else in Responder."
+        find_it: "Only ever run this on a network where DHCP poisoning is explicitly within your written scope — most engagements do NOT authorize this specific technique even when general poisoning is allowed. When in doubt, don't."
+        command_anatomy:
+          - {token: "sudo responder -I <interface>", does: "same base command"}
+          - {token: "-d", does: "enable DHCPv4 poisoning (injects WPAD via DHCP)"}
+          - {token: "-v", does: "verbose"}
+        try_this: "sudo responder -I <interface> -d -v"
+        success_criteria: "DHCP-related captures/events print — ONLY run this if you've confirmed DHCP poisoning is explicitly in scope."
+        expected_output: |
+          [+] Listening for events...
+          [DHCP] New DHCP lease poisoned for 192.168.1.77
+        alternatives:
+          - trigger: "a host on the network lost connectivity during/after testing"
+            cause: "It likely accepted a poisoned DHCP lease and is now configured with Responder's rogue settings instead of the real network's."
+            fix: "Stop Responder immediately (Ctrl+C); have the affected host release/renew its DHCP lease to get a legitimate one back — e.g. `sudo dhclient -r && sudo dhclient` on Linux, `ipconfig /release && ipconfig /renew` on Windows."
+            check: "The host regains normal connectivity after a DHCP renew."
+          - trigger: "no visible effect"
+            cause: "No client requested a new DHCP lease during the window — existing leases aren't touched until they renew."
+            fix: "This is expected — DHCP poisoning only affects NEW lease requests, not already-leased hosts. Wait for a lease renewal or a new device joining, or accept this is a narrow-window technique."
+            check: "Not a failure — timing-dependent by design."
+      - step_id: adv4
+        title: "Spoof the poisoning source address (-e / -6)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Ctrl+C stops Responder immediately. Same authorization requirements as any other poisoning mode on this segment — authorized network/scope only."
+        explanation:
+          what: "`-e <IP>` makes Responder's poisoned answers claim to come from a different IPv4 address than the machine actually running Responder; `-6 <IPv6>` does the same for IPv6."
+          why: "Useful when you want poisoned traffic directed somewhere other than your own interface's address — e.g. a separate listener box, or to make the poisoning source less obviously 'the pentester's laptop' in logs."
+          where: "ACTION_OPTIONS."
+        find_it: "The IP you want poisoned traffic to appear to come from — it must actually be reachable/yours on this network for captures to work, not an arbitrary address."
+        command_anatomy:
+          - {token: "sudo responder -I <interface>", does: "same base command"}
+          - {token: "-e 192.168.1.99", does: "poison using this IPv4 address instead of the interface's own"}
+          - {token: "-v", does: "verbose"}
+        try_this: "sudo responder -I <interface> -e 192.168.1.99 -v"
+        success_criteria: "Poisoned answers reference the spoofed IP instead of your real interface address."
+        expected_output: |
+          [+] Listening for events...
+          [*] Poisoning answers with IP: 192.168.1.99
+        alternatives:
+          - trigger: "no captures / clients don't respond"
+            cause: "The spoofed IP isn't actually reachable, or isn't yours — clients will try to authenticate to an address that doesn't lead back to Responder."
+            fix: "Use an IP you genuinely control and that's reachable on this segment, or drop -e and use your real interface address."
+            check: "Confirm the spoofed IP is one you own/control on this network."
 quick_build:
   builder: responder
   title: "Quick start"
@@ -170,3 +290,31 @@ quick_build:
     - field_id: wpad
       label: "Start rogue WPAD proxy (-w)"
       type: bool
+    - field_id: force_wpad_auth
+      label: "Force NTLM/Basic auth on WPAD retrieval (-F)"
+      type: bool
+      help: "Requires authentication before serving wpad.dat instead of handing it over freely. Can show a visible login prompt on the victim's screen — noisier than passive WPAD alone."
+    - field_id: proxy_auth
+      label: "Force rogue proxy authentication capture (-P)"
+      type: bool
+      help: "Responder's own standout feature — captures NTLM/Basic creds from anything that tries to use a proxy, even apps LLMNR/NBT-NS poisoning can't reach. Cannot be combined with 'Start rogue WPAD proxy' above."
+    - field_id: dhcp
+      label: "Enable DHCPv4 poisoning (-d)"
+      type: bool
+      help: "Injects WPAD into DHCP responses for the whole segment. Disruptive to the network's real DHCP service, not just eavesdropping — advanced/high-risk."
+    - field_id: dhcp_dns
+      label: "Inject rogue DNS server via DHCP instead of WPAD (-D)"
+      type: bool
+      help: "Same DHCP-poisoning risk as above, but injects a rogue DNS server instead of WPAD."
+    - field_id: dhcpv6
+      label: "Enable DHCPv6 poisoning (--dhcpv6)"
+      type: bool
+      help: "Responder's own help warns: 'May disrupt network.' Advanced/high-risk."
+    - field_id: external_ip
+      label: "Poison with a different IPv4 address (-e)"
+      type: string
+      placeholder: "192.168.1.99  (optional, advanced)"
+    - field_id: external_ip6
+      label: "Poison with a different IPv6 address (-6)"
+      type: string
+      placeholder: "optional, advanced"

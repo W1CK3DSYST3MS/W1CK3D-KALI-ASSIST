@@ -8,9 +8,11 @@ requires:
   modules: []
 provides:
   tool: photon
-  flows: [guided, tune]
+  flows: [guided, tune, secrets_dns]
+  glossary_terms: [api_key, subdomain_enum]
 content:
   tool: tool.yaml
-source: "authored; verified against Photon (s0md3v) usage (-u/-l/-t/-d/-o/--wayback)"
+  glossary: glossary.yaml
+source: "authored; verified against installed Photon v1.2.2 --help (-u/-l/-t/-d/-o/--wayback/--keys/--dns/--clone/-e)"
 license: "MIT-licensed project text (this repo); Photon is GPL (referenced, not bundled)"
 checksum: ""

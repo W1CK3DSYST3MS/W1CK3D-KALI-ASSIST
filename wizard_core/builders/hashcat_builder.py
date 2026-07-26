@@ -3,7 +3,15 @@
 Shape: hashcat -m <type> -a <attack> [options] <hashfile> <wordlist|mask>. The
 hash file and the wordlist/mask are POSITIONAL and come last, in that order.
 -m (hash mode) is the #1 thing users get wrong — the module makes it explicit.
-Generate-only (offline cracking).
+Combinator mode (-a 1) is the one attack that needs TWO positional wordlists
+(dictionary1 dictionary2) instead of one wordlist/mask — handled separately so
+the ordering stays correct. Generate-only (offline cracking).
+
+Recognised keys (all optional except hash_mode/hashfile+wordlist|mask):
+profile, benchmark, identify, list_devices, hash_mode, attack_mode, rules,
+rule_left, rule_right, custom_charset, increment, username, show,
+potfile_disable, workload, optimized, session, force, output, device,
+hashfile, wordlist, wordlist2 (combinator only), mask.
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ _PROFILES: dict[str, dict[str, object]] = {
     "wordlist_rules": {"attack": "0", "wordlist": _DEFAULT_WORDLIST,
                        "rules": "/usr/share/hashcat/rules/best64.rule"},
     "mask": {"attack": "3"},
+    "combinator": {"attack": "1"},
     "benchmark": {"benchmark": True},
 }
 
@@ -71,6 +80,12 @@ def build_hashcat(inputs: Mapping[str, object]) -> CommandPlan:
     rules = inputs.get("rules") or preset.get("rules")
     if rules:
         a.extend(["-r", str(rules)])
+    if inputs.get("rule_left"):
+        a.extend(["-j", str(inputs["rule_left"])])
+        notes.append("-j applies one rule to every word from the LEFT list (dictionary1).")
+    if inputs.get("rule_right"):
+        a.extend(["-k", str(inputs["rule_right"])])
+        notes.append("-k applies one rule to every word from the RIGHT list (dictionary2).")
     if inputs.get("custom_charset"):
         a.extend(["-1", str(inputs["custom_charset"])])
     if _truthy(inputs.get("increment")):
@@ -102,18 +117,35 @@ def build_hashcat(inputs: Mapping[str, object]) -> CommandPlan:
     if inputs.get("device"):
         env.extend(["-d", str(inputs["device"])])
 
-    # POSITIONAL: hashfile then wordlist/mask
+    # POSITIONAL: hashfile then wordlist/mask — except combinator (-a 1), which
+    # takes TWO wordlists (dictionary1 dictionary2), not a wordlist+mask pair.
     if inputs.get("hashfile"):
         pos.append(str(inputs["hashfile"]))
     else:
         notes.append("No hash file — supply the file of hashes to crack.")
-    target = inputs.get("wordlist") or inputs.get("mask") or preset.get("wordlist")
-    if target:
-        pos.append(str(target))
-    elif str(attack) == "3":
-        notes.append("Mask attack (-a 3) needs a mask, e.g. ?u?l?l?l?l?d?d?d.")
-    elif str(attack) == "0":
-        notes.append("Wordlist attack (-a 0) needs a wordlist path.")
+
+    if str(attack) == "1":
+        wordlist1 = inputs.get("wordlist") or preset.get("wordlist")
+        wordlist2 = inputs.get("wordlist2")
+        if wordlist1:
+            pos.append(str(wordlist1))
+        else:
+            notes.append("Combinator attack (-a 1) needs a first wordlist (dictionary1).")
+        if wordlist2:
+            pos.append(str(wordlist2))
+        else:
+            notes.append(
+                "Combinator attack (-a 1) needs a SECOND wordlist (dictionary2) — every word "
+                "from the first is paired with every word from the second."
+            )
+    else:
+        target = inputs.get("wordlist") or inputs.get("mask") or preset.get("wordlist")
+        if target:
+            pos.append(str(target))
+        elif str(attack) == "3":
+            notes.append("Mask attack (-a 3) needs a mask, e.g. ?u?l?l?l?l?d?d?d.")
+        elif str(attack) == "0":
+            notes.append("Wordlist attack (-a 0) needs a wordlist path.")
 
     return assemble("hashcat", {
         Slot.GLOBAL_OPTIONS: g,

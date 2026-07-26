@@ -63,6 +63,10 @@ steps:
         cause: "Hashes live in /etc/shadow, readable only by root."
         fix: "Use `sudo getent shadow <user>` — and never share hashes outside authorized work."
         check: "You understand passwd vs shadow."
+      - trigger: "getent passwd $USER prints nothing at all"
+        cause: "$USER wasn't set (rare, e.g. inside some non-login shells/scripts), so getent was asked to look up an empty name."
+        fix: "Use a command that always resolves your real name instead: `getent passwd \"$(whoami)\"` or `getent passwd \"$(id -un)\"`."
+        check: "One of those two prints your passwd line even when $USER is unreliable."
   - step_id: ug3
     title: "Root: the all-powerful user (uid 0)"
     slot_target: null
@@ -137,6 +141,10 @@ steps:
         cause: "You created a test account."
         fix: "Remove it (and its home): `sudo deluser --remove-home labuser`."
         check: "getent passwd labuser returns nothing."
+      - trigger: "after the password prompt it keeps asking Full Name, Room Number, Work Phone, and more"
+        cause: "This isn't stuck or broken — adduser collects that optional account info (GECOS fields) interactively by default."
+        fix: "Press Enter to accept a blank answer for each one, then Y to confirm at the final 'Is the information correct?' prompt."
+        check: "It finishes with an 'Adding new user ... to group ... Done.' line, and the account exists."
   - step_id: ug6
     title: "Groups: add a user to one (usermod -aG)"
     slot_target: null
@@ -161,7 +169,7 @@ steps:
   - step_id: ug7
     title: "What am I allowed to run as root? (sudo -l)"
     slot_target: null
-    glossary_refs: [sudo_cmd]
+    glossary_refs: [sudo_cmd, sudoers]
     explanation:
       what: "`sudo -l` lists the commands your user may run via sudo, per the sudoers policy."
       why: "On hardened or shared systems you may only be permitted specific commands — this tells you exactly what, without trial and error."
@@ -185,7 +193,7 @@ steps:
   - step_id: ug8
     title: "Clean up a test account (deluser)"
     slot_target: null
-    glossary_refs: [home_directory]
+    glossary_refs: [home_directory, uid]
     explanation:
       what: "`sudo deluser --remove-home labuser` deletes the account and its home directory. Without --remove-home the files are left behind (now owned by an orphan uid)."
       why: "Tidy up practice accounts, and understand that deleting a user can strand files they owned across the system."

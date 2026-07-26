@@ -7,3 +7,5 @@ terms:
     definition: "netexec's own marker (Pwn3d!) meaning the credential you tried has local administrator rights on that host — not just valid, but usable for code execution."
   - term: sam_lsa_ntds
     definition: "SAM = local account hashes on one machine. LSA = secrets cached in memory (other services' credentials). NTDS.dit = the WHOLE domain's password database, only on a Domain Controller."
+  - term: nxc_module
+    definition: "A purpose-built script loaded with -M <name> (e.g. lsassy, enum_av) — netexec's headline feature, covering most of its advanced capability beyond the top-level flags. List them with -L, see a module's own options with --options, set them with -o KEY=VALUE."

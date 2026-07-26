@@ -365,15 +365,83 @@ flows:
             cause: "Many hosts × high -t."
             fix: "Lower -t and consider batching the target list."
             check: "Reduce parallelism."
+  - flow_id: bruteforce_generation
+    title: "Password bruteforce GENERATION with -x (reference)"
+    goal: "Generate password candidates from a charset/length range instead of a wordlist."
+    command_builder_id: hydra
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hy8
+        title: "Understand -x: GENERATE candidates, don't read them from a file"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [bruteforce_generation, password_list]
+        explanation:
+          what: "`-x MIN:MAX:CHARSET` tells hydra to build every possible password itself, from MIN to MAX characters long, using only the character classes you specify — 'a' lowercase, 'A' uppercase, '1' digits, plus any literal symbols you type. It replaces -p/-P/-C entirely; hydra never reads a password file in this mode."
+          why: "A wordlist (-P) only tries passwords someone already thought of. -x is for when you know the SHAPE of the password (e.g. 'a 4-digit PIN' or 'a 6-character lowercase code') but it wouldn't be in any wordlist — hydra exhaustively covers that shape instead of guessing from a list."
+          where: "ACTION_OPTIONS, in place of -p/-P/-C."
+        find_it: >
+          Decide the shape from context: a PIN pad implies digits only (CHARSET '1'); a
+          short device default password might be lowercase letters only ('a'). Keep MAX-MIN
+          small — the keyspace (character_count ^ length) grows FAST, and every guess here is a
+          real network request, unlike offline hashcat/john brute force.
+        command_anatomy:
+          - {token: "hydra -l admin", does: "single known username (or -L for a list)"}
+          - {token: "-x 4:4:1", does: "generate every 4-digit numeric password: 0000 through 9999 (10,000 candidates)"}
+          - {token: "-V", does: "verbose — watch it work"}
+          - {token: "192.168.1.10 ssh", does: "target + service, same as any hydra run"}
+        try_this: "hydra -l admin -x 4:4:1 -V 192.168.1.10 ssh"
+        success_criteria: "hydra generates and tries 4-digit numeric candidates (0000, 0001, 0002...) instead of reading a password file."
+        expected_output: |
+          [DATA] max 16 tasks per 1 server, overall 16 tasks, 10000 login tries
+          [ATTEMPT] target 192.168.1.10 - login "admin" - pass "0000"
+          [ATTEMPT] target 192.168.1.10 - login "admin" - pass "0001"
+          [22][ssh] host: 192.168.1.10   login: admin   password: 4821
+        alternatives:
+          - trigger: "it's taking forever / huge number of tries reported"
+            cause: "The keyspace is too big — e.g. -x 4:8:aA1 mixes 62 characters across up to 8 positions, which is billions of combinations."
+            fix: "Narrow it: shrink MAX, or use only ONE character class (just '1' for digits, or just 'a' for lowercase) if you have any reason to believe that's the shape."
+            check: "The '[DATA] ... N login tries' line at the start — sanity-check N before letting it run."
+          - trigger: "you don't actually know the password shape"
+            cause: "-x is only efficient when you have a real reason to believe the password fits a narrow pattern."
+            fix: "Go back to a wordlist attack (-P) instead — broader coverage of REAL passwords people use, for the same or less time."
+            check: "Compare: is there a wordlist that already covers what you're guessing at?"
+      - step_id: hy9
+        title: "Combine -x with a username list, and know what it implies"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "-x works with -L (multiple usernames) too. hydra AUTOMATICALLY loops usernames on the outside when -x is active (equivalent to always adding -u), because regenerating the whole candidate keyspace per user would be wasteful."
+          why: "Knowing this matters for reading progress output and estimating runtime — with N usernames and K generated candidates, expect roughly N x K total attempts, reported up front."
+          where: "GLOBAL_OPTIONS; -u is implied, you don't add it yourself."
+        find_it: "Reuse a users.txt from an earlier step; keep the -x range narrow so N x K stays reasonable."
+        command_anatomy:
+          - {token: "-L users.txt", does: "try every username in this file"}
+          - {token: "-x 4:4:1", does: "against every 4-digit numeric password"}
+        try_this: "hydra -L users.txt -x 4:4:1 -V 192.168.1.10 ssh"
+        success_criteria: "hydra reports total tries as (usernames x candidates) and works through them."
+        expected_output: |
+          [DATA] max 16 tasks per 1 server, overall 16 tasks, 30000 login tries (dep: none), ~1875 tries per task
+        alternatives:
+          - trigger: "way more tries than expected"
+            cause: "Forgot it multiplies by every username in the list."
+            fix: "Cut the username list down to the most likely candidates first, or narrow -x further."
+            check: "Check the reported total tries before committing to a long run."
 
 quick_build:
   builder: hydra
   title: "Quick attack"
   fields:
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      choices: [single, targeted, standard, careful]
+      help: "Preset pacing (tasks/verbose/wait). 'careful' is slowest but safest against lockouts. Leave blank to set tuning yourself below."
+    - field_id: resume
+      label: "Resume previous session (-R)"
+      type: bool
+      help: "Ignores everything else and continues an aborted run from its hydra.restore file."
     - field_id: target
       label: "Target host"
       type: string
-      required: true
       placeholder: "10.0.0.5"
     - field_id: service
       label: "Service"
@@ -381,6 +449,10 @@ quick_build:
       required: true
       default: ssh
       choices: [ssh, ftp, smb, rdp, mysql, http-post-form]
+    - field_id: port
+      label: "Non-standard port (-s)"
+      type: int
+      placeholder: "2222  (optional — only if not the default port)"
     - field_id: login
       label: "Username (single)"
       type: string
@@ -389,11 +461,69 @@ quick_build:
       label: "Username list"
       type: path
       placeholder: "users.txt  (instead of single)"
+    - field_id: password
+      label: "Password (single)"
+      type: string
+      placeholder: "admin123  (for a one-off test)"
     - field_id: password_list
       label: "Password list"
       type: path
       placeholder: "/usr/share/wordlists/rockyou.txt"
+    - field_id: combo
+      label: "Combo file (-C, user:pass pairs)"
+      type: path
+      placeholder: "combos.txt  (replaces username + password list above)"
+      help: "A file of 'user:pass' lines, one pair per line — an alternative to separate username/password lists."
+    - field_id: bruteforce
+      label: "Generate passwords instead of a list (-x MIN:MAX:CHARSET)"
+      type: string
+      placeholder: "4:6:a1  (optional — e.g. 4-6 chars, lowercase+digits)"
+      help: "Advanced: instead of trying passwords FROM a file, hydra GENERATES every combination in this length/charset range. Replaces the password fields above. See the 'Bruteforce generation' flow before using this."
+    - field_id: http_form
+      label: "HTTP form string"
+      type: string
+      placeholder: "/login.php:user=^USER^&pass=^PASS^:F=Invalid credentials"
+      help: "Only for http-post-form / http-get-form services: path, POST body with ^USER^/^PASS^, and the text that appears on a FAILED login."
+    - field_id: module_opts
+      label: "Module-specific options (-m)"
+      type: string
+      placeholder: "optional — see hydra -U <service> for what a module accepts"
+    - field_id: ssl
+      label: "Force explicit SSL/TLS (-S)"
+      type: bool
+      help: "Use when a plain service (e.g. telnet, ftp) is actually running over TLS on that port."
     - field_id: tasks
       label: "Parallel tasks (-t)"
       type: int
       placeholder: "4"
+    - field_id: wait
+      label: "Wait time between attempts, seconds (-w)"
+      type: int
+      placeholder: "30  (higher = gentler, avoids lockouts)"
+    - field_id: extra_tries
+      label: "Extra trivial guesses (-e)"
+      type: string
+      placeholder: "nsr  (n=null pass, s=pass=login, r=reversed login)"
+    - field_id: verbose
+      label: "Verbose — show every attempt (-V)"
+      type: bool
+    - field_id: stop_on_success
+      label: "Stop this host on first hit (-f)"
+      type: bool
+    - field_id: stop_global
+      label: "Stop entire run on first hit anywhere (-F)"
+      type: bool
+      help: "Only useful with multiple targets — stops the whole attack, not just one host."
+    - field_id: targets_file
+      label: "Multiple targets file (-M)"
+      type: path
+      placeholder: "targets.txt  (instead of a single Target host)"
+    - field_id: output
+      label: "Save found credentials to file (-o)"
+      type: path
+      placeholder: "~/scans/hydra.txt"
+    - field_id: output_format
+      label: "Output format (-b)"
+      type: choice
+      choices: [text, json, jsonv1]
+      help: "Only applies with Output file set above."

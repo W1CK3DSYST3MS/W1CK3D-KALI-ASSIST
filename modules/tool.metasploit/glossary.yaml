@@ -31,5 +31,7 @@ terms:
     definition: "A named DB container to separate engagements."
   - term: msfvenom
     definition: "Standalone payload/shellcode generator (a real CLI tool)."
+  - term: template_injection
+    definition: "Using -x/--template to wrap a payload inside an existing, real executable so the result keeps looking (and, with -k, working) like the original program — the core technique behind trojanized/backdoored software."
   - term: msfdb
     definition: "Sets up the PostgreSQL database the console uses."

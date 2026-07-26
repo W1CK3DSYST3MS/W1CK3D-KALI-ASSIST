@@ -18,4 +18,6 @@ terms:
   - term: download_tool
     definition: "wget and curl fetch files over HTTP(S). `wget URL` saves by remote name; `curl -O URL` too, and `curl -L -o name URL` follows redirects and names output."
   - term: ssh_remote
-    definition: "A host you reach over SSH (user@host). scp and rsync ride SSH, so if `ssh user@host` works, so do they."
+    definition: "SSH (Secure Shell) is an encrypted way to connect to another machine. 'A host you reach over SSH' means user@host works with the `ssh` command — scp and rsync ride on top of that same connection, so if `ssh user@host` works, so do they."
+  - term: iso
+    definition: "ISO — a single file that's an exact copy of a disc/installer image (e.g. the Kali installer). You verify its checksum before using it, since a corrupted or tampered ISO can install a broken or unsafe system."

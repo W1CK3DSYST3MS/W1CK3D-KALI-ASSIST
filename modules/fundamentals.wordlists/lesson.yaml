@@ -22,7 +22,7 @@ steps:
   - step_id: wl1
     title: "Where Kali keeps wordlists"
     slot_target: null
-    glossary_refs: [wordlist_dir, wordlist]
+    glossary_refs: [wordlist_dir, wordlist, symlink]
     explanation:
       what: "Kali stores wordlists under /usr/share/wordlists. Many are symlinks into packages like dirb, dirbuster, wfuzz and (once installed) seclists."
       why: "Knowing the standard location means you can point any tool at a real list without hunting."
@@ -46,7 +46,7 @@ steps:
   - step_id: wl2
     title: "Unpack rockyou (it ships gzipped)"
     slot_target: null
-    glossary_refs: [rockyou, wordlist]
+    glossary_refs: [rockyou, wordlist, gzip]
     explanation:
       what: "rockyou.txt is Kali's classic ~14-million-line password list, shipped compressed as rockyou.txt.gz to save space. `gunzip -k` unpacks it while keeping the .gz."
       why: "Most tools want the plain .txt path; you unpack it once. It's the default 'does anything crack?' list."
@@ -64,6 +64,10 @@ steps:
         cause: "Files under /usr/share are root-owned."
         fix: "Use sudo, or copy the .gz to your home first: `cp .../rockyou.txt.gz ~ && gunzip ~/rockyou.txt.gz`."
         check: "You get an uncompressed rockyou.txt you can read."
+      - trigger: "gzip: unexpected end of file, and rockyou.txt exists but looks tiny"
+        cause: "The .gz itself is truncated/corrupt — usually an interrupted apt install or a bad mirror — so gunzip produced a partial file rather than failing outright."
+        fix: "Reinstall the package cleanly: `sudo apt install --reinstall wordlists`, then re-run the gunzip."
+        check: "The line-count check in the next step (wl3) should read in the millions; a truncated file will show far fewer lines."
   - step_id: wl3
     title: "How big is a wordlist? (wc -l)"
     slot_target: null
@@ -85,6 +89,10 @@ steps:
         cause: "It reads the whole file to count."
         fix: "That's expected once; note the number. For a quick peek use head/tail instead."
         check: "You have the count."
+      - trigger: "the count is small, like a few hundred, not millions"
+        cause: "A command that ran without error but answered the wrong question — usually you counted the still-gzipped rockyou.txt.gz (its compressed bytes don't map to real text lines) or a path typo pointed you at a different file."
+        fix: "Confirm exactly which file you're counting: `ls -la /usr/share/wordlists/rockyou.txt*` should show both the .gz and the plain .txt; run wc -l on the .txt one."
+        check: "The .txt path with no .gz extension is the one that gives the multi-million count."
   - step_id: wl4
     title: "Peek inside (head / tail)"
     slot_target: null
@@ -133,6 +141,10 @@ steps:
         cause: "More specific policy."
         fix: "Chain greps: `grep '[0-9]' list | grep '[A-Za-z]'`, or one -E pattern with lookahead-free classes."
         check: "The subset matches the policy."
+      - trigger: "policy.txt is created but completely empty"
+        cause: "The command exits with no error either way, so an empty result looks identical to a slow success at a glance — usually the regex range is wrong for this data, or the file path has a typo so grep silently matched zero lines."
+        fix: "Test the grep alone, without head, before you trust it: `grep -E '^.{8,12}$' /usr/share/wordlists/rockyou.txt | wc -l`. It should report a large number."
+        check: "A non-zero count from that wc -l confirms the pattern is actually matching something before you trim it down."
   - step_id: wl6
     title: "Get more lists: SecLists"
     slot_target: null
@@ -154,6 +166,10 @@ steps:
         cause: "Not sure which file."
         fix: "A solid default: /usr/share/seclists/Discovery/Web-Content/common.txt (or raft-*-directories.txt)."
         check: "You have a path to pass to -w."
+      - trigger: "ls /usr/share/seclists shows only one or two folders, not the full set"
+        cause: "apt reported success, but the install was interrupted partway (network hiccup) or you have an older, thinner SecLists package."
+        fix: "Reinstall cleanly: `sudo apt install --reinstall seclists`, then check the size: `du -sh /usr/share/seclists` (expect several hundred MB)."
+        check: "The full category list (Discovery, Fuzzing, Passwords, Usernames, Web-Shells, etc.) appears once it's really complete."
   - step_id: wl7
     title: "Build a small custom wordlist"
     slot_target: null

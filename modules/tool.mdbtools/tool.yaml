@@ -109,6 +109,38 @@ flows:
             cause: "Character encoding mismatch (older Access files sometimes use non-UTF-8 encodings)."
             fix: "Check the mdbtools documentation for encoding options; try opening the CSV with a different encoding in your spreadsheet tool."
             check: "—"
+      - step_id: g5
+        title: "Run a real SQL query with mdb-sql"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [sql_query]
+        explanation:
+          what: "`mdb-export` dumps a WHOLE table. `mdb-sql` instead lets you run an actual SQL query — filter rows, pick specific columns, JOIN tables — against the database, the same as querying a real SQL server."
+          why: "Once a database has real data, you rarely want everything — you want 'just the rows where Department = Sales', or a couple of columns. That needs a query, not a full dump."
+          where: "The database file is positional; the query itself is NOT typed on the command line — it's read from a saved .sql file via -i, because this app only ever shows you a command to run, it can't type interactively for you."
+        find_it: >
+          Write your query into a plain text file first, e.g. `echo "SELECT LastName, FirstName
+          FROM Employees WHERE Department='Sales';" > query.sql`. Use table/column names from
+          the schema/export steps above.
+        command_anatomy:
+          - {token: "mdb-sql", does: "the program"}
+          - {token: "-i query.sql", does: "read the SQL query from this file instead of prompting interactively"}
+          - {token: "-H", does: "(optional) skip the header row in results"}
+          - {token: "database.mdb", does: "the file to query"}
+        try_this: "echo \"SELECT * FROM Employees;\" > query.sql && mdb-sql -i query.sql database.mdb"
+        success_criteria: "The query results print as a table, matching only the rows/columns you asked for."
+        expected_output: |
+          LastName  FirstName
+          Smith     John
+          Doe       Jane
+        alternatives:
+          - trigger: "syntax error"
+            cause: "mdb-sql's SQL dialect is limited (it's a lightweight parser, not a full SQL server) — some standard SQL syntax isn't supported."
+            fix: "Simplify the query (basic SELECT/WHERE/JOIN); check table/column names exactly match mdb-schema's output."
+            check: "Start with `SELECT * FROM <table>;` and add clauses one at a time."
+          - trigger: "runs with no output / hangs"
+            cause: "No -i file was given, so mdb-sql is waiting at an interactive prompt this app can't type into."
+            fix: "Always include `-i query.sql` when using this app — never run mdb-sql without it."
+            check: "Confirm -i points to a real, saved query file."
 quick_build:
   builder: mdbtools
   title: "Quick read"
@@ -116,8 +148,9 @@ quick_build:
     - field_id: action
       label: "Action"
       type: choice
-      choices: ["ver", "tables", "schema", "export"]
+      choices: ["ver", "tables", "schema", "export", "sql"]
       default: "tables"
+      help: "sql runs a real SQL query (mdb-sql) — needs a saved .sql file, see the guided flow's last step."
     - field_id: file
       label: "Database file"
       type: path
@@ -134,3 +167,14 @@ quick_build:
       label: "One name per line (-1, tables action)"
       type: bool
       default: true
+    - field_id: sql_file
+      label: "SQL query file (-i, sql action)"
+      type: path
+      placeholder: "query.sql"
+    - field_id: sql_output
+      label: "Write results to file (-o, sql action)"
+      type: path
+      placeholder: "results.csv  (optional)"
+    - field_id: no_header
+      label: "No header row (-H, sql action)"
+      type: bool

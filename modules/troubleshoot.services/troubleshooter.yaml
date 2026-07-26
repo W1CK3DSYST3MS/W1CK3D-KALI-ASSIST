@@ -55,6 +55,10 @@ symptoms:
             cause: "status truncates."
             fix: "`journalctl -u <svc> -e` (end) or `-b` (this boot) for the first ERROR/Failed/fatal."
             check: "The first error is usually the real cause."
+          - trigger: "Active: activating (auto-restart), or it keeps flipping between activating/failed"
+            cause: "This isn't a clean one-time failure — the service starts, crashes, and systemd keeps automatically retrying it (called 'flapping')."
+            fix: "See the 'starts then dies / flapping' fix below — read the exit reason before just restarting it again, since it'll just crash the same way."
+            check: "`journalctl -u <svc> -e` shows the actual crash reason, not just 'failed'."
     fixes:
       - fix_id: clean_restart
         tier: basic
@@ -107,6 +111,10 @@ symptoms:
             cause: "The service never ran."
             fix: "Try to start it once, then re-read the journal."
             check: "Logs appear after it runs."
+          - trigger: "you see old entries, but nothing from the attempt you just made"
+            cause: "You're reading logs after the fact instead of watching them live — easy to miss the exact window, or a time filter is hiding it."
+            fix: "Run `sudo journalctl -u <svc> -f` FIRST (it follows live), then start/restart the service in another terminal so you catch it as it happens."
+            check: "New lines appear in the -f output the moment you start the service."
     fixes:
       - fix_id: status_first
         tier: basic
@@ -114,6 +122,18 @@ symptoms:
         command: "systemctl status <svc> --no-pager"
         why: "Fastest single view of state plus the last log lines."
         verify: "You can read the cause."
+      - fix_id: filter_priority
+        tier: intermediate
+        title: "Too much noise — filter by priority or time"
+        command: "journalctl -u <svc> -p err -e   # errors only; or add --since '10 min ago'"
+        why: "-p err hides routine info/debug noise so only warnings and errors show; --since narrows the window to around when it broke."
+        verify: "The output is short enough to actually read, and still shows the real error."
+      - fix_id: persistent_journal
+        tier: extensive
+        title: "Logs disappear after every reboot"
+        command: "sudo mkdir -p /var/log/journal; sudo systemd-tmpfiles --create --prefix /var/log/journal; sudo systemctl restart systemd-journald"
+        why: "The journal often defaults to RAM-only storage, so logs vanish on reboot — this switches it to persistent storage on disk."
+        verify: "`journalctl --list-boots` shows more than just the current boot after your next reboot."
   - symptom_id: not_enabled
     label: "Works now but not after reboot (enable vs start)"
     aliases: [not after reboot, enable, boot, autostart, is-enabled]
@@ -138,6 +158,62 @@ symptoms:
         verify: "is-enabled -> disabled."
         destructive: true
         recovery: "Disabling a service others rely on (e.g. remote ssh) can lock you out. Be sure before disabling."
+  - symptom_id: active_not_reachable
+    label: "systemctl says it's active/running, but I still can't connect to it"
+    aliases: [active but unreachable, running but not working, connection refused, cant connect to service, not listening, running but no response]
+    diagnosis:
+      - step_id: sv_listen
+        title: "Is it actually listening where you expect?"
+        slot_target: null
+        glossary_refs: [service, bind_address]
+        explanation:
+          what: "`sudo ss -tulpn | grep <port-or-name>` shows every address and port your service is genuinely bound to — separate from whatever systemd reports."
+          why: "'Active (running)' only means the process started. It says nothing about WHERE it's listening — a service can be fully 'running' and still be completely unreachable."
+          where: "Diagnostic."
+        try_this: "sudo ss -tulpn | grep <port-or-name>"
+        success_criteria: "You see a line for your service bound to the address:port you expected."
+        expected_output: |
+          tcp LISTEN 0.0.0.0:8080 0.0.0.0:* users:(("myservice",pid=4120,fd=6))
+        alternatives:
+          - trigger: "nothing shows up for it at all"
+            cause: "Despite 'active (running)', the process isn't actually listening yet — it may be stuck starting up (some stacks like GVM take minutes), or it crashed into a state systemd hasn't flagged as failed yet."
+            fix: "Read its logs for the real state: `journalctl -u <svc> -e`. Give slow-starting services time before assuming it's broken."
+            check: "The listen line appears once it's genuinely ready."
+          - trigger: "it IS listening, but only on 127.0.0.1 (localhost), and you're connecting from another machine"
+            cause: "The service is deliberately bound to localhost only — by default, or for safety — so only connections FROM the same machine work."
+            fix: "If remote access is genuinely intended, change its config to bind 0.0.0.0 (or a specific interface) and open the firewall for that port (see fixes). Make sure it should be reachable remotely before doing this."
+            check: "ss shows 0.0.0.0:<port> (or the intended interface) instead of 127.0.0.1:<port>."
+          - trigger: "it's listening on the right address and port, but connections still fail"
+            cause: "The service side is fine — something between you and it (a local firewall, a cloud provider's security group, a router) is dropping the connection."
+            fix: "Check `sudo ufw status` locally, and any network-level firewall between you and this machine."
+            check: "The connection succeeds once the firewall allows that port."
+    fixes:
+      - fix_id: check_listen
+        tier: basic
+        title: "Confirm what's actually listening"
+        command: "sudo ss -tulpn | grep <port-or-name>"
+        why: "Shows the real bind address and port, not just systemd's active/inactive state."
+        verify: "You see the expected process bound to the expected address:port."
+      - fix_id: firewall_block
+        tier: intermediate
+        title: "Service is fine, a firewall is blocking it"
+        command: "sudo ufw status; sudo ufw allow <port>/tcp   # only if ufw is active and blocking it"
+        why: "A firewall (ufw or network-level) can silently drop connections to a perfectly healthy, correctly-listening service."
+        verify: "The port shows ALLOW in `ufw status`; the connection succeeds."
+      - fix_id: bind_address_fix
+        tier: intermediate
+        title: "Bound to localhost only, but you need remote access"
+        command: "# edit the service's own config to listen on 0.0.0.0 or a specific interface, then: sudo systemctl restart <svc>"
+        why: "Many services default to 127.0.0.1 for safety. Broadening the bind address is a deliberate security decision, not just a bug fix."
+        verify: "`ss` shows the broader bind address; remote connections now succeed."
+        destructive: true
+        recovery: "Exposing a service beyond localhost widens your attack surface. Only do this when you actually need remote access, and pair it with a firewall rule scoped to who should reach it."
+      - fix_id: slow_start
+        tier: extensive
+        title: "'Active' but still initializing (large stacks like GVM)"
+        command: "journalctl -u <svc> -f   # watch it live; some services take minutes after 'active' before they're truly ready"
+        why: "systemd marks a unit 'active' as soon as the process starts — for some services that's well before it's actually ready to serve connections."
+        verify: "The log shows a ready/listening message, and the connection then works."
   - symptom_id: port_conflict
     label: "Port already in use / address already in use"
     aliases: [port in use, address already in use, bind, eaddrinuse, port conflict]
@@ -158,7 +234,17 @@ symptoms:
             cause: "The conflict is elsewhere, or the service binds a different port."
             fix: "Check the service's configured port; re-run with the right number."
             check: "Confirm the port from the error message."
+          - trigger: "the process holding the port IS the same service you're trying to start"
+            cause: "Not actually a conflict — an earlier copy is already running (it may have auto-started, or a previous `start` already succeeded)."
+            fix: "Don't start a second copy — check `systemctl status <svc>` first; if it's already active, you're already done."
+            check: "systemctl status shows active (running) using that same PID."
     fixes:
+      - fix_id: identify_holder
+        tier: basic
+        title: "Identify exactly what's holding the port"
+        command: "sudo ss -tulpn | grep :<port>"
+        why: "Before stopping or changing anything, know whether it's a duplicate of the service you're starting or a completely different program."
+        verify: "You can name the exact process and PID holding the port."
       - fix_id: stop_dup
         tier: intermediate
         title: "Duplicate instance"

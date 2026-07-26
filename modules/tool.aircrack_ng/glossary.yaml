@@ -19,3 +19,9 @@ terms:
     definition: "An AP-side value that can enable clientless cracking on some APs."
   - term: hc22000
     definition: "The hashcat mode-22000 format for WPA (via hcxpcapngtool)."
+  - term: fakeauth
+    definition: "An 802.11 open-system association with an AP, done without the real Wi-Fi password — proves your adapter can talk to the AP and is often required before other injection attacks are accepted."
+  - term: arpreplay
+    definition: "Rebroadcasting one captured ARP packet at an AP to force it to generate many new IVs quickly — the classic way to gather enough IVs to crack legacy WEP."
+  - term: iv
+    definition: "Initialization Vector — a short value WEP mixes into each packet's key; collecting enough of them lets aircrack-ng statistically recover a WEP key."

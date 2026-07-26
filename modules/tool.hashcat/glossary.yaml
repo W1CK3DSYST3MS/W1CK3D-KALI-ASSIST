@@ -19,3 +19,7 @@ terms:
     definition: "--increment tries growing password lengths within a mask."
   - term: gpu_opencl
     definition: "hashcat's accelerator; needs proper drivers (else 'no devices')."
+  - term: combinator_attack
+    definition: "-a 1 pairs every word from a first wordlist with every word from a second (word1word2) — good for firstname+lastname style passwords."
+  - term: second_wordlist
+    definition: "The dictionary2 positional argument required by combinator (-a 1) — the RIGHT half of each generated candidate."

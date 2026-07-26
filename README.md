@@ -25,13 +25,17 @@ Issue Log** plus curated trusted links — no live help, no AI, nothing phoned h
   services/systemd, permissions/filesystem, and rare/hard cases).
 - Every tool's flags/syntax have been cross-checked against the real installed tool's
   `--help`/`man` output on Kali — see `docs/VERIFICATION-LOG.md` for the source and status of
-  each one.
+  each one. Beyond flags, every module (all 34 tools, all 14 lessons, all 5 troubleshooters)
+  has also been through a **completeness pass**: does it actually cover everything the real
+  tool/topic offers, does it explain jargon in plain English, and do walkthroughs account for
+  partial/varied real-world output, not just clean success or total failure — see
+  `docs/DEPTH-AUDIT.md`.
 - Working toward guides for every tool in Kali's official catalog — see
   `docs/TOOL-COVERAGE.md` for the tracked checklist (407 tools across 29 categories).
 
 ## Status
 
-Fully built and passing: 127 automated tests, the CLI harness, the GUI smoke test, and a
+Fully built and passing: 302 automated tests, the CLI harness, the GUI smoke test, and a
 native Kali/Linux binary build (`--self-test` reports `tools=34 lessons=14 troubleshooters=5`).
 Released at [github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases](https://github.com/W1CK3DSYST3MS/W1CK3D-KALI-ASSIST/releases)
 — see `docs/PHASE-TWO-STATUS.md` for the detailed build log and what's still outstanding

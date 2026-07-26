@@ -238,6 +238,10 @@ steps:
         cause: "A stray space or variable can turn a safe rm into a system-wiper."
         fix: "STOP. Never rm -rf absolute roots. Use -i, or ls the target first."
         check: "If in doubt, `ls` the exact path before rm."
+      - trigger: "rm -r removes most of a directory tree, then stops with 'Permission denied' on one file — the rest is already gone"
+        cause: "A PARTIAL delete: rm works through the tree and keeps going after a failure, so files it could remove ARE gone, and the one(s) it couldn't (usually owned by another user, or root) are still there. It's not all-or-nothing."
+        fix: "Re-run `ls -la` on what's left to see exactly what survived; if you own the rest, `sudo rm -r <path>` clears the remaining root/other-owned files (only if you're sure)."
+        check: "An error partway through a multi-file rm means SOME deletions already happened — always re-check the directory rather than assuming nothing changed."
   - step_id: n11
     title: "Find files (find)"
     slot_target: ACTION_OPTIONS
@@ -269,6 +273,7 @@ steps:
   - step_id: n12
     title: "What kind of file is this? (file)"
     slot_target: POSITIONAL_ARGS
+    glossary_refs: [ctf]
     explanation:
       what: "`file <path>` inspects contents and tells you the real type — not just the extension."
       why: "Extensions lie; `file` reads the actual bytes. Vital in forensics/CTF."

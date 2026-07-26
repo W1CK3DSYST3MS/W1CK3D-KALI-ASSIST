@@ -21,3 +21,9 @@ terms:
     definition: "A Wi-Fi mode that captures all nearby traffic (for authorized testing)."
   - term: regulatory_domain
     definition: "Country setting that governs allowed channels/power."
+  - term: ssid
+    definition: "The name of a Wi-Fi network — what you pick from the list when connecting (e.g. 'HomeWifi-5G')."
+  - term: link_state
+    definition: "Whether an interface has a live physical/radio connection, shown by `ip a` as UP/DOWN and (NO-)CARRIER. A cable unplugged or Wi-Fi never joined shows NO-CARRIER even though the interface itself is enabled — like a phone with signal bars but no SIM."
+  - term: link_local_address
+    definition: "An IPv6 address starting fe80:: that a device assigns itself automatically, without needing a router or DHCP. It only works for talking to other devices on the exact same local network segment — seeing one does NOT mean you have internet access."

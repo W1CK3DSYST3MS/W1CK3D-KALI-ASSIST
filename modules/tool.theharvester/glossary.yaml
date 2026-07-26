@@ -5,3 +5,5 @@ terms:
     definition: "crt.sh — a free, public search engine over Certificate Transparency logs. Every HTTPS certificate ever issued gets logged publicly, which leaks subdomain names (a cert for mail.corp.com proves mail.corp.com exists) — and needs no API key."
   - term: dns_takeover
     definition: "A subdomain still pointing (via CNAME) at a cloud service you no longer own (a deleted S3 bucket, an expired Heroku app) — someone else can claim that service and serve their own content under your domain."
+  - term: shodan
+    definition: "A search engine that continuously scans the internet and indexes what's running on every host it finds (open ports, banners, sometimes known vulnerabilities). theHarvester's -s flag queries it about hosts already discovered via other sources — but it needs your own Shodan API key configured first, it isn't free/keyless like crtsh."

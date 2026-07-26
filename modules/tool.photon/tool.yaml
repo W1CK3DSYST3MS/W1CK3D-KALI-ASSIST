@@ -144,6 +144,94 @@ flows:
             cause: "Too aggressive."
             fix: "Lower -t, raise -d."
             check: "The crawl completes cleanly."
+  - flow_id: secrets_dns
+    title: "Find secrets & subdomains (reference)"
+    goal: "Use Photon's two most valuable detection flags: leaked API keys and subdomain enumeration."
+    command_builder_id: photon
+    slots: [PROGRAM, ENV_INTERFACE, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: pk1
+        title: "Hunt for leaked API keys and secrets (--keys)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [api_key]
+        explanation:
+          what: "`--keys` scans every page and JavaScript file Photon crawls for patterns that look like secrets — API keys, auth tokens, and access keys for services like AWS, Google, Stripe, Slack, and more."
+          why: "Developers accidentally ship secrets in client-side JS constantly. A hardcoded API key sitting in a public .js file is one of the most common, highest-value real findings in web recon — this is arguably Photon's main selling point over a plain link crawler."
+          where: "ACTION_OPTIONS, added to a normal crawl."
+        find_it: "Use the site URL you're authorized to crawl (from the guided flow). No extra input needed — just add --keys to a crawl you already know how to run."
+        command_anatomy:
+          - {token: "photon", does: "the crawler"}
+          - {token: "-u <target-url>", does: "the start URL to crawl"}
+          - {token: "--keys", does: "flag anything that looks like a secret/API key on crawled pages"}
+          - {token: "-o ~/photon_example", does: "save results, including a keys file, to this directory"}
+        try_this: "photon -u <target-url> --keys -o ~/photon_example"
+        success_criteria: "A keys-related file appears in the output directory (even if empty — 'none found' is itself a real result)."
+        expected_output: |
+          [~] Level 1: 42 URLs
+          [+] Crawling complete
+          [+] Results saved in ~/photon_example
+          (then: cat ~/photon_example/keys.txt)
+          AIzaSyD4C1xt-Q1234567890abcdefGHIJKLmno
+        alternatives:
+          - trigger: "keys file is empty or missing"
+            cause: "The site simply has no exposed secrets in what Photon crawled — a good outcome, not a failure — or the crawl didn't reach the JS files that contain them."
+            fix: "Increase crawl depth (-l 3 or more) so Photon reaches more JS bundles, and try --dns too — dev/staging subdomains leak secrets far more often than production."
+            check: "Re-run with a higher -l and confirm internal.txt lists JS files."
+          - trigger: "a hit looks like a false positive (a random-looking string that isn't actually a key)"
+            cause: "Photon matches against regex patterns for common key formats, which can occasionally catch look-alike strings (hashes, session tokens, minified code)."
+            fix: "Manually verify each hit — check whether it matches a known vendor's key format (e.g. AWS keys start AKIA, Google API keys start AIza) before treating it as a real finding."
+            check: "Cross-reference the hit against the vendor's documented key format."
+      - step_id: pk2
+        title: "Enumerate subdomains during the crawl (--dns)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [subdomain_enum]
+        explanation:
+          what: "`--dns` has Photon pull out and resolve subdomains it encounters while crawling (in links, JS, and similar), saving them to their own result file."
+          why: "Subdomains are extra attack surface — a forgotten dev.example.com or old-admin.example.com is often far less hardened than the main site, and this is a free byproduct of a crawl you're already running."
+          where: "ACTION_OPTIONS, added to a normal crawl."
+        find_it: "Same authorized target as step 1 — no extra input needed."
+        command_anatomy:
+          - {token: "photon", does: "the crawler"}
+          - {token: "-u <target-url>", does: "the start URL to crawl"}
+          - {token: "--dns", does: "collect and resolve subdomains found during the crawl"}
+          - {token: "-o ~/photon_example", does: "save results, including a subdomains file, to this directory"}
+        try_this: "photon -u <target-url> --dns -o ~/photon_example"
+        success_criteria: "A subdomain-related file appears in the output directory listing anything found."
+        expected_output: |
+          [~] Level 1: 42 URLs
+          [+] Crawling complete
+          [+] Results saved in ~/photon_example
+          (then: ls ~/photon_example)
+          dns.txt  external.txt  internal.txt
+        alternatives:
+          - trigger: "no subdomains found"
+            cause: "The site simply doesn't reference any other subdomains in what was crawled."
+            fix: "For dedicated subdomain enumeration beyond what a crawl happens to find, use a purpose-built tool (theHarvester, or gobuster's dns mode) — --dns here is a convenient bonus, not a full enumeration technique."
+            check: "Compare against theHarvester/gobuster dns results for the same domain."
+      - step_id: pk3
+        title: "Extra: clone the site locally, or export a structured summary (reference)"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`--clone` saves a local copy of the crawled pages (handy for offline review); `-e csv` or `-e json` writes a structured summary file alongside the normal plain-text result files."
+          why: "Useful add-ons once a crawl already works well — cloning for offline browsing, exporting for feeding results into another tool or script."
+          where: "--clone is ACTION_OPTIONS; -e/--export is OUTPUT_OPTIONS."
+        find_it: "Same authorized target. Cloning can use real disk space on large sites — start with a shallow -l."
+        command_anatomy:
+          - {token: "photon", does: "the crawler"}
+          - {token: "-u <target-url>", does: "the start URL to crawl"}
+          - {token: "--clone", does: "save a local copy of crawled pages"}
+          - {token: "-e json", does: "also write a JSON summary of the results"}
+          - {token: "-o ~/photon_example", does: "output directory"}
+        try_this: "photon -u <target-url> --clone -e json -o ~/photon_example"
+        success_criteria: "A cloned copy of pages and a .json summary appear under the output directory."
+        expected_output: |
+          [+] Cloning website
+          [+] Results saved in ~/photon_example
+        alternatives:
+          - trigger: "clone directory is huge / the crawl is slow"
+            cause: "Cloning downloads every crawled page's content, not just its URL."
+            fix: "Lower -l (depth) before adding --clone, or skip cloning and just work from internal.txt/external.txt."
+            check: "Re-run with a smaller -l."
 
 quick_build:
   builder: photon
@@ -162,9 +250,30 @@ quick_build:
       label: "Threads (-t)"
       type: int
       placeholder: "10"
+    - field_id: delay
+      label: "Delay between requests, seconds (-d)"
+      type: string
+      placeholder: "1  (optional — be polite to small/fragile sites)"
     - field_id: wayback
       label: "Include archived URLs (--wayback)"
       type: bool
+    - field_id: keys
+      label: "Find leaked API keys/secrets (--keys)"
+      type: bool
+      help: "Scans crawled pages and JavaScript for things that look like API keys, tokens, or other secrets — one of Photon's most valuable findings."
+    - field_id: dns
+      label: "Enumerate subdomains during the crawl (--dns)"
+      type: bool
+      help: "Collects and resolves subdomains found while crawling — extra attack surface, as a free byproduct of the crawl."
+    - field_id: clone
+      label: "Clone the site locally (--clone)"
+      type: bool
+      help: "Saves a local copy of crawled pages for offline review. Can use real disk space — start with a shallow depth."
+    - field_id: export
+      label: "Also export a summary as (-e)"
+      type: choice
+      choices: [csv, json]
+      help: "Optional — writes a structured summary file alongside the normal plain-text results."
     - field_id: output
       label: "Output directory (-o)"
       type: path

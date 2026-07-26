@@ -1,4 +1,6 @@
 terms:
+  - term: heredoc
+    definition: "A `<<'EOF' ... EOF` block that feeds several lines straight into a command as if you'd typed them yourself, ending when the shell sees the marker (EOF) alone on its own line. Quoting the marker (`<<'EOF'`) stops the shell from expanding `$variables` inside the text."
   - term: regex
     definition: "Regular expression — a pattern language for matching text (used by grep -E, sed, awk). Special chars like ^ $ . * [] + describe shapes, not literal characters."
   - term: anchor

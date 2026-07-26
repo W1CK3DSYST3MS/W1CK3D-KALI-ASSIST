@@ -130,6 +130,10 @@ steps:
         cause: "That's normal — sudo caches your password for a few minutes per terminal, then asks again."
         fix: "Nothing to fix; entering it is expected. Don't disable the prompt."
         check: "root is printed after you authenticate."
+      - trigger: "`id` prints fine and lists several groups, but 'sudo' isn't one of them"
+        cause: "This is a partial result, not a crash: the command worked, it's just telling you the group you need is missing — the same root cause as the sudoers error below, spotted a step earlier."
+        fix: "Don't bother running `sudo whoami` yet — fix the group membership first (see the sudoers fix directly below), then re-run `id` to confirm sudo now appears."
+        check: "`id` lists `(sudo)` among your groups before you try sudo again."
   - step_id: su5
     title: "Raise a firewall (ufw)"
     slot_target: null

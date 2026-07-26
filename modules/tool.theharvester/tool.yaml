@@ -135,6 +135,80 @@ flows:
             cause: "A long list with no obvious priority."
             fix: "Start with anything that resolved in step 3 (still live) and anything --take-over flagged (actionable finding on its own)."
             check: "—"
+  - flow_id: shodan_and_extras
+    title: "Shodan enrichment, screenshots & API scanning (reference)"
+    goal: "Pull extra data on discovered hosts from Shodan (needs an API key first), screenshot resolved domains, and scan for API endpoints."
+    command_builder_id: theharvester
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: sh1
+        title: "Configure a Shodan API key before using -s"
+        slot_target: null
+        glossary_refs: [shodan]
+        explanation:
+          what: "Unlike crtsh/duckduckgo/urlscan, Shodan requires an account and API key. The key goes in theHarvester's own config file, NOT on the command line — edit /etc/theHarvester/api-keys.yaml and fill in the 'shodan: key:' line with your key from account.shodan.io."
+          why: "Without a key configured here, -s either errors or silently returns nothing — theHarvester reads this file itself before making the request."
+          where: "Not part of the theHarvester command — this is one-time setup, done in a text editor before step 2."
+        find_it: "Get a free-tier key at https://account.shodan.io/register, then edit the file with e.g. `sudo nano /etc/theHarvester/api-keys.yaml` and paste it after 'shodan:\\n    key:'."
+        command_anatomy:
+          - {token: "sudo nano /etc/theHarvester/api-keys.yaml", does: "edit the shared config file (needs root — it's under /etc)"}
+          - {token: "shodan:\n    key: YOUR_KEY_HERE", does: "the block to fill in, exactly as it already appears in the file"}
+        try_this: "grep -A2 'shodan:' /etc/theHarvester/api-keys.yaml"
+        success_criteria: "The shodan block shows your key filled in, not blank."
+        expected_output: |
+          shodan:
+            key: abcd1234yourrealkeyhere
+        alternatives:
+          - trigger: "permission denied editing the file"
+            cause: "/etc/theHarvester/ is root-owned."
+            fix: "Use sudo to edit it, or run theHarvester as a user with a personal ~/.theHarvester/api-keys.yaml instead — check theHarvester's docs for the exact per-user path on your install."
+            check: "You can save the edited file."
+      - step_id: sh2
+        title: "Run with -s (--shodan) to enrich discovered hosts"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [shodan]
+        explanation:
+          what: "-s queries Shodan about hosts theHarvester already discovered via -b, adding data Shodan indexed about them (open ports, banners, known vulnerabilities) that the other sources don't provide."
+          why: "crtsh/duckduckgo/urlscan tell you a host EXISTS; Shodan tells you what's actually running and exposed on it — a different, complementary layer of information."
+          where: "ACTION_OPTIONS, alongside -d/-b like any other source flag."
+        find_it: "The API key from step 1 must already be configured — -s reads it from the config file automatically, no key entry here."
+        command_anatomy:
+          - {token: "theHarvester -d example-corp.com -b crtsh", does: "same base search as before"}
+          - {token: "-s", does: "also query Shodan about the discovered hosts"}
+        try_this: "theHarvester -d example-corp.com -b crtsh -s"
+        success_criteria: "Shodan-sourced details (ports, banners) appear alongside the crtsh hosts."
+        expected_output: |
+          [*] Searching Shodan.
+          [*] Hosts found: 3
+          mail.example-corp.com:25 - banner: 220 mail.example-corp.com ESMTP
+        alternatives:
+          - trigger: "no Shodan data appears / an API error"
+            cause: "No key configured, an invalid key, or the free tier's query limit was hit."
+            fix: "Re-check step 1's key is saved correctly; free-tier Shodan accounts have a monthly query cap."
+            check: "—"
+      - step_id: sh3
+        title: "Screenshot resolved domains and scan for API endpoints"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`--screenshot <dir>` takes a browser screenshot of every resolved domain and saves it to that folder — useful when you want visual evidence, not just a hostname in a list. `-a` (--api-scan) checks discovered hosts for exposed API endpoints, optionally guided by a wordlist via -w."
+          why: "A screenshot is easier to include in a report than a URL, and survives even if the site changes later. API-endpoint scanning surfaces attack surface that a plain host/subdomain list doesn't show."
+          where: "--screenshot is an OUTPUT option (needs a folder); -a/-w are ACTION options."
+        find_it: "Pick/create a writable folder for screenshots. For -w, any wordlist of common API paths works (theHarvester ships a default if you omit -w)."
+        command_anatomy:
+          - {token: "theHarvester -d example-corp.com -b crtsh", does: "same base search"}
+          - {token: "--screenshot ./screenshots", does: "save a screenshot of each resolved domain here"}
+          - {token: "-a", does: "also scan discovered hosts for API endpoints"}
+        try_this: "theHarvester -d example-corp.com -b crtsh --screenshot ./screenshots -a"
+        success_criteria: "The screenshots folder fills with one image per resolved domain, and any found API endpoints are listed."
+        expected_output: |
+          [*] Saving screenshots to ./screenshots
+          [*] Scanning for API endpoints
+        alternatives:
+          - trigger: "screenshots fail / a headless browser error"
+            cause: "--screenshot needs a working headless browser (Selenium/Chromium) installed."
+            fix: "Confirm a Chromium/Chromedriver is installed and on PATH; check theHarvester's own error message for the specific missing dependency."
+            check: "The screenshots folder starts filling with images."
+
 quick_build:
   builder: theharvester
   title: "Quick harvest"
@@ -163,7 +237,22 @@ quick_build:
     - field_id: take_over
       label: "Check for subdomain takeovers (-t)"
       type: bool
+    - field_id: shodan
+      label: "Enrich with Shodan (-s, needs an API key configured first)"
+      type: bool
+      help: "Requires a Shodan API key set in /etc/theHarvester/api-keys.yaml — see the 'Shodan enrichment' reference flow for setup."
+    - field_id: api_scan
+      label: "Scan for API endpoints (-a)"
+      type: bool
+    - field_id: api_wordlist
+      label: "API endpoint wordlist (-w, used with -a)"
+      type: path
+      placeholder: "(optional — theHarvester's default is used if blank)"
     - field_id: filename
       label: "Save results (-f)"
       type: path
       placeholder: "results  (optional, writes .xml + .json)"
+    - field_id: screenshot_dir
+      label: "Screenshot resolved domains (--screenshot)"
+      type: path
+      placeholder: "./screenshots  (optional)"

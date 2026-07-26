@@ -61,7 +61,7 @@ steps:
   - step_id: p3
     title: "Who am I, and what groups am I in? (id)"
     slot_target: null
-    glossary_refs: [owner_group_other, root]
+    glossary_refs: [owner_group_other, root, uid, gid]
     explanation:
       what: "`id` shows your user id, primary group, and all groups you belong to."
       why: "Permissions are decided by whether you're the file's owner, in its group, or 'other'."

@@ -52,6 +52,10 @@ symptoms:
             cause: "Repo key issue."
             fix: "Switch to the 'NO_PUBKEY / signature' symptom."
             check: "The error names a key id."
+          - trigger: "some repo lines update fine, only one or two show errors"
+            cause: "Not a general apt or network problem — one specific repository is offline, stale, or has a bad signing key, while the rest of your sources are fine."
+            fix: "Note exactly which URL the `Err:` line names, and fix that one source (correct its key, or comment it out in `/etc/apt/sources.list` / `/etc/apt/sources.list.d/` if you don't actually need it)."
+            check: "Re-run `sudo apt update`; only that one repo's line should still error."
     fixes:
       - fix_id: correct_sequence
         tier: basic
@@ -80,6 +84,30 @@ symptoms:
   - symptom_id: pubkey_signature
     label: "NO_PUBKEY / signature / 'not signed' errors"
     aliases: [no_pubkey, signature, not signed, gpg, key, repository is not signed, keyring]
+    diagnosis:
+      - step_id: pk_which_repo
+        title: "Which repo does the key error belong to?"
+        slot_target: null
+        glossary_refs: [gpg_key, keyring, signed_by]
+        explanation:
+          what: "The NO_PUBKEY line names a key ID; the line just above it in `apt update`'s output names the repo URL that's unsigned."
+          why: "The official Kali repo and a repo you added yourself need different fixes — refreshing Kali's keyring won't help a third-party repo, and vice versa."
+          where: "Diagnostic."
+        try_this: "sudo apt update 2>&1 | grep -B2 NO_PUBKEY"
+        success_criteria: "You can see which repo URL the failing key belongs to."
+        alternatives:
+          - trigger: "the repo is http.kali.org (the official Kali repo)"
+            cause: "Kali's own signing keyring package is missing or out of date."
+            fix: "Refresh Kali's keyring (basic fix below)."
+            check: "`sudo apt update` completes with no signature error."
+          - trigger: "the repo is a third-party URL you added yourself"
+            cause: "That repo's signing key was never added, or was added the old deprecated way."
+            fix: "Add the repo's key the modern way with signed-by= (intermediate fix below)."
+            check: "The source line shows `[signed-by=...]` and `apt update` verifies it without error."
+          - trigger: "only SOME packages from a repo fail the signature check, not the whole repo"
+            cause: "Usually a partial or corrupted download of that repo's index files, not an actually-missing key."
+            fix: "Clear apt's downloaded index and retry: `sudo rm -rf /var/lib/apt/lists/*; sudo apt update`."
+            check: "apt update rebuilds the lists cleanly with no signature error."
     fixes:
       - fix_id: kali_keyring
         tier: basic
@@ -110,6 +138,35 @@ symptoms:
   - symptom_id: broken_deps
     label: "broken / unmet / held-back dependencies"
     aliases: [broken, unmet dependencies, held back, dependency, kept back, apt-mark]
+    diagnosis:
+      - step_id: pk_broken_read
+        title: "Read exactly what apt proposes before confirming"
+        slot_target: null
+        glossary_refs: [held_package, candidate_version]
+        explanation:
+          what: "`sudo apt full-upgrade` prints the full list of what it will install, upgrade, AND remove, and waits for you to confirm (press N to back out safely)."
+          why: "The size and contents of the remove list tell you whether this is normal rolling-release churn or something more serious."
+          where: "Diagnostic."
+        try_this: "sudo apt full-upgrade   # read the list, then press N to back out if unsure"
+        success_criteria: "You can see the counts of packages to upgrade/install/remove and recognize the names."
+        expected_output: |
+          The following packages will be REMOVED:
+            old-lib-pkg
+          1 upgraded, 0 newly installed, 1 to remove, 0 not upgraded.
+          Do you want to continue? [Y/n]
+        alternatives:
+          - trigger: "a small, expected remove list (old packages being replaced by newer ones you recognize)"
+            cause: "Normal Kali rolling-release churn — packages get renamed/replaced often."
+            fix: "It's safe to proceed with the upgrade."
+            check: "The upgrade completes cleanly."
+          - trigger: "a large or surprising remove list, including tools you actually use"
+            cause: "A partially-broken upgrade state, or a held/conflicting package forcing wider removals than expected."
+            fix: "Back out (press N), then run the auto-repair basic fix below before retrying."
+            check: "After the repair, full-upgrade's remove list shrinks to only what you'd expect."
+          - trigger: "only ONE specific package is stuck on 'unmet dependency', everything else installs fine"
+            cause: "That package needs a version not currently available from your configured repos — often from mixing Debian and Kali repos together."
+            fix: "Check what's actually available: `apt policy <pkg>`. Don't force-install a mismatched version to work around it."
+            check: "apt policy shows a candidate version that satisfies what's missing."
     fixes:
       - fix_id: fix_broken
         tier: basic
@@ -163,6 +220,10 @@ symptoms:
             cause: "Stale lock from a hard crash."
             fix: "Only now is it safe to remove the lock (extensive fix)."
             check: "Confirm truly nothing is running first."
+          - trigger: "a process IS listed, but it's been sitting there with no progress for a long time"
+            cause: "A crashed or hung apt/dpkg that never released the lock — not one that's still actively working."
+            fix: "Don't assume it's hung — watch it for a few minutes first (network/disk activity, or `ps -o stat= -p <pid>` showing D/Z). Only treat it as stale once you're sure nothing is actually happening."
+            check: "No CPU/network/disk activity from that process over several minutes."
     fixes:
       - fix_id: wait
         tier: basic
@@ -200,6 +261,12 @@ symptoms:
         command: "sudo apt install kali-linux-large"
         why: "A bigger official toolset — still all Kali, no third-party risk."
         verify: "The tools you wanted are now present."
+      - fix_id: add_vendor_repo
+        tier: intermediate
+        title: "Tool has its own official apt repo (not in Kali)"
+        command: "# follow the vendor's official install page: add their signed-by key + a .list source, then: sudo apt update && sudo apt install <pkg>"
+        why: "Some tools ship their own official Debian/Ubuntu apt repo. That's safer than piping a random install script into bash, and `apt upgrade` keeps it current afterward — but only add repos from the vendor's real site over HTTPS."
+        verify: "The tool installs from apt, and it appears in future `apt upgrade` runs."
       - fix_id: pipx_venv
         tier: extensive
         title: "Prefer isolation over base-system repos"
@@ -217,6 +284,26 @@ symptoms:
   - symptom_id: cert_tls
     label: "Certificate / TLS 'verify failed' errors"
     aliases: [certificate, tls, ssl, verify failed, self-signed, unknown issuer, ca]
+    diagnosis:
+      - step_id: pk_cert_scope
+        title: "Is it EVERY HTTPS site/tool, or just one?"
+        slot_target: null
+        glossary_refs: [ca_certificate, certificate_authority]
+        explanation:
+          what: "Try another HTTPS site or tool and compare — does the same error happen everywhere, or only for the one thing you started with?"
+          why: "'Every site, every tool, all at once' points to the system clock or the whole CA store. 'Just one site or one tool' points to that specific certificate or that tool's own settings."
+          where: "Diagnostic."
+        try_this: "curl -v https://example.com   # then repeat against the specific site/tool that failed"
+        success_criteria: "You know whether the failure is universal or scoped to one thing."
+        alternatives:
+          - trigger: "EVERY HTTPS site and tool fails at once, all of a sudden"
+            cause: "Almost always the system clock — certificates are time-bound, so a wrong date fails verification everywhere simultaneously."
+            fix: "Check the clock fix first — it's the single most common cause of a sudden, total TLS failure."
+            check: "`timedatectl` shows the correct time and 'System clock synchronized: yes'."
+          - trigger: "only ONE site or ONE tool fails, everything else HTTPS works fine"
+            cause: "That specific site has a real certificate problem (self-signed or expired), or that one tool (e.g. git, a Python script) uses its own separate certificate bundle instead of the system's."
+            fix: "For a specific site: don't just bypass the warning — confirm with a browser too before trusting anything. For a specific tool: point it at the system CA bundle or add the custom CA properly (see fixes below)."
+            check: "Other HTTPS sites/tools keep working normally — you haven't disabled verification everywhere to fix one case."
     fixes:
       - fix_id: ca_bundle
         tier: basic

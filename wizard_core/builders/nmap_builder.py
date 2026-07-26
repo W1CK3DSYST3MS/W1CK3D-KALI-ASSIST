@@ -38,7 +38,8 @@ def build_nmap(inputs: Mapping[str, object]) -> CommandPlan:
       profile, targets, scan_type, ports, top_ports, fast, all_ports,
       service_version, os_detect, aggressive, scripts, script_args,
       timing(0-5), no_dns, skip_host_discovery, verbose, reason,
-      output_format(+output_path), input_list, interface, privileged.
+      output_format(+output_path), input_list, interface, privileged,
+      fragment, decoys, spoof_source_ip, source_port, spoof_mac.
     """
     g: list[str] = []   # GLOBAL_OPTIONS
     a: list[str] = []   # ACTION_OPTIONS
@@ -102,6 +103,29 @@ def build_nmap(inputs: Mapping[str, object]) -> CommandPlan:
     if script_args:
         a.extend(["--script-args", str(script_args)])
 
+    # Firewall/IDS evasion + spoofing (real nmap flags — see `nmap --help` under
+    # "FIREWALL/IDS EVASION AND SPOOFING"). These change what a target/IDS SEES,
+    # they don't change what nmap itself does.
+    if _as_bool(inputs.get("fragment")):
+        a.append("-f")
+    decoys = inputs.get("decoys")
+    if decoys:
+        a.extend(["-D", str(decoys)])
+    source_port = inputs.get("source_port")
+    if source_port:
+        a.extend(["-g", str(int(source_port))])
+    spoof_mac = inputs.get("spoof_mac")
+    if spoof_mac:
+        a.extend(["--spoof-mac", str(spoof_mac)])
+    spoof_source_ip = inputs.get("spoof_source_ip")
+    if spoof_source_ip:
+        a.extend(["-S", str(spoof_source_ip)])
+        notes.append(
+            "-S (spoof source IP) needs -e <interface> and usually -Pn too, since replies "
+            "won't come back to you — set the Interface field, and consider Skip host "
+            "discovery."
+        )
+
     # 4. OUTPUT_OPTIONS.
     out_fmt = inputs.get("output_format")
     out_path = inputs.get("output_path")
@@ -125,7 +149,7 @@ def build_nmap(inputs: Mapping[str, object]) -> CommandPlan:
 
     # Privilege handling: -sS / -O / -sU need root. Render as `sudo` prefix.
     privileged = _as_bool(inputs.get("privileged"))
-    needs_priv = any(t in {"-sS", "-O", "-sU"} for t in a)
+    needs_priv = any(t in {"-sS", "-O", "-sU", "-f", "-D", "-S", "--spoof-mac"} for t in a)
     if needs_priv and not privileged:
         notes.append("This scan needs privileges (-sS/-O/-sU). Prefix with sudo, or use -sT.")
     elevation = "sudo" if (privileged or (needs_priv and _as_bool(inputs.get("auto_sudo")))) else None

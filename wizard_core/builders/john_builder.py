@@ -3,6 +3,12 @@
 Shape: john [mode/options] [--format=…] <hashfile>. The hash file is POSITIONAL
 and goes last; mode/format flags precede it. Cracked results land in the pot file
 automatically — --show reads them back. Generate-only (offline cracking).
+
+Recognised keys (all optional except ``hashfile``): profile, hashfile, format,
+session, fork, pot, single, wordlist, rules, incremental, show, list, restore,
+mask, prince, loopback, markov. Verified against the installed jumbo build
+(``john --help``, 1.9.0-jumbo-1) — the bundled ``man john`` page is a stale
+non-jumbo doc and disagrees with several of these.
 """
 
 from __future__ import annotations
@@ -75,6 +81,19 @@ def build_john(inputs: Mapping[str, object]) -> CommandPlan:
         inc = inputs.get("incremental")
         a.append("--incremental" if inc is True or str(inc).lower() in {"true", "1", "yes"}
                  else f"--incremental={inc}")
+
+    # Mask mode (spec gap fix): hashcat-style placeholder pattern, e.g.
+    # --mask='?d?d?d?d?d?d?d?d' for an 8-digit PIN. ?d=digit ?l=lower ?u=upper ?s=symbol.
+    if inputs.get("mask"):
+        a.append(f"--mask={inputs['mask']}")
+
+    # Lower-priority modes (PRINCE / loopback / Markov) — same bare-flag-or-named-value
+    # shape as --incremental above.
+    for key, flag in (("prince", "--prince"), ("loopback", "--loopback"), ("markov", "--markov")):
+        val = inputs.get(key)
+        if val:
+            a.append(flag if val is True or str(val).lower() in {"true", "1", "yes"} else f"{flag}={val}")
+
     if _truthy(inputs.get("show")):
         a.append("--show")
 

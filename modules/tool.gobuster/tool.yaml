@@ -305,6 +305,102 @@ flows:
             cause: "Cookie/header invalid or expired."
             fix: "Refresh the session value; verify the header format."
             check: "Test the cookie in a browser."
+      - step_id: ga2
+        title: "Or use HTTP Basic Auth directly"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-U username -P password` sends credentials via HTTP Basic Auth — the browser popup-style login, not a cookie/session."
+          why: "Some areas are protected by Basic Auth instead of a login page/cookie. dir, vhost and fuzz modes support it; dns/tftp/s3/gcs don't (Basic Auth is an HTTP-only concept)."
+          where: "ACTION_OPTIONS; only valid in dir/vhost/fuzz mode."
+        find_it: "You need real, working credentials — either given to you for a lab/engagement, or ones you already found (e.g. via a login-form brute-force with hydra)."
+        command_anatomy:
+          - {token: "gobuster dir -u ... -w ...", does: "same directory scan as before"}
+          - {token: "-U admin", does: "the Basic Auth username"}
+          - {token: "-P hunter2", does: "the Basic Auth password"}
+        try_this: "gobuster dir -u https://site -w common.txt -U admin -P hunter2"
+        success_criteria: "Results appear instead of a wall of 401 Unauthorized."
+        expected_output: |
+          /admin-panel           (Status: 200) [Size: 3021]
+        alternatives:
+          - trigger: "everything is still 401 Unauthorized"
+            cause: "Wrong credentials, or the area actually uses a login form/cookie instead of Basic Auth."
+            fix: "Confirm the auth type: visit the URL in a browser — Basic Auth shows a native browser popup, a login form does not (use -c cookie instead, previous step)."
+            check: "Verify credentials work in a browser first."
+  - flow_id: cloud_and_tftp
+    title: "Cloud buckets & TFTP (reference)"
+    goal: "Find open S3/GCS storage buckets and TFTP files by name-guessing."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, EXTRA_FILES]
+    steps:
+      - step_id: gc1
+        title: "Guess S3 bucket names"
+        slot_target: null
+        glossary_refs: [bucket]
+        explanation:
+          what: "`s3 -w <list>` tries each wordlist entry as an AWS S3 bucket NAME (not a URL) and reports which ones exist and whether they're publicly readable."
+          why: "Misconfigured buckets are a common real-world leak — company names, product names, and common suffixes (-backup, -dev, -assets) are worth trying."
+          where: "s3 is the mode; there's no target/-u flag at all — the wordlist IS the input."
+        find_it: "Build a small wordlist of likely names: the company/product name plus common suffixes (-backup, -dev, -prod, -assets, -logs). One name per line in a text file."
+        command_anatomy:
+          - {token: "gobuster", does: "the program"}
+          - {token: "s3", does: "mode: AWS S3 bucket enumeration"}
+          - {token: "-w names.txt", does: "the list of bucket names to try — this IS the target, there's no URL"}
+        try_this: "gobuster s3 -w names.txt"
+        success_criteria: "Buckets that exist are reported, with a note on whether they're publicly listable."
+        expected_output: |
+          Bucket: my-company-backup [Status: 200, Listable: true]
+          Bucket: my-company-assets [Status: 403, Listable: false]
+        alternatives:
+          - trigger: "everything shows as not found"
+            cause: "Bucket names are globally unique across all of AWS — your guesses just don't happen to exist."
+            fix: "Try more realistic names based on real research (company name variations, known product names)."
+            check: "This is normal — most guesses won't hit; it only takes one real find."
+          - trigger: "you typed a URL and it didn't work"
+            cause: "s3 mode has no target/-u flag — only -w matters."
+            fix: "Put bucket name guesses in the wordlist file itself, not in the Target field."
+            check: "Re-run with just -w."
+      - step_id: gc2
+        title: "Same idea for Google Cloud Storage"
+        slot_target: null
+        explanation:
+          what: "`gcs -w <list>` is the same idea as s3 mode, but for Google Cloud Storage buckets."
+          why: "Companies using GCP make the same bucket-naming mistakes as AWS users."
+          where: "gcs is the mode; no target flag, same as s3."
+        find_it: "Same wordlist approach as S3 — company/product name plus common suffixes."
+        command_anatomy:
+          - {token: "gobuster gcs -w names.txt", does: "try each name as a GCS bucket"}
+        try_this: "gobuster gcs -w names.txt"
+        success_criteria: "Existing buckets are reported."
+        expected_output: |
+          Bucket: my-company-data [Status: 200, Listable: true]
+        alternatives:
+          - trigger: "nothing found"
+            cause: "Normal — same as S3, most guesses won't hit."
+            fix: "Broaden the wordlist with realistic company/product name variations."
+            check: "Not a failure."
+      - step_id: gc3
+        title: "Enumerate files on a TFTP server"
+        slot_target: TARGET_PIVOT
+        glossary_refs: [tftp]
+        explanation:
+          what: "`tftp -s <server> -w <list>` guesses FILENAMES that exist on a TFTP server (an old, simple, unauthenticated file-transfer protocol still found on network gear like routers/switches/VoIP phones)."
+          why: "TFTP servers often hold device configs (sometimes with passwords) and firmware — worth checking if you find one open (UDP port 69) during a network scan."
+          where: "tftp is the mode; -s (not -u) sets the server, since TFTP isn't HTTP-based."
+        find_it: "Find a TFTP server first with an nmap UDP scan (`sudo nmap -sU -p 69 <target>`). Use a small filename-guessing list (config, startup-config, boot.img)."
+        command_anatomy:
+          - {token: "gobuster", does: "the program"}
+          - {token: "tftp", does: "mode: TFTP file enumeration"}
+          - {token: "-s 192.168.1.1", does: "the TFTP server address"}
+          - {token: "-w filenames.txt", does: "filenames to try"}
+        try_this: "gobuster tftp -s 192.168.1.1 -w filenames.txt"
+        success_criteria: "Existing filenames are reported."
+        expected_output: |
+          Found: startup-config
+        alternatives:
+          - trigger: "connection refused / timeout"
+            cause: "No TFTP service on that host, or it's UDP-filtered."
+            fix: "Confirm with `sudo nmap -sU -p 69 <target>` first — UDP scans are slow, be patient."
+            check: "Confirm port 69/udp is open before troubleshooting further."
   - flow_id: dns_mode
     title: "DNS mode — subdomains (reference)"
     goal: "Enumerate subdomains of a domain."
@@ -407,12 +503,12 @@ quick_build:
       type: choice
       required: true
       default: dir
-      choices: [dir, dns, vhost, fuzz]
+      choices: [dir, dns, vhost, fuzz, tftp, s3, gcs]
+      help: "dir=web paths, dns=subdomains, vhost=virtual hosts, fuzz=custom FUZZ keyword, tftp=TFTP server files, s3/gcs=cloud storage buckets (bucket names come from the wordlist alone, no target needed)."
     - field_id: target
-      label: "Target (URL or domain)"
+      label: "Target (URL, domain, or TFTP server)"
       type: string
-      required: true
-      placeholder: "http://host  or  example.com"
+      placeholder: "http://host  or  example.com  (not used for s3/gcs)"
     - field_id: wordlist
       label: "Wordlist"
       type: path
@@ -425,3 +521,66 @@ quick_build:
       label: "Threads"
       type: int
       placeholder: "40"
+    - field_id: skip_tls
+      label: "Skip TLS certificate check (-k)"
+      type: bool
+      help: "For self-signed HTTPS."
+    - field_id: quiet
+      label: "Quiet — no banner/noise (-q)"
+      type: bool
+    - field_id: status_whitelist
+      label: "Show ONLY these status codes (-s)"
+      type: string
+      placeholder: "200,301,302  (don't combine with blacklist below)"
+    - field_id: status_blacklist
+      label: "Hide these status codes (-b)"
+      type: string
+      placeholder: "404,403"
+    - field_id: exclude_length
+      label: "Hide responses of this size (--exclude-length)"
+      type: string
+      placeholder: "1234  (for filtering soft-404 pages)"
+    - field_id: follow_redirects
+      label: "Follow redirects (-r)"
+      type: bool
+      help: "dir/vhost/fuzz only — in dns mode -r is a different flag (resolver), handled separately below."
+    - field_id: append_domain
+      label: "Append base domain to each word (--append-domain)"
+      type: bool
+      help: "vhost mode only — required on modern gobuster or the wordlist must already contain full hostnames."
+    - field_id: cookie
+      label: "Cookie (-c)"
+      type: string
+      placeholder: "PHPSESSID=abc123  (optional, for authenticated scans)"
+    - field_id: header
+      label: "Custom header (-H)"
+      type: string
+      placeholder: "Authorization: Bearer xyz  (optional)"
+    - field_id: user_agent
+      label: "User-Agent (-a)"
+      type: string
+      placeholder: "Mozilla/5.0 ...  (optional, if the server blocks the default)"
+    - field_id: username
+      label: "Basic Auth username (-U)"
+      type: string
+      placeholder: "optional — dir/vhost/fuzz modes only"
+    - field_id: password
+      label: "Basic Auth password (-P)"
+      type: string
+      placeholder: "optional — dir/vhost/fuzz modes only"
+    - field_id: show_ips
+      label: "Show resolved IPs (-i)"
+      type: bool
+      help: "dns mode only."
+    - field_id: resolver
+      label: "Custom DNS resolver (-r)"
+      type: string
+      placeholder: "1.1.1.1  (dns mode only, optional)"
+    - field_id: output
+      label: "Save results to file (-o)"
+      type: path
+      placeholder: "~/scans/gobuster.txt  (optional)"
+    - field_id: proxy
+      label: "Proxy (--proxy)"
+      type: string
+      placeholder: "http://127.0.0.1:8080  (optional, e.g. to route through Burp)"

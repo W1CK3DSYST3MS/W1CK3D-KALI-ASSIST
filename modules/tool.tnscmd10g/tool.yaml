@@ -122,3 +122,8 @@ quick_build:
       label: "Port (-p)"
       type: int
       placeholder: "1521  (optional)"
+    - field_id: rawcmd
+      label: "Raw TNS command (--rawcmd, advanced — overrides Command above)"
+      type: string
+      placeholder: "(CONNECT_DATA=(COMMAND=ping))  (optional)"
+      help: "Hand-built CONNECT_DATA string for probes the version/status/ping presets don't cover. When set, this replaces the Command dropdown entirely."

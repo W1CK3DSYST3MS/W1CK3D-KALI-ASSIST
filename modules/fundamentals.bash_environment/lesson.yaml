@@ -112,6 +112,10 @@ steps:
         cause: "Shell/env vars are session-only by design."
         fix: "To persist it, add the export line to ~/.zshrc (step be6)."
         check: "It's present in a new terminal after the rc edit."
+      - trigger: "you exported EDITOR=nano but some program still opens a different editor (or vi)"
+        cause: "This is PARTIAL success: the variable IS set correctly (printenv proves it) — but not every program checks $EDITOR. Some hard-code their own default or use a different variable (e.g. VISUAL)."
+        fix: "Confirm the variable itself is right first (`printenv EDITOR`), then check that specific program's own docs/config for how it picks an editor — the env var being correct doesn't guarantee every tool respects it."
+        check: "printenv EDITOR showing 'nano' means YOUR half of the job is done; the rest depends on the other program's support."
   - step_id: be5
     title: "Aliases — shortcuts for commands"
     slot_target: null

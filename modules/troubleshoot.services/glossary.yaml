@@ -17,3 +17,5 @@ terms:
     definition: "A group of units representing a system state (like a runlevel)."
   - term: daemon_reload
     definition: "systemctl daemon-reload — re-reads unit files after you edit them."
+  - term: bind_address
+    definition: "The IP address a service listens on. 127.0.0.1 (localhost) only accepts connections from the same machine; 0.0.0.0 accepts connections on every network interface, including from other machines."

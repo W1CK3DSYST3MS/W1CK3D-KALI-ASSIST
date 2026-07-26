@@ -138,6 +138,117 @@ flows:
             cause: "Wrong extensions for the stack."
             fix: "Match extensions to the app (.asp, .aspx, .jsp...)."
             check: "Relevant files appear."
+  - flow_id: proxy_auth_throttle
+    title: "Proxy routing, HTTP auth & throttling (reference)"
+    goal: "Scan behind a login, through Burp/ZAP, or slowly enough not to flood/trip a WAF."
+    command_builder_id: dirb
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: pa1
+        title: "Route the scan through a proxy (e.g. Burp Suite)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [proxy]
+        explanation:
+          what: "`-p <proxy[:port]>` sends every dirb request through an HTTP proxy instead of straight to the target. If you omit the port, dirb defaults to 1080."
+          why: "Routing through Burp Suite or OWASP ZAP lets you watch, replay, or modify every request dirb makes — turning a blind brute-force into something you can inspect and steer."
+          where: "ACTION_OPTIONS."
+        find_it: "Start Burp/ZAP, note its proxy listener address (Burp's default is 127.0.0.1:8080). Make sure the proxy's 'Intercept' is off first or every single request will pause waiting for you."
+        command_anatomy:
+          - {token: "dirb http://TARGET/", does: "the target as usual"}
+          - {token: "-p 127.0.0.1:8080", does: "send every request through the proxy listening here"}
+        try_this: "dirb http://TARGET/ -p 127.0.0.1:8080"
+        success_criteria: "Requests appear in Burp's HTTP history / ZAP's site map while dirb runs."
+        expected_output: |
+          -----------------
+          DIRB v2.22
+          URL_BASE: http://TARGET/
+          PROXY: 127.0.0.1:8080
+          -----------------
+          + http://TARGET/admin/ (CODE:301|SIZE:0)
+        alternatives:
+          - trigger: "'Can't connect to proxy' or the scan hangs immediately"
+            cause: "The proxy tool isn't running, or is listening on a different address/port than you gave dirb."
+            fix: "Confirm Burp/ZAP is running and check its exact listener address in its Proxy settings tab."
+            check: "curl -x 127.0.0.1:8080 http://TARGET/ succeeds from the same terminal."
+          - trigger: "scan runs but nothing shows up in Burp's history"
+            cause: "Burp's proxy listener is bound to a different interface, or 'Intercept' is silently dropping requests."
+            fix: "Turn Intercept off (Proxy tab), and confirm the listener is bound to 127.0.0.1 in Proxy > Options."
+            check: "A manual `curl -x 127.0.0.1:8080 http://TARGET/` shows up in Burp's HTTP history."
+      - step_id: pa2
+        title: "Authenticate to the proxy itself (if it requires a login)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [proxy]
+        explanation:
+          what: "`-P <proxy_username:proxy_password>` logs in to the PROXY server, not the target website. Only relevant for corporate/gateway proxies that require their own credentials to pass traffic through."
+          why: "Some networks force all outbound HTTP through an authenticated proxy — without this, every request gets rejected by the proxy before it even reaches the target."
+          where: "ACTION_OPTIONS; always paired with -p."
+        find_it: "Ask whoever manages the network proxy for its login, or check your browser's saved proxy credentials. Most home setups (Burp/ZAP) don't need this at all."
+        command_anatomy:
+          - {token: "dirb http://TARGET/ -p proxy.corp.local:3128", does: "route through the corporate proxy"}
+          - {token: "-P proxyuser:proxypass", does: "the LOGIN FOR THE PROXY (not the target site)"}
+        try_this: "dirb http://TARGET/ -p proxy.corp.local:3128 -P proxyuser:proxypass"
+        success_criteria: "The scan proceeds normally instead of every request failing with a proxy-auth error."
+        expected_output: |
+          -----------------
+          PROXY: proxy.corp.local:3128
+          -----------------
+          + http://TARGET/index.html (CODE:200|SIZE:4521)
+        alternatives:
+          - trigger: "'407 Proxy Authentication Required' still appears"
+            cause: "Wrong proxy credentials, or the proxy needs NTLM auth which dirb's -P (Basic) doesn't support."
+            fix: "Double-check the proxy username/password; if it's NTLM, dirb can't authenticate to it directly — you'd need an NTLM-aware local relay proxy in front."
+            check: "curl -x proxy.corp.local:3128 -U proxyuser:proxypass http://TARGET/ works from the terminal."
+      - step_id: pa3
+        title: "Log in with HTTP Basic Auth"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [basic_auth]
+        explanation:
+          what: "`-u <username:password>` supplies credentials for HTTP Basic Authentication — the plain browser login POPUP some sites/directories use (not a web page login form)."
+          why: "Without this, every request to a Basic-Auth-protected area returns 401 Unauthorized and dirb can't tell real content from the login wall."
+          where: "ACTION_OPTIONS."
+        find_it: "If a browser visit to the URL shows a native username/password popup (not a styled login page), it's Basic Auth. Use credentials you were given for the authorized test."
+        command_anatomy:
+          - {token: "dirb http://TARGET/admin/", does: "a Basic-Auth-protected area"}
+          - {token: "-u admin:password123", does: "the username:password to send with every request"}
+        try_this: "dirb http://TARGET/admin/ -u admin:password123"
+        success_criteria: "Responses stop being uniform 401s — you see real 200/301/403 codes for different paths."
+        expected_output: |
+          + http://TARGET/admin/dashboard.php (CODE:200|SIZE:8841)
+          + http://TARGET/admin/logout.php (CODE:302|SIZE:0)
+        alternatives:
+          - trigger: "every result is still CODE:401"
+            cause: "Wrong username/password, or the area actually uses a login FORM (session cookie) rather than Basic Auth."
+            fix: "Confirm it's really Basic Auth by checking for the browser popup; if it's a form login instead, log in via the browser/Burp and use the Cookie field instead of -u."
+            check: "curl -u admin:password123 http://TARGET/admin/ returns something other than 401."
+      - step_id: pa4
+        title: "Throttle requests so you don't flood the server"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [throttle]
+        explanation:
+          what: "`-z <millisecs>` adds a delay (in milliseconds) between each request dirb sends."
+          why: "dirb fires requests as fast as it can by default, which can overload a fragile server, trip a WAF's rate-limiting, or get your IP auto-blocked. A small delay trades speed for reliability and stealth."
+          where: "ACTION_OPTIONS."
+        find_it: "Start with something modest like 200ms; raise it if you see errors or blocks, lower it if the target clearly tolerates fast scans."
+        command_anatomy:
+          - {token: "dirb http://TARGET/", does: "the target as usual"}
+          - {token: "-z 200", does: "wait 200 milliseconds between each request"}
+        try_this: "dirb http://TARGET/ -z 200"
+        success_criteria: "The scan visibly takes longer per word but completes without connection errors or a sudden wall of 403s."
+        expected_output: |
+          -----------------
+          DIRB v2.22
+          URL_BASE: http://TARGET/
+          -----------------
+          + http://TARGET/robots.txt (CODE:200|SIZE:122)
+        alternatives:
+          - trigger: "you start seeing 403s or connection resets partway through, even WITH -z set"
+            cause: "The delay is still too aggressive for this server's rate-limit/WAF threshold."
+            fix: "Raise -z further (e.g. 500 or 1000ms) and consider adding Silent mode (-S) to keep output readable at a slower pace."
+            check: "The 403s/resets stop appearing at the higher delay."
+          - trigger: "scan is now far too slow for a large wordlist"
+            cause: "-z applies per-request, and dirb is single-threaded, so throttling directly multiplies total scan time."
+            fix: "Trade off: use a smaller, targeted wordlist instead of throttling a huge one, or accept the longer runtime on an authorized, low-risk target."
+            check: "Estimate: wordlist size x delay = rough minimum scan time."
 
 quick_build:
   builder: dirb
@@ -156,6 +267,45 @@ quick_build:
       label: "Extensions (-X)"
       type: string
       placeholder: ".php,.txt,.bak"
+    - field_id: cookie
+      label: "Cookie (-c)"
+      type: string
+      placeholder: "PHPSESSID=abc123  (optional, scan as a logged-in session)"
+      help: "Sends this Cookie header with every request — useful for scanning pages that need an existing login session."
+    - field_id: agent
+      label: "User-Agent (-a)"
+      type: string
+      placeholder: "Mozilla/5.0 ...  (optional)"
+      help: "Pretend to be a browser instead of dirb's default scanner UA. Some servers block or soft-404 requests from unknown/known-scanner user agents."
+    - field_id: http_auth
+      label: "HTTP Basic Auth (-u)"
+      type: string
+      placeholder: "username:password  (optional)"
+      help: "Logs in with HTTP Basic Authentication (the browser login popup) before scanning. Not for web login FORMS — those need a Cookie instead."
+    - field_id: header
+      label: "Custom header (-H)"
+      type: string
+      placeholder: "Authorization: Bearer TOKEN  (optional)"
+      help: "Adds one extra HTTP header to every request — e.g. an API token or a custom header your app expects."
+    - field_id: proxy
+      label: "Proxy (-p)"
+      type: string
+      placeholder: "127.0.0.1:8080  (optional, e.g. route through Burp Suite)"
+      help: "Sends every request through this proxy — lets you watch or intercept dirb's traffic in Burp/ZAP. Default proxy port is 1080 if you omit it."
+    - field_id: proxy_auth
+      label: "Proxy authentication (-P)"
+      type: string
+      placeholder: "proxyuser:proxypass  (optional)"
+      help: "Only needed if the PROXY itself requires a login — separate from the target site's own login (set Proxy above too)."
+    - field_id: delay_ms
+      label: "Delay between requests, ms (-z)"
+      type: int
+      placeholder: "200  (optional)"
+      help: "Throttles requests to avoid flooding the server or tripping rate-limits/WAFs. Higher = slower but gentler."
+    - field_id: silent
+      label: "Silent mode (-S)"
+      type: bool
+      help: "Only print found paths, not every word being tried — cleaner output on big wordlists."
     - field_id: output
       label: "Save results (-o)"
       type: path

@@ -1,0 +1,5 @@
+terms:
+  - term: api_key
+    definition: "A secret credential (API key, auth token, access key) that lets code or a script authenticate to a cloud/vendor service. Frequently leaked by being hardcoded into public client-side JavaScript — one of the most common real findings in web recon."
+  - term: subdomain_enum
+    definition: "Finding the subdomains (dev.example.com, staging.example.com, ...) that belong to a target domain — extra attack surface beyond the main site, often less hardened."

@@ -41,6 +41,10 @@ steps:
         cause: "aux lists everything."
         fix: "Pipe to grep for a name: `ps aux | grep firefox`."
         check: "grep narrows to what you care about."
+      - trigger: "the command printed a normal-looking table, but the process you were actually hunting for isn't in it"
+        cause: "`head -n 5` only shows the first 5 lines — your process may be further down the (long) list, or it genuinely isn't running."
+        fix: "Search instead of skimming: `ps aux | grep -i name`. If that also prints nothing, the process isn't running at all — that's a different problem than a display cutoff."
+        check: "`ps aux | grep -i name` returning nothing (besides the grep line itself) confirms it's really not running."
   - step_id: pr2
     title: "Live view (top)"
     slot_target: PROGRAM
@@ -88,6 +92,10 @@ steps:
         cause: "Without & it runs in the foreground and blocks your shell."
         fix: "Press Ctrl+C to stop it, then re-run with a trailing &."
         check: "& sends it to the background."
+      - trigger: "pgrep lists more than one sleep, and you're not sure which is the one you just started"
+        cause: "A sleep from an earlier attempt (this lesson, or a previous session) is still running alongside the new one."
+        fix: "`pgrep -a sleep` shows the full command line of each match; `pgrep -n sleep` picks only the newest (most recently started) match."
+        check: "The PID from `pgrep -n sleep` is the highest number in the `pgrep -a sleep` list."
   - step_id: pr4
     title: "Stop a process politely (kill)"
     slot_target: POSITIONAL_ARGS
@@ -109,6 +117,10 @@ steps:
         cause: "The process is ignoring SIGTERM or is stuck."
         fix: "Escalate to SIGKILL (next step) — a last resort."
         check: "SIGTERM is polite; SIGKILL is forced."
+      - trigger: "the command ran with no error, but pgrep still shows the process for a moment right after"
+        cause: "`kill` only SENDS the request — it returns instantly, before the process has finished cleaning up and exiting. This is a timing gap, not a failure."
+        fix: "Wait a second and re-check: `sleep 1; pgrep -a sleep`. If it's still there after a couple of seconds, then it's genuinely ignoring the signal."
+        check: "A brief overlap is normal; a process still listed several seconds later is not."
   - step_id: pr5
     title: "Force-stop (kill -9) — last resort"
     slot_target: ACTION_OPTIONS
@@ -139,6 +151,7 @@ steps:
     slot_target: POSITIONAL_ARGS
     destructive: true
     recovery: "pkill/killall match by NAME and can hit more processes than you intend. Check first with pgrep -a <name> before signalling."
+    glossary_refs: [signal]
     explanation:
       what: "`pkill name` / `killall name` signal every process matching a name."
       why: "Faster than looking up PIDs, but riskier — it can match more than you meant."
@@ -180,6 +193,10 @@ steps:
         cause: "Jobs belong to the shell that started them."
         fix: "Run the sleeps in the SAME terminal, then `jobs`."
         check: "Job control is per-shell."
+      - trigger: "jobs only shows one entry, not two"
+        cause: "The other sleep already finished (its timer ran out) before you checked — the shell may have printed a 'Done' line for it and dropped it from the list."
+        fix: "That's not an error — a job disappears from `jobs` once it completes. Use longer sleep times (e.g. `sleep 2000 &`) if you want to inspect both while they're still running."
+        check: "A job still counts as running if `jobs` lists it as 'Running'; 'Done' means it already finished."
   - step_id: pr8
     title: "Keep running after logout (nohup)"
     slot_target: PROGRAM
@@ -226,6 +243,10 @@ steps:
         cause: "Changing service state needs root."
         fix: "Prefix with sudo: `sudo systemctl start ssh`."
         check: "status is readable; start/stop need sudo."
+      - trigger: "Active: failed (Result: exit-code) instead of active or inactive"
+        cause: "The service isn't just 'off' — it tried to start and crashed. That's a different, more specific problem than never having been started."
+        fix: "A failed state always has a reason in its logs. Move to the next step (journalctl) to read the actual error instead of guessing."
+        check: "`journalctl -u ssh -e` shows the specific line that explains why it failed."
   - step_id: pr10
     title: "Read a service's logs (journalctl)"
     slot_target: ACTION_OPTIONS

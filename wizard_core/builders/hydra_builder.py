@@ -3,7 +3,15 @@
 Shape: hydra [options] -L users -P passwords <target> <service> [formstring].
 target + service are POSITIONAL and go LAST, so credential flags live in
 ACTION_OPTIONS (slot 4, before POSITIONAL slot 6) — never in EXTRA_FILES, which
-would place them after the target. Generate-only; online brute force is noisy.
+would place them after the target. Also covers -x (password bruteforce
+GENERATION — candidates built from a MIN:MAX:CHARSET spec instead of a
+wordlist), -S (explicit SSL/TLS), and -m (module-specific option string).
+Generate-only; online brute force is noisy.
+
+Recognised keys (all optional except target+service): profile, resume, tasks,
+port, ssl, verbose, stop_on_success, stop_global, wait, extra_tries, login,
+login_list, combo, bruteforce, password, password_list, module_opts,
+targets_file, output, output_format, target, service, http_form.
 """
 
 from __future__ import annotations
@@ -54,6 +62,10 @@ def build_hydra(inputs: Mapping[str, object]) -> CommandPlan:
         g.extend(["-t", str(int(inputs["tasks"]))])
     if inputs.get("port"):
         g.extend(["-s", str(inputs["port"])])
+    if _truthy(inputs.get("ssl")):
+        g.append("-S")
+        notes.append("-S forces an explicit SSL/TLS connect — use it when a plain service name "
+                     "(e.g. telnet, ftp) is actually running over TLS on that port.")
     if _truthy(inputs.get("verbose")) and "-V" not in g:
         g.append("-V")
     if _truthy(inputs.get("stop_on_success")) and "-f" not in g:
@@ -70,12 +82,28 @@ def build_hydra(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-l", str(inputs["login"])])
     elif inputs.get("login_list"):
         a.extend(["-L", str(inputs["login_list"])])
-    if inputs.get("combo"):
+
+    # Passwords: -x (GENERATE candidates from a charset/length range) is a
+    # different technique from -p/-P/-C (try candidates FROM a list/file) —
+    # it wins if set, since hydra doesn't combine password sources.
+    bruteforce = inputs.get("bruteforce")
+    if bruteforce:
+        a.extend(["-x", str(bruteforce)])
+        if inputs.get("combo") or inputs.get("password") or inputs.get("password_list"):
+            notes.append(
+                "-x (bruteforce generation) replaces -p/-P/-C — those password inputs are "
+                "ignored while a bruteforce spec is set."
+            )
+        notes.append("-x implies -u (loop usernames on the outside) automatically.")
+    elif inputs.get("combo"):
         a.extend(["-C", str(inputs["combo"])])
     elif inputs.get("password"):
         a.extend(["-p", str(inputs["password"])])
     elif inputs.get("password_list"):
         a.extend(["-P", str(inputs["password_list"])])
+
+    if inputs.get("module_opts"):
+        a.extend(["-m", str(inputs["module_opts"])])
 
     targets_file = inputs.get("targets_file")
     if targets_file:

@@ -19,6 +19,7 @@ steps:
   - step_id: v1
     title: "Make a sample file"
     slot_target: OUTPUT_OPTIONS
+    glossary_refs: [redirection]
     explanation:
       what: "Create a small multi-line file to practise on using redirection."
       why: "We need real content to view/search/edit."
@@ -280,3 +281,7 @@ steps:
         cause: "rm without -r."
         fix: "Use `rm -r ~/ka-text`."
         check: "Recursive for non-empty dirs."
+      - trigger: "rm reports 'Permission denied' for one file but removes everything else, leaving the folder behind"
+        cause: "Partial success: rm -r deletes what it can and just skips a file it doesn't own or can't write to (e.g. one created by another process as root while you were testing)."
+        fix: "Check ownership of what's left: `ls -la ~/ka-text`. If a stray file needs root to remove, `sudo rm -r ~/ka-text`; otherwise remove it manually once you know why it's protected."
+        check: "`ls -d ~/ka-text` reporting 'No such file or directory' confirms it's fully gone, not just mostly gone."

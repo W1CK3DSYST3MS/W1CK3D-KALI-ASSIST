@@ -118,6 +118,11 @@ quick_build:
       label: "Report file (-r)"
       type: path
       default: "oscanner-report.txt"
+    - field_id: host_file
+      label: "Host list file (-f, instead of a single target)"
+      type: path
+      placeholder: "oracle_hosts.txt  (optional — one host per line)"
+      help: "Scan every host listed in this file instead of a single target. Use one or the other, not both."
     - field_id: port
       label: "Port (-P)"
       type: int

@@ -141,6 +141,54 @@ flows:
             fix: "See the guided flow's device steps."
             check: "d.ping() works."
 
+  - flow_id: spectrum_analyzer
+    title: "Spectrum analyzer mode (reference)"
+    goal: "Sweep a frequency range from a single command — no Python shell needed."
+    command_builder_id: rfcat
+    slots: [PROGRAM, ACTION_OPTIONS]
+    steps:
+      - step_id: sa1
+        title: "Launch the spectrum analyzer"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: []
+        explanation:
+          what: >
+            Unlike -r, -s/--specan is a genuinely standalone CLI mode: it never drops you
+            into a Python shell. It puts the dongle into a sweep mode and opens a graphical
+            window plotting signal strength across a frequency range — a real-time visual
+            'is anything transmitting here?' view, no scripting required. -f sets the CENTER
+            frequency in Hz (default 902000000 = 902 MHz), -c sets the spacing in Hz between
+            each sampled channel (default 250000 = 250 kHz), and -n sets how many channels to
+            sweep either side of that center (default 104). The swept range is roughly
+            centfreq +/- (spacing * channels / 2).
+          why: "This is the fastest way to answer 'is anything on this band right now?' without writing any rflib code — most people's actual first step before tuning to a specific signal with -r."
+          where: "ACTION_OPTIONS: -s plus -f/-c/-n. rfcat checks -s before -r, so combining them just runs the analyzer."
+        find_it: "Same dongle as the guided flow (lsusb confirms it). Needs a graphical session — this opens a window, it won't work over a plain SSH terminal without X forwarding."
+        command_anatomy:
+          - {token: "rfcat", does: "the tool"}
+          - {token: "-s", does: "start spectrum analyzer mode (standalone, not the -r shell)"}
+          - {token: "-f 433920000", does: "center frequency in Hz — here, 433.92 MHz"}
+          - {token: "-c 250000", does: "spacing in Hz between sampled channels"}
+          - {token: "-n 104", does: "number of channels to sweep either side of the center"}
+        try_this: "rfcat -s -f 433920000 -c 250000 -n 104"
+        success_criteria: "A graphical window opens plotting signal strength (dBm) against frequency, updating live."
+        expected_output: |
+          RfCat Spectrum Analyzer (thanks Ubertooth!)
+          (a live-updating plot window appears; no meaningful terminal output)
+        alternatives:
+          - trigger: "no window appears / Qt or display errors"
+            cause: "No graphical session available (e.g. a headless/SSH-only terminal)."
+            fix: "Run it from the physical desktop session, or set up X forwarding (`ssh -X`) if remote."
+            check: "The plot window appears."
+          - trigger: "'sorry, only 255 samples per pass'"
+            cause: "-n (spec_channels) was set above 255 — the dongle's hardware limit per sweep."
+            fix: "Lower -n to 255 or below."
+            check: "The command runs without that error."
+          - trigger: "the swept range goes above ~936 MHz and errors"
+            cause: "The CC1111 hardware caps out (MAX_FREQ ~936 MHz); a high -f with wide -c/-n pushes past it."
+            fix: "Lower -f, or reduce -c/-n so centfreq + (spacing * channels) stays under the cap."
+            check: "The analyzer launches without an exception."
+
 quick_build:
   builder: rfcat
   title: "Launch"
@@ -153,3 +201,19 @@ quick_build:
       label: "Dongle index (-i)"
       type: int
       placeholder: "0  (if multiple dongles)"
+    - field_id: specan
+      label: "Spectrum analyzer mode (-s, instead of the shell)"
+      type: bool
+      help: "Opens a graphical live signal-strength plot instead of the interactive shell. Needs a display/X session."
+    - field_id: centfreq
+      label: "Center frequency in Hz (-f, specan only)"
+      type: string
+      placeholder: "433920000  (default 902000000)"
+    - field_id: chan_spacing
+      label: "Channel spacing in Hz (-c, specan only)"
+      type: string
+      placeholder: "250000  (default)"
+    - field_id: spec_channels
+      label: "Channels to sweep (-n, specan only, max 255)"
+      type: int
+      placeholder: "104  (default)"

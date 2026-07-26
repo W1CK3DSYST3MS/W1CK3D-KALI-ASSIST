@@ -13,7 +13,11 @@ from ..models import CommandPlan
 from ..slots import Slot
 from .common import assemble, register_builder
 
-_MODES = {"dir", "dns", "vhost", "fuzz"}
+_MODES = {"dir", "dns", "vhost", "fuzz", "tftp", "s3", "gcs"}
+# Modes that support HTTP Basic Auth (-U/-P) — bucket/tftp modes don't speak HTTP auth.
+_BASIC_AUTH_MODES = {"dir", "vhost", "fuzz"}
+# Modes with no target flag at all — bucket names come purely from the wordlist.
+_NO_TARGET_MODES = {"s3", "gcs"}
 # Profiles map to (mode, global tokens, action tokens).
 _PROFILES: dict[str, dict[str, object]] = {
     "quick_dir": {"mode": "dir", "global": ["-t", "40"], "action": []},
@@ -58,14 +62,20 @@ def build_gobuster(inputs: Mapping[str, object]) -> CommandPlan:
     if _truthy(inputs.get("quiet")):
         g.append("-q")
 
-    # TARGET — correct flag per mode.
+    # TARGET — correct flag per mode. s3/gcs have none at all (bucket names come
+    # purely from the wordlist); tftp uses -s (server), dns uses -d, everything
+    # else (dir/vhost/fuzz) uses -u.
     target: list[str] = []
     tgt = inputs.get("target")
-    if tgt:
-        flag = "-d" if mode == "dns" else "-u"
+    if mode in _NO_TARGET_MODES:
+        if tgt:
+            notes.append(f"'{mode}' mode has no target flag — bucket names come from the "
+                         "wordlist alone. The Target field is ignored for this mode.")
+    elif tgt:
+        flag = {"dns": "-d", "tftp": "-s"}.get(mode, "-u")
         target = [flag, str(tgt)]
     else:
-        notes.append("No target — supply a URL (dir/vhost) or domain (dns).")
+        notes.append("No target — supply a URL (dir/vhost/fuzz), domain (dns), or TFTP server (tftp).")
 
     # ACTION
     if inputs.get("wordlist"):
@@ -97,6 +107,12 @@ def build_gobuster(inputs: Mapping[str, object]) -> CommandPlan:
         a.append("-i")
     if mode == "dns" and inputs.get("resolver"):
         a.extend(["-r", str(inputs["resolver"])])
+    if mode in _BASIC_AUTH_MODES and inputs.get("username"):
+        a.extend(["-U", str(inputs["username"])])
+    if mode in _BASIC_AUTH_MODES and inputs.get("password"):
+        a.extend(["-P", str(inputs["password"])])
+    if mode not in _BASIC_AUTH_MODES and (inputs.get("username") or inputs.get("password")):
+        notes.append(f"Basic Auth (-U/-P) isn't available in '{mode}' mode — only dir/vhost/fuzz support it.")
 
     # OUTPUT
     if inputs.get("output"):

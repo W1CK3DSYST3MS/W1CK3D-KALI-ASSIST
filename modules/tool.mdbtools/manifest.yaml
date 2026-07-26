@@ -9,8 +9,10 @@ requires:
 provides:
   tool: mdbtools
   flows: [guided]
+  glossary_terms: [sql_query]
 content:
   tool: tool.yaml
+  glossary: glossary.yaml
 source: "authored; verified against installed mdb-tables/mdb-export/mdb-schema/mdb-sql/mdb-ver --help (Kali 2026.3, mdbtools 1.0.1)"
 license: "MIT (this repo); mdbtools is LGPL/GPL (referenced, not bundled)"
 checksum: ""

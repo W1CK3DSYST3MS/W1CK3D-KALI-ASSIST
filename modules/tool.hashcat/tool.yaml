@@ -373,11 +373,68 @@ flows:
             cause: "Capture lacks a valid handshake/PMKID."
             fix: "Capture a valid handshake first (aircrack-ng, authorized networks only)."
             check: "Validate the capture before cracking."
+  - flow_id: combinator
+    title: "Combinator attack — -a 1 (reference)"
+    goal: "Pair every word from one wordlist with every word from a second wordlist."
+    command_builder_id: hashcat
+    slots: [PROGRAM, ACTION_OPTIONS, POSITIONAL_ARGS]
+    steps:
+      - step_id: hc9
+        title: "Understand combinator: two wordlists glued together"
+        slot_target: POSITIONAL_ARGS
+        glossary_refs: [combinator_attack, second_wordlist]
+        explanation:
+          what: "`-a 1` takes TWO wordlists instead of one. hashcat takes every word from dictionary1 and glues it to every word from dictionary2, in order: word1word2. With 100 first names and 100 last names, that's 10,000 candidates like 'johnsmith', 'johndoe', 'janesmith'..."
+          why: "People often build passwords by concatenating two real words — a first name + last name, a word + a pet's name, two dictionary words stuck together. A single wordlist (-a 0) never generates these two-word combos; -a 1 does it systematically."
+          where: "-a 1 is an ACTION_OPTIONS flag; BOTH wordlists are POSITIONAL, hashfile first, then dictionary1, then dictionary2 — order matters."
+        find_it: >
+          Build two small, TARGETED lists rather than using rockyou twice (rockyou x rockyou is
+          206 billion combinations — far too slow). Good candidates: a firstnames.txt and
+          lastnames.txt, or a list of common words + a list of years/pet names relevant to your
+          target.
+        command_anatomy:
+          - {token: "hashcat -m 0 -a 1", does: "MD5 hashes, combinator attack"}
+          - {token: "hashes.txt", does: "the hashes to crack (positional #1)"}
+          - {token: "firstnames.txt", does: "dictionary1 — becomes the FRONT half of each candidate (positional #2)"}
+          - {token: "lastnames.txt", does: "dictionary2 — becomes the BACK half of each candidate (positional #3)"}
+        try_this: "hashcat -m 0 -a 1 hashes.txt firstnames.txt lastnames.txt"
+        success_criteria: "hashcat reports a keyspace of (words in list1) x (words in list2), then cracks any hash matching a firstname+lastname combo."
+        expected_output: |
+          Guess.Base.......: File (firstnames.txt), Left Side
+          Guess.Mod........: File (lastnames.txt), Right Side
+          5f4dcc3b5aa765d61d8327deb882cf99:johnsmith
+          Status...........: Cracked
+        alternatives:
+          - trigger: "keyspace is enormous / it will take forever"
+            cause: "Both wordlists are large — combinator multiplies their sizes, so two 10,000-word lists is already 100 million candidates."
+            fix: "Use smaller, more targeted lists (a few hundred relevant names/words each) rather than general-purpose big wordlists on both sides."
+            check: "Check the reported keyspace before letting a long run continue."
+          - trigger: "nothing cracks even though you're fairly sure it's two words stuck together"
+            cause: "Wrong order (word2word1 instead of word1word2), or a separator/number in between (e.g. john.smith or johnsmith99) that plain combinator doesn't add."
+            fix: "Swap dictionary1/dictionary2 order and re-run; or add -j/-k to append a rule (e.g. -k '$9$9' appends '99' to every right-side word)."
+            check: "Try both orders; consider -j (left) / -k (right) to add a small mangling rule during the combinator run."
 
 quick_build:
   builder: hashcat
   title: "Quick crack"
   fields:
+    - field_id: profile
+      label: "Profile"
+      type: choice
+      choices: [wordlist, wordlist_rules, mask, combinator, benchmark]
+      help: "Preset attack setup. Leave blank to choose hash mode/attack mode/wordlist yourself below."
+    - field_id: benchmark
+      label: "Just benchmark my hardware (-b)"
+      type: bool
+      help: "Ignores everything else and reports how fast your GPU/CPU cracks each hash type."
+    - field_id: identify
+      label: "Just identify the hash type (--identify)"
+      type: bool
+      help: "Ignores attack settings and suggests the -m number for the hashes in Hash file."
+    - field_id: list_devices
+      label: "Just list devices (-I)"
+      type: bool
+      help: "Ignores everything else and lists available GPU/CPU compute devices."
     - field_id: hashfile
       label: "Hash file"
       type: path
@@ -393,13 +450,78 @@ quick_build:
       type: choice
       required: true
       default: "0"
-      choices: ["0", "3"]
-      help: "0 = wordlist, 3 = mask/brute-force."
+      choices: ["0", "1", "3", "6", "7"]
+      help: "0 = wordlist, 1 = combinator (two wordlists), 3 = mask/brute-force, 6 = word+mask, 7 = mask+word."
     - field_id: wordlist
-      label: "Wordlist (attack 0)"
+      label: "Wordlist (attack 0, 1, 6, 7)"
       type: path
       placeholder: "/usr/share/wordlists/rockyou.txt"
+      help: "For attack 1 (combinator) this is the FIRST wordlist (dictionary1)."
+    - field_id: wordlist2
+      label: "Second wordlist (attack 1 only)"
+      type: path
+      placeholder: "lastnames.txt  (combinator dictionary2)"
+      help: "Combinator mode pairs every word from Wordlist above with every word from this second list."
     - field_id: mask
-      label: "Mask (attack 3)"
+      label: "Mask (attack 3, 6, 7)"
       type: string
       placeholder: "?a?a?a?a?a?a"
+    - field_id: rules
+      label: "Rules file (-r)"
+      type: path
+      placeholder: "/usr/share/hashcat/rules/best64.rule  (optional)"
+      help: "Mangles each wordlist word (case, digits, leet-speak) to generate more candidates from one wordlist."
+    - field_id: rule_left
+      label: "Single rule on left wordlist (-j)"
+      type: string
+      placeholder: "c  (optional, combinator/hybrid only)"
+    - field_id: rule_right
+      label: "Single rule on right wordlist (-k)"
+      type: string
+      placeholder: "^- (optional, combinator/hybrid only)"
+    - field_id: custom_charset
+      label: "Custom charset ?1 (-1)"
+      type: string
+      placeholder: "?l?d  (optional, use ?1 in your mask to reference it)"
+      help: "Define what ?1 means in a mask — e.g. -1 ?l?d then use ?1?1?1?1 in the Mask field."
+    - field_id: increment
+      label: "Increment mask length (--increment)"
+      type: bool
+      help: "Try every length up to the mask's length, not just the exact length — e.g. also tries 1, 2, 3... characters."
+    - field_id: username
+      label: "Hash file has username: prefix (--username)"
+      type: bool
+      help: "Set this if each line is 'user:hash' instead of just the hash."
+    - field_id: show
+      label: "Show already-cracked results (--show)"
+      type: bool
+      help: "Prints cracked hash:password pairs from the potfile instead of running a new attack."
+    - field_id: potfile_disable
+      label: "Don't use the potfile (--potfile-disable)"
+      type: bool
+      help: "Forces hashcat to re-crack hashes it has already solved before, instead of skipping them."
+    - field_id: workload
+      label: "Workload profile (-w)"
+      type: choice
+      choices: ["1", "2", "3", "4"]
+      help: "1 = low (keep using your PC normally), 4 = insane (fastest, machine becomes unresponsive)."
+    - field_id: optimized
+      label: "Optimized kernels (-O)"
+      type: bool
+      help: "Faster, but caps the maximum password length it can crack. Fine for most real passwords."
+    - field_id: session
+      label: "Session name (--session)"
+      type: string
+      placeholder: "crackA  (optional, lets you --restore this run later)"
+    - field_id: force
+      label: "Force — bypass warnings (--force)"
+      type: bool
+      help: "Risky: can silently give WRONG results. Only use if you understand why a warning is firing."
+    - field_id: output
+      label: "Save cracked results to file (-o)"
+      type: path
+      placeholder: "cracked.txt  (optional)"
+    - field_id: device
+      label: "Specific device ID (-d)"
+      type: string
+      placeholder: "1  (optional — see -I / List devices for numbers)"

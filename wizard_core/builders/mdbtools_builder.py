@@ -20,6 +20,7 @@ _BINARIES = {
     "tables": "mdb-tables",
     "schema": "mdb-schema",
     "export": "mdb-export",
+    "sql": "mdb-sql",
 }
 
 
@@ -61,6 +62,20 @@ def build_mdbtools(inputs: Mapping[str, object]) -> CommandPlan:
             pos.append(str(table))
         else:
             notes.append("No table name — mdb-export needs <file> <table>.")
+    elif action == "sql":
+        if inputs.get("sql_file"):
+            a.extend(["-i", str(inputs["sql_file"])])
+        else:
+            notes.append(
+                "No SQL file (-i) — without one, mdb-sql opens an interactive prompt "
+                "(not usable from this generate-only app). Save your query to a .sql file first."
+            )
+        if inputs.get("sql_output"):
+            a.extend(["-o", str(inputs["sql_output"])])
+        if _truthy(inputs.get("no_header")):
+            a.append("-H")
+        if file_:
+            pos.append(str(file_))
     else:  # ver
         if file_:
             pos.append(str(file_))

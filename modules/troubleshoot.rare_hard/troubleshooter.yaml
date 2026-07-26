@@ -30,6 +30,30 @@ symptoms:
   - symptom_id: wont_boot
     label: "Won't boot / GRUB prompt / boot hangs"
     aliases: [wont boot, grub, boot hangs, emergency mode, unbootable, kernel panic]
+    diagnosis:
+      - step_id: rh_boot_where
+        title: "Exactly WHERE does it stop?"
+        slot_target: null
+        glossary_refs: [grub, initramfs]
+        explanation:
+          what: "Reboot and watch closely: does GRUB's menu appear at all? Does it hang before or after you pick Kali? Is there any text or prompt on screen when it stops?"
+          why: "The exact point where it stops points to a completely different fix — bootloader, GPU driver, or a filesystem/disk it can't mount."
+          where: "Diagnostic — nothing to type, this is what you observe."
+        try_this: "# Reboot and watch closely; note the exact screen/text where it stops"
+        success_criteria: "You can describe the exact point it stops and any visible text."
+        alternatives:
+          - trigger: "GRUB's menu never appears at all — straight to a blank screen or a firmware error"
+            cause: "The bootloader itself is damaged, or the wrong disk is selected in the BIOS/UEFI boot order."
+            fix: "Check the BIOS/UEFI boot order first (an easy fix); if GRUB is genuinely gone, it needs reinstalling from live media (extensive fix below)."
+            check: "GRUB's menu reappears."
+          - trigger: "GRUB menu shows, you pick Kali, then it hangs with NO further text (blank/black screen)"
+            cause: "Very often an early GPU driver problem, not a real crash or corruption."
+            fix: "Try the 'nomodeset' basic fix below before assuming anything is broken."
+            check: "It boots with nomodeset added; then fix the GPU driver properly (see the display symptom)."
+          - trigger: "it drops to a prompt like '(initramfs)' or 'Give root password for maintenance'"
+            cause: "The system can't mount its root filesystem — usually a bad fstab entry, a filesystem needing repair, or (if you set up disk encryption at install) it can't unlock that encrypted disk."
+            fix: "For a maintenance/fstab-style prompt, see 'Emergency mode' below. For an encryption unlock failure, you need the correct passphrase for that disk — there is deliberately no bypass; without it, the data is unrecoverable by design."
+            check: "It boots normally, or you've confirmed which of the two situations you're actually in."
     fixes:
       - fix_id: older_kernel
         tier: basic
@@ -85,6 +109,12 @@ symptoms:
         command: "systemctl status gdm3; sudo systemctl restart gdm3    # or lightdm; dpkg-reconfigure if needed"
         why: "The display manager starts your desktop; restarting clears a stuck state."
         verify: "The graphical login returns."
+      - fix_id: xorg_log
+        tier: extensive
+        title: "Nothing else explains it — read the X server's own log"
+        command: "cat /var/log/Xorg.0.log 2>/dev/null | grep -iE '\\(EE\\)|error'   # or ~/.local/share/xorg/Xorg.0.log"
+        why: "Xorg (the graphical display server underneath your desktop) writes its own detailed log — it almost always names the exact driver or module that failed to load."
+        verify: "You can identify the specific (EE) error line to act on."
   - symptom_id: gpu_display
     label: "Display / GPU (resolution, external monitor, NVIDIA)"
     aliases: [gpu, nvidia, resolution, external monitor, xrandr, display, nomodeset]
@@ -131,6 +161,10 @@ symptoms:
             cause: "Inodes are exhausted (many tiny files)."
             fix: "Find the directory with the most entries and clear it (safe targets only)."
             check: "df -i shows IUse% at 100%."
+          - trigger: "/ has plenty of free space, but the error is specifically about /boot"
+            cause: "/boot is often a small separate partition, and Kali's rolling release regularly installs new kernels — old ones pile up until /boot fills, even though / looks completely fine."
+            fix: "Remove old kernel packages, keeping at least the current one plus one fallback: `dpkg -l 'linux-image-*' | grep ^ii` to list them, then `sudo apt purge <old-kernel-package>`."
+            check: "df -h /boot shows freed space."
     fixes:
       - fix_id: safe_reclaim
         tier: basic
@@ -146,6 +180,14 @@ symptoms:
         verify: "You identify what to remove."
         destructive: true
         recovery: "Delete caches/logs/your-own files only. Never blindly delete from /var, /usr, /etc — removing system files can break the OS."
+      - fix_id: lvm_resize
+        tier: extensive
+        title: "Root is on LVM and has room to grow"
+        command: "sudo vgs; sudo lvextend -L +5G /dev/mapper/<vg-root>; sudo resize2fs /dev/mapper/<vg-root>"
+        why: "If Kali was installed with the default 'Guided - use entire disk' LVM option and the volume group has unused space, you can grow root without reinstalling anything."
+        verify: "df -h shows the new, larger size for /."
+        destructive: true
+        recovery: "This is safe for GROWING a filesystem (not shrinking), but back up anything critical first regardless of how safe a disk operation is supposed to be."
   - symptom_id: persistence
     label: "Live-USB persistence isn't saving my changes"
     aliases: [persistence, live usb, not saving, amnesiac, persistence.conf]

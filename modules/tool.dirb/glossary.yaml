@@ -1,0 +1,7 @@
+terms:
+  - term: proxy
+    definition: "An intermediary server that every request is routed through — e.g. Burp Suite or ZAP, so you can watch/replay/modify dirb's traffic."
+  - term: basic_auth
+    definition: "HTTP Basic Authentication — the plain browser username/password POPUP some sites use, sent with -u. Different from a web login FORM (which needs a session Cookie instead)."
+  - term: throttle
+    definition: "Slowing requests down (dirb's -z, in milliseconds) to avoid flooding a fragile server or tripping a WAF's rate-limiting."

@@ -8,8 +8,8 @@ requires:
   modules: []
 provides:
   tool: aircrack-ng
-  flows: [monitor, discover, capture, deauth, crack, pmkid, cleanup, wep_note]
-  glossary_terms: [monitor_mode, bssid, essid, channel, handshake, pmkid, deauth, injection, eapol, hc22000]
+  flows: [monitor, discover, capture, deauth, advanced_attacks, crack, pmkid, cleanup, wep_note]
+  glossary_terms: [monitor_mode, bssid, essid, channel, handshake, pmkid, deauth, injection, eapol, hc22000, fakeauth, arpreplay, iv]
 content:
   tool: tool.yaml
   glossary: glossary.yaml

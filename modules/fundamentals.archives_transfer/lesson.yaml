@@ -56,6 +56,10 @@ steps:
         cause: "gzip is fast but not the smallest."
         fix: "Use J for xz: `tar -cJf demo.tar.xz demo` (smaller, slower)."
         check: "A .tar.xz is produced."
+      - trigger: "tar prints 'file changed as we read it' but still finishes and creates the archive"
+        cause: "A PARTIAL warning, not a failure: one file was being written to (by another process) at the exact moment tar read it, so that file's copy inside the archive may be incomplete or slightly stale. The archive is still created."
+        fix: "If the file matters, make sure nothing is writing to the folder while you archive it, then re-run tar and check the warning is gone."
+        check: "No warning line on the second run means every file was captured cleanly."
   - step_id: at2
     title: "Look inside, then extract (tar -tzf / -xzf)"
     slot_target: null
@@ -81,6 +85,10 @@ steps:
         cause: "Wrong compression flag (e.g. -z on an xz file) or a corrupt/partial download."
         fix: "Let tar auto-detect: modern tar accepts `tar -xf file` without the z/J. Re-download if truncated."
         check: "Extraction succeeds."
+      - trigger: "extraction stops partway with 'Unexpected EOF in archive' — SOME files landed, others didn't"
+        cause: "The archive itself is truncated (an interrupted download or copy), so tar extracted everything up to the cut-off point and then had nowhere left to read from. This is a PARTIAL result, not a clean success or a clean failure."
+        fix: "Don't trust the partial files — delete what was extracted and re-fetch the archive whole. Check its size/checksum against the source before extracting again."
+        check: "Compare `ls -la demo.tar.gz` size to the source, or re-run `tar -tzf` — a truncated archive usually fails to even list cleanly."
   - step_id: at3
     title: "Compress single files (gzip / gunzip)"
     slot_target: null
@@ -127,10 +135,14 @@ steps:
         cause: "It was created with encryption."
         fix: "Provide the password: `unzip -P '<pw>' file.zip` (or unzip prompts). For cracking authorized test zips, that's a job for john/zip2john."
         check: "Extraction succeeds with the password."
+      - trigger: "unzip extracts most files, then reports 'bad CRC' or 'unexpected end of file' for one entry"
+        cause: "A PARTIAL extraction: the zip is corrupted or truncated, but only in ONE member's data — everything before it in the archive was fine and did extract."
+        fix: "Re-download or re-copy the zip and try again; if it keeps failing on the same file, the source archive itself is bad. `unzip -t file.zip` tests all entries without extracting, so you can spot this before relying on the output."
+        check: "unzip prints a summary at the end listing which files, if any, could not be extracted."
   - step_id: at5
     title: "Download a file (wget / curl)"
     slot_target: null
-    glossary_refs: [download_tool]
+    glossary_refs: [download_tool, http_https, url]
     explanation:
       what: "`wget URL` saves a file using its remote name; `curl -O URL` does the same, while `curl -L URL -o name` follows redirects and names the output. Both are for fetching over HTTP(S)."
       why: "You'll download tools, wordlists and payload hosts constantly. Knowing both matters because one is often missing or scripted around."
@@ -149,10 +161,14 @@ steps:
         cause: "System clock is wrong, or the site's cert is untrusted."
         fix: "Fix the clock first (`sudo timedatectl set-ntp true`). Only bypass verification (`curl -k`) for hosts you control in testing."
         check: "The download succeeds after fixing the clock."
+      - trigger: "the download stops partway — the saved file is much smaller than expected, or wget reports the connection was reset"
+        cause: "A PARTIAL download: the connection dropped mid-transfer (Wi-Fi blip, server timeout). You have a real file on disk, but it's incomplete and will fail to open/extract."
+        fix: "Resume instead of restarting from zero: `wget -c URL` continues where it left off. If the server doesn't support resuming, delete the partial file and download again."
+        check: "Compare the downloaded size to the source's listed size, or verify with sha256sum (step at6) — a partial file will not match."
   - step_id: at6
     title: "Verify a download (sha256sum)"
     slot_target: null
-    glossary_refs: [checksum]
+    glossary_refs: [checksum, iso]
     explanation:
       what: "`sha256sum file` prints a fixed-length fingerprint. Compare it to the value the source published; if they match, the file is intact and untampered."
       why: "Downloads can be corrupted or malicious. Verifying the hash is how you trust a tool or ISO before using it."
@@ -192,6 +208,10 @@ steps:
         cause: "SSH isn't running on the host or a firewall blocks the port."
         fix: "Verify the port (default 22) and that sshd is up on the target; use `-P <port>` if non-standard."
         check: "scp connects."
+      - trigger: "the progress bar stalls partway (e.g. stuck at 40%) then the connection drops"
+        cause: "A PARTIAL transfer: the network dropped mid-copy (Wi-Fi loss, VPN blip, host went down). The destination now holds an incomplete, unusable file — scp does not resume on its own."
+        fix: "Delete the partial file on the destination and re-run scp, or switch to `rsync -av --partial` (step at8) which CAN resume an interrupted transfer instead of starting over."
+        check: "Compare file sizes on both ends (`ls -l`), or checksum both copies — a stalled transfer will not match."
   - step_id: at8
     title: "Sync efficiently (rsync -av)"
     slot_target: null
@@ -218,3 +238,7 @@ steps:
         cause: "rsync must exist on BOTH ends for SSH sync."
         fix: "Install it on the remote (`sudo apt install rsync`), or fall back to scp -r."
         check: "The sync completes."
+      - trigger: "rsync copies most files, prints a Permission denied for one of them, then ends with 'rsync error: some files/attrs were not transferred (code 23)'"
+        cause: "A PARTIAL sync, not a total failure: rsync keeps going after a single file's error and reports the summary at the very end. Almost everything may have transferred correctly — except that one file."
+        fix: "Read which file(s) it named in the Permission denied lines above the summary; fix their permissions/ownership at the source (or run with sudo if they're meant to be readable), then re-run rsync — it will only need to copy what's still missing."
+        check: "Exit code 0 = fully clean; code 23 = partial, some files skipped — always scroll up from the summary to see WHICH ones."
