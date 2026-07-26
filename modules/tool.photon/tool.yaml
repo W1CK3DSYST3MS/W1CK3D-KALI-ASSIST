@@ -171,7 +171,7 @@ flows:
           [+] Crawling complete
           [+] Results saved in ~/photon_example
           (then: cat ~/photon_example/keys.txt)
-          AIzaSyD4C1xt-Q1234567890abcdefGHIJKLmno
+          AIza<...redacted example, not a real key — Google API keys have this prefix...>
         alternatives:
           - trigger: "keys file is empty or missing"
             cause: "The site simply has no exposed secrets in what Photon crawled — a good outcome, not a failure — or the crawl didn't reach the JS files that contain them."
@@ -278,3 +278,43 @@ quick_build:
       label: "Output directory (-o)"
       type: path
       placeholder: "~/photon_out  (optional)"
+    - field_id: cookie
+      label: "Cookie header (-c)"
+      type: string
+      placeholder: "session=abc123; auth=xyz  (optional — crawl as a logged-in session)"
+    - field_id: user_agent
+      label: "Custom User-Agent (--user-agent)"
+      type: string
+      placeholder: "Mozilla/5.0 ...  (optional, comma-separate several to rotate)"
+    - field_id: headers
+      label: "Prompt for extra custom headers at runtime (--headers)"
+      type: bool
+      help: "Opens an interactive editor (nano) when you run the command, to type extra 'Header: value' lines before the crawl starts. This app only builds the command — you fill in the headers yourself in your terminal."
+    - field_id: timeout
+      label: "HTTP request timeout, seconds (--timeout)"
+      type: string
+      placeholder: "6  (default; raise for a slow target)"
+    - field_id: verbose
+      label: "Verbose output (-v)"
+      type: bool
+    - field_id: regex
+      label: "Custom regex extraction (-r)"
+      type: string
+      placeholder: "TICKET-[0-9]+  (optional — collect your own pattern matches)"
+    - field_id: seeds
+      label: "Extra seed URLs (-s)"
+      type: string
+      placeholder: "https://example.com/app https://example.com/docs  (space-separated, optional)"
+    - field_id: exclude
+      label: "Exclude URLs matching this regex (--exclude)"
+      type: string
+      placeholder: "/logout|page=[0-9]+  (optional)"
+    - field_id: only_urls
+      label: "Only extract URLs, skip other analysis (--only-urls)"
+      type: bool
+      help: "Faster, simpler crawl — skips key/email/file detection, just gathers URLs."
+    - field_id: stdout
+      label: "Print one result set to stdout (--stdout)"
+      type: choice
+      choices: [internal, external, files, intel, robots, custom, failed, scripts, fuzzable, endpoints, keys, subdomains]
+      help: "Prints just this dataset, one item per line — ideal for piping into another tool. 'subdomains' only works if 'Enumerate subdomains during the crawl' (--dns) is also on."
