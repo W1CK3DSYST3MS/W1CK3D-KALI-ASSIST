@@ -27,3 +27,17 @@ terms:
     definition: "`--spoof-mac`: fakes the MAC (hardware) address your packets appear to come from. Only matters on the same local network segment — routers strip/replace MAC addresses, so this has no effect on remote/internet targets."
   - term: packet_fragmentation
     definition: "`-f`: splits each probe into several smaller pieces before sending. Some older or simply-configured firewalls only inspect the first fragment and let the rest through unchecked."
+  - term: stealth_scan_family
+    definition: "`-sN`/`-sF`/`-sX` (Null/FIN/Xmas) send TCP packets with unusual flag combinations that a normal connection would never produce. Open ports silently ignore them (no reply); closed ports send back an RST. No response = maybe open, maybe just filtered — these scans are cheaper to run than a real connection but far less certain than -sS/-sT, and don't work at all against Windows-family stacks (they always reply RST regardless of state)."
+  - term: ack_window_maimon
+    definition: "`-sA` (ACK) doesn't tell you open vs closed at all — it only maps whether a FIREWALL is filtering a port, by sending a packet no real connection would start with. `-sW` (Window) is the same idea but sometimes CAN tell open from closed on certain OSes by reading a TCP window-size quirk. `-sM` (Maimon) is a rare FIN/ACK combination that trips up some BSD-derived stacks specifically."
+  - term: idle_scan
+    definition: "`-sI <zombie>`: bounces a scan off a third, idle ('zombie') machine, reading its IP ID sequence number to infer results indirectly — the target's logs show the zombie scanning it, never you. Needs a genuinely idle host with predictable IP ID behavior nearby; rare to find one on a modern network, but it's the classic 'completely blind, completely anonymous' nmap technique."
+  - term: sctp
+    definition: "Stream Control Transmission Protocol — a less common transport protocol (like TCP/UDP) used mainly in telecom/signaling systems. `-sY`/`-sZ` scan it the way -sS/-sT scan TCP."
+  - term: ip_protocol_scan
+    definition: "`-sO`: instead of asking 'which PORT is open', asks 'which IP PROTOCOL NUMBERS does this host respond to' (TCP=6, UDP=17, ICMP=1, etc.) — a layer below normal port scanning."
+  - term: list_scan
+    definition: "`-sL`: doesn't send ANY packets at all — just resolves and prints the target list you'd otherwise scan. A dry run / sanity check before committing to a real scan."
+  - term: ping_type
+    definition: "The specific probe nmap uses to decide 'is this host up' during host discovery (see host_discovery) — by default a mix of methods, but `-PS`/`-PA`/`-PU`/`-PY`/`-PE`/`-PP`/`-PM`/`-PO` each pick ONE specific probe type. Useful when the default is blocked but a specific one gets through."

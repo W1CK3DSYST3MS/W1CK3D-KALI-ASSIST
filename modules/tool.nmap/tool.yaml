@@ -379,6 +379,28 @@ flows:
             cause: "Some script categories actively probe for weaknesses."
             fix: "Prefer `safe`/`default` for learning; only run `vuln`/intrusive scripts on authorized targets."
             check: "Confirm authorization before vuln scripts."
+      - step_id: n2
+        title: "The -sC shortcut, and looking before you leap"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-sC` is just shorthand for `--script=default` — identical result, less typing. `--script-help=<script>` prints what a specific script actually does and what arguments it takes, WITHOUT running a scan. `--script-updatedb` refreshes nmap's local script database after you add/remove scripts manually."
+          why: "--script-help is worth building the habit of using before running an unfamiliar script category (especially anything outside safe/default) — know what a script actually probes before you point it at something."
+          where: "ACTION_OPTIONS; --script-help and --script-updatedb don't need a target at all."
+        find_it: "A script name from /usr/share/nmap/scripts (e.g. http-title, http-enum) or a category name."
+        command_anatomy:
+          - {token: "nmap --script-help=http-enum", does: "show what this script does and its arguments — no target, no scan"}
+        try_this: "nmap --script-help=http-enum"
+        success_criteria: "A description of the script prints, including its categories and any --script-args it accepts."
+        expected_output: |
+          http-enum
+          Categories: discovery intrusive
+          .../scripts/http-enum.nse
+          Enumerates common web application/interface paths on a web server.
+        alternatives:
+          - trigger: "no output, or 'no matching scripts'"
+            cause: "Wrong script name, or the script database is stale after a manual script install."
+            fix: "Check the exact filename under /usr/share/nmap/scripts/; if you added scripts manually, run `nmap --script-updatedb` first."
+            check: "Confirm the .nse file actually exists in that directory."
   - flow_id: timing_stealth
     title: "Timing & stealth — control noise & speed (reference)"
     goal: "Go faster or quieter."
@@ -418,11 +440,42 @@ flows:
             cause: "A strict firewall, not timing."
             fix: "Timing won't beat a strict firewall; note it and move on."
             check: "Expected — record and continue."
+      - step_id: t2
+        title: "Fine-tune speed and reliability directly"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "-T0..5 is a PRESET bundle. For direct control: `--min-rate`/`--max-rate` set packets-per-second floor/ceiling; `--host-timeout` gives up on a slow/dead host after a time limit; `--max-retries` caps how many times a lost probe gets resent; `--scan-delay`/`--max-scan-delay` force a pause between probes."
+          why: "-T4/-T5 alone can still be too slow on a huge port range, or too aggressive against a fragile/rate-limited target — these give you the exact knob instead of a preset bundle."
+          where: "ACTION_OPTIONS."
+        find_it: "No new input — same target, tuning an existing scan. --min-rate is the one most often reached for on large scans (e.g. --min-rate 1000 on a full -p- scan)."
+        command_anatomy:
+          - {token: "nmap --min-rate 1000", does: "never send slower than 1000 packets/sec"}
+          - {token: "--host-timeout 5m", does: "give up on any single host after 5 minutes"}
+          - {token: "--max-retries 1", does: "only resend a lost probe once (default is higher)"}
+          - {token: "-p-", does: "all 65535 ports — this is where rate control matters most"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "nmap --min-rate 1000 --max-retries 1 -p- 192.168.1.10"
+        success_criteria: "A full-port scan that would normally take a long time finishes noticeably faster."
+        expected_output: |
+          Nmap scan report for 192.168.1.10
+          Not shown: 65530 closed tcp ports (reset)
+          PORT      STATE SERVICE
+          22/tcp    open  ssh
+          80/tcp    open  http
+        alternatives:
+          - trigger: "results seem less reliable / some ports missing compared to a slower scan"
+            cause: "Pushing --min-rate high and --max-retries low trades some accuracy for speed — lost probes on a lossy link don't get resent as many times."
+            fix: "For a first fast pass this is fine; re-scan any interesting/borderline host slower (default timing, no --max-retries override) to confirm."
+            check: "Cross-check important findings with a default-timing re-scan."
+          - trigger: "target/network becomes unresponsive or you're asked to stop"
+            cause: "--min-rate can genuinely flood a fragile target or a rate-limited link — this isn't purely passive tuning, it can have a real impact."
+            fix: "Lower --min-rate immediately, or drop back to a -T based preset which is inherently more conservative."
+            check: "Stop and reassess if you notice any real-world impact on the target."
   - flow_id: output
     title: "Output & reporting — capture results (reference)"
     goal: "Save results properly."
     command_builder_id: nmap
-    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, OUTPUT_OPTIONS]
     output_manifest:
       base_dir: "./out"
       files: ["scan.nmap", "scan.xml", "scan.gnmap"]
@@ -454,6 +507,33 @@ flows:
             cause: "Output directory is not writable."
             fix: "Pick a writable dir (your home), and create it first: `mkdir -p ~/scans`."
             check: "Confirm the dir exists and is writable."
+      - step_id: o2
+        title: "Cut the noise, see every packet, or resume an interrupted scan"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`--open` hides closed/filtered ports so only real findings show. `-d` (repeatable: -dd, -ddd) prints internal debug detail. `--packet-trace` shows literally every packet sent/received. `--resume <file>` picks a big scan back up from where a saved -oN/-oG output file left off, if it got interrupted."
+          why: "--open is the single most useful output filter on a big scan — cuts a wall of 'closed' noise down to what actually matters. The debug/trace flags are for when something's behaving unexpectedly and you need to see exactly what nmap is doing at the packet level. --resume saves re-doing a multi-hour scan from scratch after an interruption."
+          where: "GLOBAL_OPTIONS."
+        find_it: "--open: any scan with more than a handful of ports. --resume: needs a previous -oN or -oG output file from a scan that got interrupted (Ctrl+C, connection drop, etc.)."
+        command_anatomy:
+          - {token: "nmap --open", does: "only print open (or possibly-open) ports"}
+          - {token: "-p-", does: "all ports — where --open matters most"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "nmap --open -p- 192.168.1.10"
+        success_criteria: "Only open/possibly-open ports appear — no 'Not shown: N closed ports' wall of text to scroll past."
+        expected_output: |
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          80/tcp open  http
+        alternatives:
+          - trigger: "output looks empty / no ports at all"
+            cause: "Genuinely no open ports were found — --open is filtering correctly, there's just nothing to show."
+            fix: "Re-run without --open to confirm the scan itself worked and found closed/filtered ports as expected."
+            check: "Compare with/without --open to isolate 'no findings' from 'filter hid everything'."
+          - trigger: "a scan got interrupted (Ctrl+C, connection dropped) partway through"
+            cause: "Long scans over many hosts/ports can take a while — interruptions happen."
+            fix: "If you were writing to -oN or -oG, resume it: `nmap --resume ~/scans/scan.gnmap` picks up where it left off instead of restarting."
+            check: "Confirm the original run was writing -oN/-oG output — --resume needs that file to know where it stopped."
   - flow_id: full
     title: "Full / aggressive (combined, advanced)"
     goal: "Show how flags combine into one capable command."
@@ -607,6 +687,300 @@ flows:
             cause: "MAC addresses never leave the local network segment — this is expected, not a bug."
             fix: "Only use this against local/lab targets if you want it to matter."
             check: "Confirm the target is on the same subnet as you (compare with `ip a`)."
+      - step_id: e5
+        title: "Pad, spoof and corrupt your packets further"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`--ttl <n>` sets the IP time-to-live field (real OSes have telltale default TTLs — 64 Linux, 128 Windows — so a custom value can mislead OS-fingerprinting tools watching your traffic). `--data-string`/`--data`/`--data-length` append extra bytes to each probe (readable text, raw hex, or random padding). `--badsum` deliberately sends a WRONG checksum — a real TCP/IP stack silently drops bad-checksum packets, so any reply at all means something else (a naive firewall/IDS, not the real OS) answered instead. `--proxies` relays your connection through HTTP/SOCKS4 proxies."
+          why: "Each is a narrow, situational technique: TTL/data padding mostly confuse automated traffic-fingerprinting tools, not humans reading logs; --badsum is specifically a firewall/IDS DETECTOR, not a stealth technique; --proxies genuinely changes your visible source."
+          where: "ACTION_OPTIONS."
+        find_it: "No new input needed for most of these — they're all optional add-ons to a scan you already know how to run."
+        command_anatomy:
+          - {token: "nmap --badsum", does: "send deliberately-corrupt checksums"}
+          - {token: "<target>", does: "the host to test"}
+        try_this: "sudo nmap --badsum -p 80 scanme.nmap.org"
+        success_criteria: "Usually NO reply at all — a correctly-behaving stack silently drops bad-checksum packets."
+        expected_output: |
+          Note: Host seems down. If it is really up, but blocking our ping probes, try -Pn
+          Nmap done: 1 IP address (0 hosts up) scanned in 3.21s
+        alternatives:
+          - trigger: "you actually get a normal-looking response"
+            cause: "Something between you and the target isn't validating checksums properly — often a load balancer, proxy, or a security device inspecting/rewriting traffic rather than the real OS stack."
+            fix: "That's a genuine finding worth noting — treat it as 'something in the path answered on the real host's behalf', not as a normal open/closed result."
+            check: "Cross-reference with a normal scan to see if the behavior differs."
+  - flow_id: stealth_scans
+    title: "Stealth & uncommon scan types (reference, advanced)"
+    goal: "Beyond -sS/-sT/-sU: the rest of nmap's scan-technique family, and when each is actually useful."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: st1
+        title: "See a target list without scanning anything (-sL)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [list_scan]
+        explanation:
+          what: "`-sL` resolves and lists every target you specified — no packets sent to any of them at all."
+          why: "A dry run: confirms your target range/CIDR expands to what you actually meant BEFORE you commit to a real scan (especially useful for big ranges)."
+          where: "ACTION_OPTIONS."
+        find_it: "Any target expression, especially one you're unsure about (a big CIDR range, a hostname list)."
+        command_anatomy:
+          - {token: "nmap", does: "the program"}
+          - {token: "-sL", does: "list only — resolve names, print targets, send nothing"}
+          - {token: "192.168.1.0/28", does: "the range to expand and check"}
+        try_this: "nmap -sL 192.168.1.0/28"
+        success_criteria: "Every address in the range prints, with a hostname if one resolves — no scan actually ran."
+        expected_output: |
+          Nmap scan report for 192.168.1.0
+          Nmap scan report for 192.168.1.1
+          Nmap scan report for 192.168.1.2
+          ...
+          Nmap scan report for 192.168.1.15
+          Nmap done: 16 IP addresses (0 hosts up) scanned in 0.01s
+        alternatives:
+          - trigger: "\"0 hosts up\" — looks like a failure"
+            cause: "That's correct and expected — -sL never checks if anything is up, it only lists."
+            fix: "Not a failure. If the count/range looks right, you're ready to run a real scan next."
+            check: "Confirm the address count matches what you expected from the CIDR."
+      - step_id: st2
+        title: "Null, FIN and Xmas scans — slip past simple stateless filters"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [stealth_scan_family]
+        explanation:
+          what: "`-sN`/`-sF`/`-sX` send TCP packets with unusual flag combinations (no flags / just FIN / FIN+PSH+URG) that a real connection attempt never produces. An open port stays silent; a closed port sends RST back."
+          why: "Some simple, stateless firewalls only block packets that look like a normal connection START (SYN) — these odd packets can slip through unnoticed. They're also a bit cheaper/quieter than a full SYN scan on some setups."
+          where: "ACTION_OPTIONS; needs sudo (raw packet crafting)."
+        find_it: "No new input — try this on a target you've already SYN-scanned, to compare."
+        command_anatomy:
+          - {token: "sudo nmap", does: "root needed for raw packets"}
+          - {token: "-sN", does: "Null scan (no flags set at all) — swap for -sF (FIN) or -sX (Xmas: FIN+PSH+URG)"}
+          - {token: "<target>", does: "the host to scan"}
+        try_this: "sudo nmap -sN scanme.nmap.org"
+        success_criteria: "A port table prints — but read it carefully, see the alternatives below before trusting it."
+        expected_output: |
+          PORT   STATE         SERVICE
+          22/tcp open|filtered ssh
+          80/tcp open|filtered http
+        alternatives:
+          - trigger: "everything shows open|filtered, nothing definitively 'open'"
+            cause: "This is the expected shape for these scans, not a failure — no reply from an open port is genuinely ambiguous (could be open, could be a firewall silently dropping it). Only a returned RST (closed) is unambiguous."
+            fix: "Compare against a -sS/-sT scan of the same target for a more definite open/closed answer; use -sN/-sF/-sX specifically to test firewall behavior, not as your primary discovery method."
+            check: "Cross-reference with the SYN/connect scan results from earlier steps."
+          - trigger: "target is a Windows host and everything shows closed"
+            cause: "Windows TCP stacks don't follow the RFC behavior these scans rely on — they reply RST regardless of real port state, making the technique useless against Windows targets specifically."
+            fix: "Use -sS/-sT/-sV against Windows hosts instead; this is a known, documented nmap limitation, not a bug in your command."
+            check: "If you know/suspect the target is Windows, skip straight to -sS."
+      - step_id: st3
+        title: "ACK, Window and Maimon scans — map the firewall, not the ports"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [ack_window_maimon]
+        explanation:
+          what: "`-sA` sends a TCP ACK (as if replying to a connection that doesn't exist). It can't tell you open vs closed — only whether a stateful firewall is filtering that port at all. `-sW` is the same probe but occasionally CAN distinguish open from closed via a TCP window-size quirk on certain systems. `-sM` (Maimon, FIN+ACK) trips up specific BSD-derived stacks."
+          why: "Different question than a normal scan: 'where is the firewall actually filtering' rather than 'what's listening'. Useful for mapping firewall rulesets specifically."
+          where: "ACTION_OPTIONS; needs sudo."
+        find_it: "A target you suspect sits behind a stateful firewall/ACL."
+        command_anatomy:
+          - {token: "sudo nmap -sA", does: "ACK scan — maps filtered vs unfiltered, not open vs closed"}
+          - {token: "<target>", does: "the host to probe"}
+        try_this: "sudo nmap -sA scanme.nmap.org"
+        success_criteria: "Ports print as 'unfiltered' (a stateful device let the ACK through) or 'filtered' (something dropped it) — NOT open/closed."
+        expected_output: |
+          PORT    STATE      SERVICE
+          22/tcp  unfiltered ssh
+          80/tcp  unfiltered http
+          443/tcp filtered   https
+        alternatives:
+          - trigger: "I wanted to know if the port is OPEN, but it just says unfiltered"
+            cause: "That's the whole point of -sA — it deliberately can't tell you open/closed, only filtered/unfiltered. Different question, same tool."
+            fix: "Use -sS/-sT/-sW for actual open/closed status; use -sA specifically when you want firewall-mapping information."
+            check: "Confirm which question you're actually trying to answer before picking the scan type."
+      - step_id: st4
+        title: "IP protocol scan and SCTP — below and beside TCP/UDP"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [ip_protocol_scan, sctp]
+        explanation:
+          what: "`-sO` asks a different question than every scan above: not 'which PORT is open' but 'which IP PROTOCOL NUMBERS (TCP=6, UDP=17, ICMP=1, GRE=47...) does this host respond to at all'. `-sY`/`-sZ` scan SCTP (a TCP/UDP alternative used mostly in telecom signaling) the way -sS/-sT scan TCP."
+          why: "-sO is a layer below normal scanning — useful for spotting VPN/tunnel protocols (GRE, ESP) a host supports. SCTP scanning matters almost exclusively if you know the target runs telecom/VoIP signaling infrastructure."
+          where: "ACTION_OPTIONS; needs sudo."
+        find_it: "-sO: any host, as a broader recon step. -sY/-sZ: only worth running if you have a specific reason to suspect SCTP services."
+        command_anatomy:
+          - {token: "sudo nmap -sO", does: "IP protocol scan — which protocol numbers respond"}
+          - {token: "<target>", does: "the host"}
+        try_this: "sudo nmap -sO scanme.nmap.org"
+        success_criteria: "A table of protocol numbers/names with open/closed/filtered states, instead of ports."
+        expected_output: |
+          PROTOCOL STATE         SERVICE
+          1        open         icmp
+          6        open         tcp
+          17       open|filtered udp
+        alternatives:
+          - trigger: "this looks nothing like a normal port scan output"
+            cause: "Correct — -sO reports PROTOCOLS, not ports, by design."
+            fix: "Not an error; this is a genuinely different kind of scan from everything else in this app."
+            check: "Compare the STATE column meaning against the explanation above, not against a port-scan table."
+
+  - flow_id: idle_scan
+    title: "Idle (zombie) scan — completely blind, completely anonymous (reference, advanced)"
+    goal: "Scan a target without ANY packet ever appearing to come from you — by bouncing off a third host."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: iz1
+        title: "Find a candidate zombie host"
+        slot_target: null
+        glossary_refs: [idle_scan]
+        explanation:
+          what: "An idle scan needs a third machine (the 'zombie') that is (a) genuinely idle — not sending/receiving other traffic — and (b) uses predictable, incrementing IP ID numbers in its packets. nmap watches how the zombie's IP ID changes to infer your real target's port states, without ever sending the target a packet that has your address on it."
+          why: "This is the most indirect, hardest-to-trace nmap technique that exists — the target's logs show the ZOMBIE scanning it, never you. Most modern OSes (Linux, current Windows) randomize IP IDs specifically to defeat this, so candidates are genuinely rare today."
+          where: "You supply the zombie as an argument to -sI, separately from the real target."
+        find_it: >
+          nmap ships a helper for this: `nmap -O <candidate-host>` sometimes reports an
+          "IP ID Sequence Generation" line — "Incremental" means it's a viable zombie candidate,
+          "Random" means it isn't. Old, lightly-used embedded devices/printers on a LAN are the
+          classic (if now rare) example.
+        command_anatomy:
+          - {token: "nmap -O", does: "OS detection also reports IP ID sequence behavior"}
+          - {token: "192.168.1.50", does: "the candidate zombie you're checking"}
+        try_this: "sudo nmap -O 192.168.1.50 | grep 'IP ID'"
+        success_criteria: "A line reading 'IP ID Sequence Generation: Incremental' (viable) rather than 'Random' or 'All zeros' (not viable)."
+        expected_output: |
+          IP ID Sequence Generation: Incremental
+        alternatives:
+          - trigger: "no IP ID line printed, or it says Random/All zeros"
+            cause: "This host isn't a usable zombie — most modern systems aren't."
+            fix: "Try other idle hosts on the network (old printers, embedded devices are classic candidates); if none work, this technique simply isn't available on this network right now — that's normal, not a failure of your command."
+            check: "Test a few candidates; expect most modern hosts to fail this check."
+      - step_id: iz2
+        title: "Run the idle scan"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-sI <zombie>[:port]` runs the scan against your real target, using the zombie you found in step 1 to relay/infer the results."
+          why: "The whole point: your own address never appears in any packet sent to the real target."
+          where: "ACTION_OPTIONS; -sI takes the zombie host (and optional probe port) as its argument."
+        find_it: "The zombie host from step 1; the real target from your earlier reconnaissance."
+        command_anatomy:
+          - {token: "sudo nmap -sI", does: "idle/zombie scan mode"}
+          - {token: "192.168.1.50:80", does: "the zombie host, and (optionally) which port to probe it on"}
+          - {token: "<target>", does: "the REAL host you're actually interested in"}
+        try_this: "sudo nmap -sI 192.168.1.50:80 scanme.nmap.org"
+        success_criteria: "A normal-looking port table for the real target — obtained without ever sending it a packet carrying your address."
+        expected_output: |
+          Idle scan using zombie 192.168.1.50 (192.168.1.50:80); Class: Incremental
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          80/tcp open  http
+        alternatives:
+          - trigger: "\"Idlescan zombie ... port ... cannot be used because it has been idle\""
+            cause: "The zombie wasn't actually idle — something else was talking to it during the scan, corrupting the IP ID sequence nmap was tracking."
+            fix: "Pick a quieter zombie candidate, or re-run at a time it's less likely to be in use."
+            check: "Re-check the IP ID sequence test from step 1 right before scanning."
+          - trigger: "results look identical to a normal scan you ran directly"
+            cause: "That's success — the RESULTS should look the same as a direct scan; what's different is invisible to you: the target's logs never show your IP."
+            fix: "Not a failure — this technique's value is in what the TARGET sees, not in what you see."
+            check: "The point of this flow was stealth, not different data."
+
+  - flow_id: advanced_discovery
+    title: "Advanced host discovery — ping types, IPv6, DNS control (reference)"
+    goal: "Choose exactly HOW nmap decides a host is 'up', beyond the default and -Pn."
+    command_builder_id: nmap
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS]
+    steps:
+      - step_id: ad1
+        title: "Pick a specific ping probe type"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [ping_type]
+        explanation:
+          what: "By default nmap's host-discovery uses a mix of probes. -PS<ports> (TCP SYN), -PA<ports> (TCP ACK), -PU<ports> (UDP), -PY<ports> (SCTP), -PE (ICMP echo — classic 'ping'), -PP (ICMP timestamp), -PM (ICMP netmask) each force ONE specific probe type."
+          why: "Firewalls often block ICMP ping (the classic 'ping' command) but allow, say, a SYN to port 80/443 through — picking the right probe type is how you find a host that the default discovery wrongly reports as down."
+          where: "ACTION_OPTIONS; combine several if you want, nmap tries them all."
+        find_it: "A host you suspect is up but that -sn/plain nmap reports as down. Try a port you know is likely open (80, 443, 22)."
+        command_anatomy:
+          - {token: "sudo nmap -PS80,443", does: "TCP SYN ping to ports 80 and 443"}
+          - {token: "-PE", does: "also try classic ICMP echo"}
+          - {token: "<target>", does: "the host to check"}
+        try_this: "sudo nmap -PS80,443 -PE -sn scanme.nmap.org"
+        success_criteria: "The host reports as 'up' via a specific probe type, even if the default discovery missed it."
+        expected_output: |
+          Nmap scan report for scanme.nmap.org (45.33.32.156)
+          Host is up (0.11s latency).
+        alternatives:
+          - trigger: "still shows down / no response to any probe type"
+            cause: "The host may genuinely be firewalled against everything, or truly offline."
+            fix: "Fall back to -Pn to just assume it's up and scan anyway — the port scan itself is often more informative than host discovery on a well-firewalled target."
+            check: "Try -Pn directly on the actual scan, skip discovery entirely."
+      - step_id: ad2
+        title: "IPv6, DNS control, and traceroute"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [ip_protocol]
+        explanation:
+          what: "-6 scans over IPv6 instead of IPv4 (the target must be a real IPv6 address/hostname). -R always resolves DNS names for every target (default only resolves when it seems useful); --dns-servers picks specific resolvers; --system-dns uses your OS's resolver instead of nmap's own faster parallel one; --traceroute maps the network path to each host."
+          why: "IPv6-only services are invisible to an IPv4 scan entirely — a genuinely different address family, not a flag tweak. The DNS/traceroute options are smaller conveniences for specific situations (corporate DNS split-horizon, network-path mapping)."
+          where: "GLOBAL_OPTIONS — these apply to the whole run."
+        find_it: "For -6: an IPv6 address/hostname (find one with `dig AAAA <host>`). The rest need no special input."
+        command_anatomy:
+          - {token: "nmap -6", does: "scan over IPv6"}
+          - {token: "--traceroute", does: "also map the network path"}
+          - {token: "<ipv6-target>", does: "an IPv6 address/hostname"}
+        try_this: "nmap -6 --traceroute scanme.nmap.org"
+        success_criteria: "A normal scan report, plus a TRACEROUTE section listing each network hop."
+        expected_output: |
+          Nmap scan report for scanme.nmap.org (2600:3c01::f03c:91ff:fe18:bb2f)
+          PORT   STATE SERVICE
+          22/tcp open  ssh
+          TRACEROUTE
+          HOP RTT     ADDRESS
+          1   0.40 ms 2600:3c01::1
+        alternatives:
+          - trigger: "\"Failed to resolve ... Note that you can't use '/mask' AND '1-4,7,100-' style IP ranges\" or no IPv6 address found"
+            cause: "The target genuinely has no IPv6 (AAAA) record — not every host does."
+            fix: "Check first with `dig AAAA <host>`; if nothing returns, that host simply isn't reachable over IPv6."
+            check: "Confirm an AAAA record exists before troubleshooting further."
+
+  - flow_id: target_exclusion
+    title: "Target lists, exclusions & random targets (reference)"
+    goal: "Scan/exclude hosts from files, or generate random research targets."
+    command_builder_id: nmap
+    slots: [PROGRAM, TARGET_PIVOT, EXTRA_FILES]
+    steps:
+      - step_id: te1
+        title: "Exclude specific hosts from a range"
+        slot_target: null
+        explanation:
+          what: "`--exclude host1,host2` skips those hosts even though they'd otherwise match your target range; `--excludefile <file>` does the same from a saved list."
+          why: "Common in engagements with an explicit exclusion list (production database servers, monitoring systems you're told to leave alone) that sits inside an otherwise-authorized range."
+          where: "A standalone flag, not tied to any slot position."
+        find_it: "Your authorized scope should specify exactly which hosts are excluded, if any — never guess."
+        command_anatomy:
+          - {token: "nmap 192.168.1.0/24", does: "the range to scan"}
+          - {token: "--exclude 192.168.1.1,192.168.1.5", does: "skip these specific hosts"}
+        try_this: "nmap --exclude 192.168.1.1,192.168.1.5 192.168.1.0/24"
+        success_criteria: "The scan runs over the range but the excluded hosts never appear in results."
+        expected_output: |
+          (results for the range, minus .1 and .5)
+        alternatives:
+          - trigger: "excluded host still appears in results"
+            cause: "A typo in the exclude list, or it's specified differently than it appears in your target range (hostname vs IP)."
+            fix: "Match the exact form (IP vs hostname) used in your target range."
+            check: "Re-check the exact spelling/format of the excluded address."
+      - step_id: te2
+        title: "Random targets (research use only)"
+        slot_target: null
+        explanation:
+          what: "`-iR <num>` makes nmap pick that many random public IP addresses to scan, instead of you supplying any target at all."
+          why: "Almost never something you have authorization to do — scanning random internet hosts you don't own or have permission for is exactly the unauthorized-scanning problem this app's authorization gate exists to prevent. Documented here for completeness, not as something to actually run outside specific nmap-internal research use."
+          where: "Replaces the target entirely."
+        find_it: "There is no legitimate 'find_it' here for normal use — this flag exists for nmap's own internet-scale research use, not for you."
+        command_anatomy:
+          - {token: "nmap -iR 100", does: "pick 100 random public IPs and scan them"}
+          - {token: "-Pn -p 80", does: "typically paired with skip-discovery and a narrow port, in nmap's own documented examples"}
+        try_this: "# Do not run this against the real internet without a specific, documented, authorized research purpose."
+        success_criteria: "N/A — this step is informational, not a recommended action."
+        expected_output: |
+          (not applicable — see explanation)
+        alternatives:
+          - trigger: "considering running this for practice"
+            cause: "It's tempting because it needs no target input at all."
+            fix: "Don't. Use scanme.nmap.org or your own lab/VMs for practice instead — those are the addresses actually offered for that purpose."
+            check: "Re-read the authorization gate at the top of this tool."
 
 quick_build:
   builder: nmap
@@ -626,8 +1000,8 @@ quick_build:
     - field_id: scan_type
       label: "Scan type (overrides profile)"
       type: choice
-      choices: ["-sS", "-sT", "-sU", "-sn"]
-      help: "-sS SYN (needs sudo), -sT connect (no sudo needed), -sU UDP, -sn ping only/no ports. Leave blank to use the profile's default."
+      choices: ["-sS", "-sT", "-sU", "-sn", "-sL", "-sA", "-sW", "-sM", "-sN", "-sF", "-sX", "-sO", "-sY", "-sZ"]
+      help: "-sS SYN/-sT connect/-sU UDP/-sn ping-only/-sL list-only (no scanning) are the everyday ones. -sA/-sW/-sM (ACK/Window/Maimon) and -sN/-sF/-sX (Null/FIN/Xmas) are stealth/firewall-mapping techniques — see the 'Stealth & uncommon scan types' reference flow. -sO is IP protocol scan, -sY/-sZ are SCTP. Leave blank to use the profile's default."
     - field_id: ports
       label: "Ports"
       type: string
@@ -715,6 +1089,203 @@ quick_build:
       type: string
       placeholder: "10.0.0.99  (optional, advanced)"
       help: "Replies won't come back to you — mainly for triggering IDS alerts under a different identity, not for getting real results. Set Interface + Skip host discovery too. Needs sudo."
+    - field_id: proxies
+      label: "Relay through proxies (--proxies)"
+      type: string
+      placeholder: "http://127.0.0.1:8080,socks4://10.0.0.1:1080  (optional)"
+    - field_id: data_string
+      label: "Append ASCII payload (--data-string)"
+      type: string
+      placeholder: "optional"
+    - field_id: data_length
+      label: "Append random padding bytes (--data-length)"
+      type: int
+      placeholder: "optional"
+    - field_id: ip_options
+      label: "IP options (--ip-options)"
+      type: string
+      placeholder: "advanced/rare, optional"
+    - field_id: ttl
+      label: "Set IP time-to-live (--ttl)"
+      type: int
+      placeholder: "optional"
+    - field_id: badsum
+      label: "Send bogus checksums (--badsum)"
+      type: bool
+      help: "Real stacks drop these; a reply means something (a firewall/IDS, not the real stack) answered instead."
+
+    - field_id: idle_zombie
+      label: "Idle/zombie scan host (-sI)"
+      type: string
+      placeholder: "zombie-host[:port]  (advanced — see the Idle scan reference flow)"
+    - field_id: scan_flags
+      label: "Custom TCP flags (--scanflags)"
+      type: string
+      placeholder: "URGACKPSHRSTSYNFIN combination, e.g. SYNFIN  (advanced, optional)"
+    - field_id: ftp_bounce
+      label: "FTP bounce relay host (-b)"
+      type: string
+      placeholder: "legacy technique, optional"
+
+    - field_id: ping_syn
+      label: "TCP SYN ping ports (-PS)"
+      type: string
+      placeholder: "22,80,443  (optional — use when default host discovery is blocked)"
+    - field_id: ping_ack
+      label: "TCP ACK ping ports (-PA)"
+      type: string
+      placeholder: "80  (optional)"
+    - field_id: ping_udp
+      label: "UDP ping ports (-PU)"
+      type: string
+      placeholder: "53  (optional)"
+    - field_id: ping_sctp
+      label: "SCTP ping ports (-PY)"
+      type: string
+      placeholder: "optional"
+    - field_id: ping_echo
+      label: "ICMP echo ping (-PE)"
+      type: bool
+    - field_id: ping_timestamp
+      label: "ICMP timestamp ping (-PP)"
+      type: bool
+    - field_id: ping_netmask
+      label: "ICMP netmask ping (-PM)"
+      type: bool
+    - field_id: ping_protocol
+      label: "IP protocol ping (-PO)"
+      type: string
+      placeholder: "1,6,17  (optional, advanced)"
+    - field_id: resolve_all
+      label: "Always resolve DNS (-R)"
+      type: bool
+    - field_id: dns_servers
+      label: "Custom DNS servers (--dns-servers)"
+      type: string
+      placeholder: "1.1.1.1,8.8.8.8  (optional)"
+    - field_id: system_dns
+      label: "Use OS's own DNS resolver (--system-dns)"
+      type: bool
+    - field_id: traceroute
+      label: "Traceroute to each host (--traceroute)"
+      type: bool
+    - field_id: ipv6
+      label: "Scan over IPv6 (-6)"
+      type: bool
+      help: "Target must be a real IPv6 address/hostname too."
+
+    - field_id: exclude
+      label: "Exclude hosts (--exclude)"
+      type: string
+      placeholder: "10.0.0.5,10.0.0.6  (optional)"
+    - field_id: exclude_file
+      label: "Exclude hosts from file (--excludefile)"
+      type: path
+      placeholder: "optional"
+    - field_id: random_targets
+      label: "Scan N random internet hosts (-iR)"
+      type: int
+      placeholder: "optional — replaces Targets entirely, RESEARCH/LAB USE ONLY"
+      help: "Picks random public IPs. Almost never something you're authorized to do against the real internet — included for completeness, not everyday use."
+    - field_id: exclude_ports
+      label: "Exclude ports (--exclude-ports)"
+      type: string
+      placeholder: "optional"
+    - field_id: sequential_ports
+      label: "Scan ports in order, don't randomize (-r)"
+      type: bool
+
+    - field_id: version_intensity
+      label: "Version-detection intensity 0-9 (--version-intensity)"
+      type: int
+      placeholder: "0=light .. 9=try everything, optional"
+    - field_id: version_light
+      label: "Version-detection: light/fast only (--version-light)"
+      type: bool
+    - field_id: version_trace
+      label: "Show version-probe debug detail (--version-trace)"
+      type: bool
+    - field_id: osscan_limit
+      label: "Only attempt OS detection on promising hosts (--osscan-limit)"
+      type: bool
+    - field_id: osscan_guess
+      label: "Guess OS more aggressively (--osscan-guess)"
+      type: bool
+
+    - field_id: script_default
+      label: "Run default scripts (-sC)"
+      type: bool
+      help: "Same as --script=default; ignored if you already filled in Scripts above."
+    - field_id: script_args_file
+      label: "NSE script args from a file (--script-args-file)"
+      type: path
+      placeholder: "optional"
+    - field_id: script_trace
+      label: "Show all NSE script traffic (--script-trace)"
+      type: bool
+    - field_id: script_updatedb
+      label: "Update NSE script database (--script-updatedb)"
+      type: bool
+      help: "Doesn't scan anything — just refreshes /usr/share/nmap/scripts.db. Target not needed."
+    - field_id: script_help
+      label: "Show help for script(s) (--script-help)"
+      type: string
+      placeholder: "http-title  (optional — doesn't scan, target not needed)"
+
+    - field_id: min_rate
+      label: "Minimum packets/sec (--min-rate)"
+      type: int
+      placeholder: "optional — floor the speed, useful on large scans"
+    - field_id: max_rate
+      label: "Maximum packets/sec (--max-rate)"
+      type: int
+      placeholder: "optional — cap the speed, gentler on the network"
+    - field_id: host_timeout
+      label: "Give up on a host after (--host-timeout)"
+      type: string
+      placeholder: "30m  (optional)"
+    - field_id: max_retries
+      label: "Max probe retransmissions (--max-retries)"
+      type: int
+      placeholder: "optional — lower = faster but less reliable on lossy links"
+    - field_id: scan_delay
+      label: "Delay between probes (--scan-delay)"
+      type: string
+      placeholder: "1s  (optional)"
+    - field_id: max_scan_delay
+      label: "Max delay between probes (--max-scan-delay)"
+      type: string
+      placeholder: "optional"
+
+    - field_id: debug
+      label: "Debug output (-d)"
+      type: bool
+    - field_id: show_open_only
+      label: "Show only open ports (--open)"
+      type: bool
+      help: "Hides closed/filtered noise — very commonly used on big scans."
+    - field_id: packet_trace
+      label: "Show every packet sent/received (--packet-trace)"
+      type: bool
+    - field_id: iflist
+      label: "Print interfaces/routes, don't scan (--iflist)"
+      type: bool
+      help: "A diagnostic dump, not a scan — target not needed."
+    - field_id: append_output
+      label: "Append to output file instead of overwriting (--append-output)"
+      type: bool
+    - field_id: resume
+      label: "Resume an aborted scan (--resume)"
+      type: path
+      placeholder: "scan.gnmap  (optional — needs a previous -oN/-oG file)"
+    - field_id: assume_privileged
+      label: "Force-assume raw-socket privileges (--privileged)"
+      type: bool
+      help: "For when nmap's own auto-detection of your privilege level is wrong (e.g. Linux capabilities set on the binary instead of running as root)."
+    - field_id: assume_unprivileged
+      label: "Force-assume NO raw-socket privileges (--unprivileged)"
+      type: bool
+      help: "Makes nmap fall back to connect()-based techniques even if it could use raw sockets."
     - field_id: output_format
       label: "Save output as"
       type: choice
