@@ -25,16 +25,32 @@ def _truthy(v: object) -> bool:
 def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
     """Build a msfvenom CommandPlan from validated inputs.
 
-    Recognised keys (all optional except ``payload``):
+    2026-07-26: extended to cover msfvenom's FULL `-h` surface (previous pass
+    only covered the "major gaps" a first audit flagged — see the nmap builder
+    for the same corrective pattern). Recognised keys (all optional except
+    ``payload``):
       payload, lhost, lport, options(dict or "KEY=VAL,KEY2=VAL2" string),
-      arch, platform, encoder, iterations, badchars, template, keep,
-      encrypt, format, outfile, list (shortcut: overrides everything else).
+      list_options, arch, platform, encoder, iterations, badchars, encrypt,
+      encrypt_key, encrypt_iv, smallest, space, encoder_space, nopsled,
+      pad_nops, add_code, service_name, sec_name, var_name, timeout,
+      template, keep, format, outfile, list (shortcut: overrides everything
+      else).
     """
     notes: list[str] = []
 
     if inputs.get("list"):
         return assemble("msfvenom", {Slot.ACTION_OPTIONS: ["--list", str(inputs["list"])]},
                         notes=["Lists payloads/formats/encoders."])
+
+    if inputs.get("list_options"):
+        payload = inputs.get("payload")
+        if not payload:
+            notes.append("--list-options needs a Payload selected first — pick one, then "
+                         "check this box to see exactly what it needs (LHOST, LPORT, etc.).")
+            return assemble("msfvenom", {}, notes=notes)
+        return assemble("msfvenom", {Slot.ACTION_OPTIONS: ["-p", str(payload), "--list-options"]},
+                        notes=["Shows this payload's standard/advanced/evasion options — this is "
+                               "how you discover what to fill in BEFORE building. Generates nothing."])
 
     a: list[str] = []   # -p + datastore + shaping (kept in canonical order within the slot)
     o: list[str] = []   # -f / -o
@@ -74,6 +90,56 @@ def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
         a.extend(["-b", str(inputs["badchars"])])
     if inputs.get("encrypt"):
         a.extend(["--encrypt", str(inputs["encrypt"])])
+    encrypt_key = inputs.get("encrypt_key")
+    if encrypt_key:
+        if not inputs.get("encrypt"):
+            notes.append("--encrypt-key only applies together with Encrypt (--encrypt) — set that field too.")
+        a.extend(["--encrypt-key", str(encrypt_key)])
+    encrypt_iv = inputs.get("encrypt_iv")
+    if encrypt_iv:
+        if not inputs.get("encrypt"):
+            notes.append("--encrypt-iv only applies together with Encrypt (--encrypt) — set that field too.")
+        a.extend(["--encrypt-iv", str(encrypt_iv)])
+
+    # Size / NOP-sled shaping — distinct from encoding: these control the
+    # RAW BYTE SIZE of the result, not how it's obfuscated.
+    if _truthy(inputs.get("smallest")):
+        a.append("--smallest")
+        notes.append("--smallest already tries every available encoder to find the smallest "
+                     "result — an explicit Encoder above is usually redundant alongside it.")
+    space = inputs.get("space")
+    if space not in (None, ""):
+        a.extend(["-s", str(int(space))])
+    encoder_space = inputs.get("encoder_space")
+    if encoder_space not in (None, ""):
+        a.extend(["--encoder-space", str(int(encoder_space))])
+    nopsled = inputs.get("nopsled")
+    has_nopsled = nopsled not in (None, "")
+    if has_nopsled:
+        a.extend(["-n", str(int(nopsled))])
+    if _truthy(inputs.get("pad_nops")):
+        if not has_nopsled:
+            notes.append("--pad-nops only has an effect together with -n/NOP sled length — set that field too.")
+        a.append("--pad-nops")
+    add_code = inputs.get("add_code")
+    if add_code:
+        a.extend(["-c", str(add_code)])
+
+    # Output-artifact branding — helps a generated binary blend in.
+    service_name = inputs.get("service_name")
+    if service_name:
+        a.extend(["--service-name", str(service_name)])
+    sec_name = inputs.get("sec_name")
+    if sec_name:
+        a.extend(["--sec-name", str(sec_name)])
+    var_name = inputs.get("var_name")
+    if var_name:
+        a.extend(["-v", str(var_name)])
+    timeout = inputs.get("timeout")
+    if timeout not in (None, ""):
+        a.extend(["-t", str(int(timeout))])
+        notes.append("-t/--timeout only matters when Payload is '-' or STDIN (reading custom "
+                     "shellcode from standard input) — ignored for a normal named payload.")
 
     # Template injection: wrap the payload inside an existing executable so it
     # keeps looking (and, with -k, working) like the original program. This is
@@ -104,7 +170,16 @@ def build_msfvenom(inputs: Mapping[str, object]) -> CommandPlan:
 
 @register_builder("msfconsole")
 def build_msfconsole(inputs: Mapping[str, object]) -> CommandPlan:
-    """Render console grammar into `msfconsole -q -x "use …; set …; run"`."""
+    """Render console grammar into `msfconsole -q -x "use …; set …; run"`.
+
+    2026-07-26: also covers msfconsole's own launch-time CLI flags, which
+    previously had ZERO representation anywhere outside the console-grammar
+    steps (see docs/DEPTH-AUDIT.md pattern) — -r/--resource (run a saved
+    resource script on startup), -o/--output (log console output to a file),
+    and -n/--no-database (skip the PostgreSQL connection entirely). Recognised
+    keys: commands, module, sets, action, resource_file, output_file,
+    no_database.
+    """
     notes: list[str] = []
     commands: list[str] = []
 
@@ -122,13 +197,32 @@ def build_msfconsole(inputs: Mapping[str, object]) -> CommandPlan:
         if action:
             commands.append(str(action))
 
-    if not commands:
-        notes.append("No console steps — pick a module and the values to set (use/set/run).")
-        return assemble("msfconsole", {Slot.GLOBAL_OPTIONS: ["-q"]}, notes=notes)
+    g: list[str] = ["-q"]  # quiet banner (GLOBAL) — always on, matches prior behaviour.
+    a: list[str] = []
+    o: list[str] = []
 
-    script = "; ".join(commands)
-    # -q quiet banner (GLOBAL); -x runs the script then drops into the console (ACTION).
+    if _truthy(inputs.get("no_database")):
+        g.append("-n")
+
+    resource_file = inputs.get("resource_file")
+    if resource_file:
+        a.extend(["-r", str(resource_file)])
+
+    if commands:
+        # -x runs the script then drops into the console (ACTION).
+        a.extend(["-x", "; ".join(commands)])
+
+    output_file = inputs.get("output_file")
+    if output_file:
+        o.extend(["-o", str(output_file)])
+
+    if not commands and not resource_file:
+        notes.append("No console steps — pick a module and the values to set (use/set/run), "
+                     "or point Resource script at a saved .rc file to run instead.")
+        return assemble("msfconsole", {Slot.GLOBAL_OPTIONS: g, Slot.OUTPUT_OPTIONS: o}, notes=notes)
+
     return assemble("msfconsole", {
-        Slot.GLOBAL_OPTIONS: ["-q"],
-        Slot.ACTION_OPTIONS: ["-x", script],
+        Slot.GLOBAL_OPTIONS: g,
+        Slot.ACTION_OPTIONS: a,
+        Slot.OUTPUT_OPTIONS: o,
     }, notes=notes)

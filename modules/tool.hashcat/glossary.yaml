@@ -23,3 +23,11 @@ terms:
     definition: "-a 1 pairs every word from a first wordlist with every word from a second (word1word2) — good for firstname+lastname style passwords."
   - term: second_wordlist
     definition: "The dictionary2 positional argument required by combinator (-a 1) — the RIGHT half of each generated candidate."
+  - term: custom_charset
+    definition: "-1/-2/-3/-4 DEFINE what a mask placeholder like ?1 means (e.g. -1 ?l?d makes ?1 = lowercase-or-digit) — different from the built-in ?l/?u/?d/?s which need no definition."
+  - term: hex_encoding
+    definition: "--hex-charset/--hex-salt/--hex-wordlist read that input as hex bytes instead of plain text — for binary or non-UTF8 candidate/salt data a mask or wordlist file can't represent directly."
+  - term: keyspace
+    definition: "The total number of candidate passwords an attack will try — shown by --keyspace/--total-candidates before you commit to running it."
+  - term: device_type
+    definition: "-D picks OpenCL device TYPE (1=CPU, 2=GPU, 3=FPGA/other) — different from -d, which picks a specific device ID once you know the type works."

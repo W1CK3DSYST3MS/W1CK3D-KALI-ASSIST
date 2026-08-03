@@ -25,3 +25,19 @@ terms:
     definition: "-a ends the WHOLE capture on a condition (duration/filesize/files/packets) — unlike -b, which just rotates."
   - term: decode_as
     definition: "-d <layer>==<selector>,<protocol> forces a dissector, overriding tshark's port-based protocol guess."
+  - term: two_pass_analysis
+    definition: "-2 reads the whole file twice so filters/stats needing later context (like -R or some -z reports) get complete answers — costs speed for accuracy."
+  - term: read_filter
+    definition: "-R applies a display-filter-syntax filter DURING the second pass (needs -2) — different from -Y, which just hides already-fully-processed packets from view."
+  - term: name_resolution_flags
+    definition: "-N <letters> turns on ONLY specific name-resolution types (d=DNS, m=MAC, n=network, N=external resolvers, t=ports, v=VLAN, g=geolocation, s=SNI) instead of -n's all-or-nothing switch."
+  - term: hex_dump
+    definition: "-x prints each packet's raw bytes as hex + ASCII, alongside the summary/detail view."
+  - term: export_objects
+    definition: "--export-objects <protocol>,<dir> pulls transferred files (e.g. HTTP downloads, SMB shares) out of a capture into a directory."
+  - term: conversation_stats
+    definition: "-z conv,<type> lists every conversation (pair of endpoints) seen, with packet/byte counts, per protocol layer (tcp, ip, udp...)."
+  - term: endpoint_stats
+    definition: "-z endpoints,<type> lists every individual endpoint (not pairs) seen, with total traffic per host/port."
+  - term: expert_info
+    definition: "-z expert surfaces tshark's own 'this looks worth a look' flags (errors, warnings, notes, chats) grouped by severity."

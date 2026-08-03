@@ -35,3 +35,9 @@ terms:
     definition: "Using -x/--template to wrap a payload inside an existing, real executable so the result keeps looking (and, with -k, working) like the original program — the core technique behind trojanized/backdoored software."
   - term: msfdb
     definition: "Sets up the PostgreSQL database the console uses."
+  - term: nopsled
+    definition: "A run of NOP (no-op) instructions prepended to shellcode (msfvenom -n) so an imprecise jump/return address still lands somewhere inside it and 'slides' down to the real payload."
+  - term: shellcode_encryption
+    definition: "msfvenom --encrypt wraps the raw shellcode bytes in aes256/rc4/xor/base64 so a static file scan doesn't see the real payload directly — different from -e/--encoder, which reshapes bytes to avoid bad characters, not to hide them."
+  - term: resource_script
+    definition: "A saved .rc text file of console commands, one per line, run automatically with msfconsole -r <file> — the reusable, version-controllable alternative to a one-line -x \"cmd; cmd\" chain."

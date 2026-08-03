@@ -215,6 +215,29 @@ flows:
             cause: "SecLists not installed."
             fix: "Install it: sudo apt install seclists."
             check: "Re-run after install."
+      - step_id: gw2
+        title: "Shape dir-mode output: full URLs, slashes, backups, and prechecks"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-e` (--expanded) prints the full URL instead of just the path. `--add-slash` appends / to every request (useful for frameworks that only serve a directory listing with the trailing slash). `--discover-backup` automatically also tries common backup-file suffixes (~, .bak, .swp, .old...) on every FOUND file. `--no-status` hides the status-code column. `--hide-length` hides the body-size column. `-X <file>` reads extensions from a file instead of typing them with -x. `--force` skips gobuster's own precheck (it normally refuses to run if the wordlist looks unreadable, the URL looks wrong, etc.) — only use this once you've confirmed the precheck's complaint is a false alarm."
+          why: "These don't change WHAT gets found — they change how much of that is spelled out for you, and --discover-backup automates a manual step (trying admin.php~ after finding admin.php) most people forget to do by hand."
+          where: "ACTION_OPTIONS; dir-mode-only flags."
+        find_it: "No new input for most of these — add them to a scan you already know how to run. -X needs a text file with one extension per line (no leading dot)."
+        command_anatomy:
+          - {token: "gobuster dir -u ... -w ...", does: "same directory scan as before"}
+          - {token: "-e", does: "print full URLs (http://site/admin) instead of bare paths (/admin)"}
+          - {token: "--discover-backup", does: "on every hit, also try common backup-file suffixes"}
+        try_this: "gobuster dir -u http://TARGET -w /usr/share/wordlists/dirb/common.txt -e --discover-backup"
+        success_criteria: "Results show full URLs, and any found file also gets checked for backup copies (e.g. config.php.bak)."
+        expected_output: |
+          http://TARGET/admin              (Status: 301) [Size: 312]
+          http://TARGET/config.php         (Status: 200) [Size: 1543]
+          http://TARGET/config.php.bak     (Status: 200) [Size: 1601]
+        alternatives:
+          - trigger: "'the tool refuses to start / precheck failed' but you're confident the target/wordlist is fine"
+            cause: "gobuster's built-in sanity check (reachability, wordlist readability) flagged something it thinks is wrong."
+            fix: "Only after actually confirming it's a false alarm, add --force to continue anyway. Don't reach for this as a first response to an error — read the precheck message first."
+            check: "Re-read the exact precheck error before deciding to override it."
   - flow_id: status_filter
     title: "Status-code filtering (reference)"
     goal: "Get signal, not noise — pick whitelist OR blacklist."
@@ -276,6 +299,30 @@ flows:
             cause: "Too many threads or server rate-limiting."
             fix: "Lower -t and raise --timeout."
             check: "Re-run at -t 20."
+      - step_id: gp2
+        title: "Retries, HTTP timeout, and quieting the noise"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [throttle]
+        explanation:
+          what: "`--timeout <dur>` caps how long gobuster waits per HTTP request before giving up (default 10s). `--retry` re-tries a request that timed out, up to `--retry-attempts` times. `-d <dur>` (--delay) pauses that long between every request per thread — the real throttle knob for a fragile target. `--no-progress` and `--no-error` quiet the live progress bar / error lines. `--no-color` strips ANSI colour codes (useful when piping to a file or another tool). `--debug` prints extra internal detail."
+          why: "A flaky network or slow server causes false 'not found' results if gobuster gives up too fast — --retry/--timeout make results more trustworthy. --delay is the real pacing control if -t (threads) alone is still too aggressive. The noise-reduction flags matter once you start piping gobuster's output into a file or another tool."
+          where: "GLOBAL_OPTIONS; shared by every mode."
+        find_it: "No new input — add these to a scan you already know how to run. --delay takes a duration like 500ms or 1s."
+        command_anatomy:
+          - {token: "gobuster dir -u ... -w ...", does: "same directory scan as before"}
+          - {token: "--timeout 15s", does: "wait up to 15 seconds per request before giving up"}
+          - {token: "--retry --retry-attempts 2", does: "retry a timed-out request up to 2 times"}
+          - {token: "-d 500ms", does: "pause 500ms between each thread's requests — the real speed brake"}
+        try_this: "gobuster dir -u http://TARGET -w /usr/share/wordlists/dirb/common.txt --timeout 15s --retry --retry-attempts 2 -d 500ms"
+        success_criteria: "Fewer spurious errors/timeouts on a slow or rate-limited target, at the cost of a slower overall scan."
+        expected_output: |
+          Progress: 4614 / 4615 (99.98%)
+          (no timeout errors, noticeably slower than the default)
+        alternatives:
+          - trigger: "still timing out constantly"
+            cause: "The server is genuinely overloaded or actively rate-limiting you."
+            fix: "Lower -t (threads) first — retries/timeout tuning can't fix a target that's actively throttling or blocking you."
+            check: "Try -t 5 with the same timeout/retry settings."
   - flow_id: auth_headers
     title: "Auth, headers, cookies, redirects (reference)"
     goal: "Scan authenticated areas."
@@ -308,6 +355,7 @@ flows:
       - step_id: ga2
         title: "Or use HTTP Basic Auth directly"
         slot_target: ACTION_OPTIONS
+        glossary_refs: [basic_auth]
         explanation:
           what: "`-U username -P password` sends credentials via HTTP Basic Auth — the browser popup-style login, not a cookie/session."
           why: "Some areas are protected by Basic Auth instead of a login page/cookie. dir, vhost and fuzz modes support it; dns/tftp/s3/gcs don't (Basic Auth is an HTTP-only concept)."
@@ -401,6 +449,30 @@ flows:
             cause: "No TFTP service on that host, or it's UDP-filtered."
             fix: "Confirm with `sudo nmap -sU -p 69 <target>` first — UDP scans are slow, be patient."
             check: "Confirm port 69/udp is open before troubleshooting further."
+      - step_id: gc4
+        title: "Control how many files gobuster lists per found bucket"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [bucket]
+        explanation:
+          what: "`-m <n>` (--max-files) caps how many file names gobuster lists from inside each publicly-readable bucket it finds (default 5). `--show-files` (on by default, no CLI switch to turn it off) makes it list those files at all rather than just reporting the bucket exists."
+          why: "A big, publicly-listable bucket can have thousands of objects — raising --max-files gives you more of the picture in one run; lowering it keeps output short when you just want to know WHICH buckets exist."
+          where: "ACTION_OPTIONS; s3/gcs-mode-only."
+        find_it: "No new input — add -m to the s3/gcs scan from the previous steps."
+        command_anatomy:
+          - {token: "gobuster s3 -w names.txt", does: "same bucket-name scan as before"}
+          - {token: "-m 20", does: "list up to 20 files from each bucket found (default is 5)"}
+        try_this: "gobuster s3 -w names.txt -m 20"
+        success_criteria: "Found buckets list up to 20 files each instead of the default 5."
+        expected_output: |
+          Bucket: my-company-backup [Status: 200, Listable: true]
+          my-company-backup/db-2024-01.sql.gz
+          my-company-backup/db-2024-02.sql.gz
+          ... (up to 20 entries)
+        alternatives:
+          - trigger: "still only see 5 files even after setting -m higher"
+            cause: "The bucket itself only has 5 (or fewer) objects — -m is a ceiling, not a guarantee."
+            fix: "Not a bug — that bucket is just small. Compare against a bucket you know has more objects."
+            check: "N/A — this is expected when the bucket is genuinely small."
   - flow_id: dns_mode
     title: "DNS mode — subdomains (reference)"
     goal: "Enumerate subdomains of a domain."
@@ -412,29 +484,51 @@ flows:
         slot_target: TARGET_PIVOT
         glossary_refs: [subdomain]
         explanation:
-          what: "`dns -d <domain> -w <list>`; `-i` shows IPs; `-r <resolver>` uses a specific DNS server."
+          what: "`dns --domain <domain> -w <list>` tries every wordlist entry as a subdomain and reports which ones resolve. gobuster prints the resolved IP alongside every hit automatically — there's no separate 'show IPs' flag to turn on."
           why: "Maps the attack surface beyond the main site."
-          where: "dns subcommand; -d in TARGET_PIVOT."
+          where: "dns subcommand; --domain in TARGET_PIVOT."
         find_it: >
           Use a registered domain you're authorized to test — replace <target-domain> below
           with it (example.com in the explanation above is just an illustration, not a real
           target) — and a DNS subdomain list from SecLists.
         command_anatomy:
           - {token: "dns", does: "subdomain brute-force mode"}
-          - {token: "-d <target-domain>", does: "the base domain — you type this in"}
+          - {token: "--domain <target-domain>", does: "the base domain — you type this in (no short flag on this gobuster version)"}
           - {token: "-w .../subdomains-top1million-5000.txt", does: "list of subdomain names to try"}
-          - {token: "-i", does: "also show the resolved IP addresses"}
-        try_this: "gobuster dns -d <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -i"
-        success_criteria: "Discovered subdomains print (with IPs if -i)."
+        try_this: "gobuster dns --domain <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+        success_criteria: "Discovered subdomains print, each with its resolved IP address."
         expected_output: |
           Found: www.example.com [93.184.216.34]
           Found: mail.example.com [93.184.216.35]
         alternatives:
           - trigger: "nothing found / rate-limited"
             cause: "Resolver limits, small list, or wildcard DNS."
-            fix: "Try a different resolver (-r 1.1.1.1), a bigger list; check for wildcard DNS."
-            check: "If everything resolves, suspect a wildcard."
-  - flow_id: vhost_mode
+            fix: "Try a different resolver (--resolver 1.1.1.1), a bigger list; check for wildcard DNS (next step)."
+            check: "If EVERY random guess resolves, suspect a wildcard — see the next step."
+      - step_id: gn2
+        title: "Wildcard DNS, CNAMEs, and a custom resolver"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [dns_wildcard]
+        explanation:
+          what: "`--wildcard` forces gobuster to keep going even when it detects wildcard DNS (a misconfigured zone that resolves EVERY subdomain, real or not — gobuster normally stops and warns you instead of wasting time on fake hits). `-c` (--check-cname) also records each hit's CNAME record. `--no-fqdn` stops gobuster auto-adding a trailing dot to the domain, letting your resolver's own DNS search-domain settings apply. `--resolver <server[:port]>` and `--protocol udp|tcp` point queries at a specific DNS server instead of your system default."
+          why: "Wildcard DNS makes every single guess look like a 'find' — without noticing this you'd report hundreds of fake subdomains. A custom resolver also helps when your default DNS is slow, filtered, or you specifically want to query the target's own authoritative nameserver."
+          where: "ACTION_OPTIONS; all dns-mode-only flags."
+        find_it: "No new input — try --wildcard on a domain from step 1. For --resolver, any public resolver works for testing (1.1.1.1, 8.8.8.8)."
+        command_anatomy:
+          - {token: "gobuster dns --domain <target-domain> -w ...", does: "same subdomain scan as before"}
+          - {token: "--wildcard", does: "continue even if wildcard DNS is detected (default: gobuster stops and warns)"}
+          - {token: "--resolver 1.1.1.1", does: "use this DNS server instead of your system default"}
+        try_this: "gobuster dns --domain <target-domain> -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --wildcard --resolver 1.1.1.1"
+        success_criteria: "The scan runs to completion instead of stopping at a wildcard warning; results come from the resolver you chose."
+        expected_output: |
+          [-] Wildcard DNS found. IP address(es): 93.184.216.34
+          [-] To force processing of Wildcard DNS, specify the '--wildcard' switch.
+          (with --wildcard set, the scan continues instead of aborting here)
+        alternatives:
+          - trigger: "'Wildcard DNS found ... exiting' and the scan stops"
+            cause: "gobuster detected the domain resolves random/nonexistent names too, and refuses to waste your time by default."
+            fix: "Confirm it really is a wildcard (try a deliberately-random name with `dig randomjunk123.<domain>`); if so, either skip this domain or re-run with --wildcard knowing results will be noisy."
+            check: "Every result after enabling --wildcard should be treated with more suspicion, not less."
     title: "VHost mode (reference)"
     goal: "Find name-based virtual hosts sharing an IP."
     command_builder_id: gobuster
@@ -466,6 +560,28 @@ flows:
             cause: "The server returns a default page for unknown vhosts."
             fix: "Filter with --exclude-length on that size."
             check: "Note the default body length and exclude it."
+      - step_id: gv2
+        title: "Fine-tune vhost filtering"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`--domain <domain>` sets the base domain to append when your URL is an IP address (if you leave it out and pass a domain-based URL, gobuster extracts the hostname from the URL itself). `--exclude-status <codes>` drops specific status codes from the results (separate from --exclude-length). `--exclude-hostname-length` automatically adjusts the length filter for each guess, since a longer/shorter hostname naturally shifts the response size a little even on an identical default page."
+          why: "--exclude-hostname-length solves a subtler version of the false-positive problem in the previous step: even a 'same default page' response varies slightly in size because the hostname you guessed is embedded in it somewhere — a fixed --exclude-length can miss those near-misses."
+          where: "ACTION_OPTIONS; vhost-mode-only flags."
+        find_it: "Use an IP-based target URL from step 1. --domain is required in that case since there's no hostname in the URL to extract a base domain from."
+        command_anatomy:
+          - {token: "gobuster vhost -u http://10.0.0.20 -w ...", does: "vhost scan against an IP (no hostname to extract a domain from)"}
+          - {token: "--domain example.com", does: "the base domain to append to each guessed word"}
+          - {token: "--exclude-hostname-length", does: "auto-adjust the size filter per-guess instead of one fixed number"}
+        try_this: "gobuster vhost -u http://10.0.0.20 -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --domain example.com --exclude-hostname-length"
+        success_criteria: "Fewer false-positive 'found' vhosts than a plain --exclude-length filter would catch."
+        expected_output: |
+          Found: dev.example.com (Status: 200) [Size: 5122]
+          (near-identical default-page sizes for non-existent vhosts are now filtered out)
+        alternatives:
+          - trigger: "still lots of false positives"
+            cause: "The server's default vhost response varies for reasons beyond hostname length (timestamps, random IDs in the page)."
+            fix: "Combine with --exclude-length on the common baseline size, or check a few by hand in a browser."
+            check: "Compare 2-3 'found' results by hand to confirm they're real."
   - flow_id: output
     title: "Output & integration (reference)"
     goal: "Save results to feed the next tool."
@@ -493,6 +609,207 @@ flows:
             cause: "Output directory not writable."
             fix: "Pick a writable path (e.g. your home dir)."
             check: "Confirm the directory is writable."
+
+  - flow_id: fuzz_mode
+    title: "Fuzz mode — the FUZZ keyword, anywhere in the request (reference)"
+    goal: "Understand gobuster's most flexible mode: replacing the literal word FUZZ in the URL, a header, or the request body."
+    command_builder_id: gobuster
+    slots: [PROGRAM, GLOBAL_OPTIONS, TARGET_PIVOT, ACTION_OPTIONS, EXTRA_FILES]
+    steps:
+      - step_id: fz1
+        title: "What makes fuzz mode different"
+        slot_target: null
+        glossary_refs: [fuzz_keyword]
+        explanation:
+          what: "Every other mode (dir/dns/vhost) has ONE fixed place it substitutes wordlist entries — a URL path, a subdomain, a Host header. Fuzz mode has NO fixed place: you write the literal word FUZZ anywhere in the URL, in a header value, or in the request body, and gobuster substitutes each wordlist entry there instead."
+          why: "This is what lets you brute-force things dir/dns/vhost mode simply can't reach: a query-string parameter value (?id=FUZZ), a specific header like an API key (X-API-Key: FUZZ), or a POST body field (username=admin&password=FUZZ)."
+          where: "The FUZZ keyword goes wherever YOU put it — in the Target URL, in a Header, or in the Body field — not in a fixed slot."
+        find_it: "Pick exactly one thing you want to brute-force: a URL parameter value, a header value, or a POST field. Put the word FUZZ (all caps, exactly that) in that one spot."
+        command_anatomy:
+          - {token: "gobuster fuzz", does: "the program, in fuzz mode"}
+          - {token: "-u http://TARGET/page.php?id=FUZZ", does: "FUZZ sits in the query-string value — each wordlist entry gets tried as ?id=<entry>"}
+          - {token: "-w wordlist.txt", does: "the values to substitute in place of FUZZ"}
+        try_this: "gobuster fuzz -u \"http://TARGET/page.php?id=FUZZ\" -w /usr/share/wordlists/dirb/common.txt"
+        success_criteria: "gobuster reports which substituted values produced a 'kept' response (see the status-filtering step next — fuzz mode's filtering works a little differently from dir mode)."
+        expected_output: |
+          ===============================================================
+          Gobuster v3.8.2
+          ===============================================================
+          [+] FUZZ: 42          (Status: 200) [Size: 512]
+          ===============================================================
+        alternatives:
+          - trigger: "'the URL/header/body must contain the keyword FUZZ' error"
+            cause: "You ran fuzz mode without putting FUZZ anywhere — gobuster refuses to run because it wouldn't know what to substitute."
+            fix: "Add the literal word FUZZ (all caps) somewhere in the URL, a header, or the body."
+            check: "Re-check the exact spelling — it must be FUZZ, not fuzz or {FUZZ}."
+          - trigger: "you actually just wanted to brute-force directories"
+            cause: "dir mode already does that more simply — fuzz mode is for when the thing you want to brute-force ISN'T a URL path."
+            fix: "Use dir mode instead (first_dir / wordlists_ext reference flows) unless you specifically need FUZZ in a parameter, header, or body."
+            check: "Confirm dir mode can't already do what you need before reaching for fuzz mode."
+      - step_id: fz2
+        title: "FUZZ in a header — brute-force an API key or a custom header value"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "The same FUZZ keyword works inside a `-H` header value instead of the URL. gobuster still needs a real (non-FUZZ) URL via -u — only the header's VALUE contains FUZZ."
+          why: "Some APIs authenticate via a header (X-API-Key, Authorization) rather than a URL parameter — this is the only gobuster mode that can brute-force that."
+          where: "ACTION_OPTIONS (-H); -u still required and fixed."
+        find_it: "A real, reachable URL, plus the exact header name the API expects (check API docs or a captured request in Burp)."
+        command_anatomy:
+          - {token: "gobuster fuzz -u http://TARGET/api/data", does: "a fixed, real URL — no FUZZ here this time"}
+          - {token: "-H \"X-API-Key: FUZZ\"", does: "FUZZ sits inside the header VALUE — each wordlist entry gets tried as the key"}
+          - {token: "-w apikeys.txt", does: "candidate API key values"}
+        try_this: "gobuster fuzz -u http://TARGET/api/data -H \"X-API-Key: FUZZ\" -w apikeys.txt"
+        success_criteria: "One or more candidate values return a different status/size than the rest (e.g. 200 instead of 401/403)."
+        expected_output: |
+          [+] FUZZ: sk-live-abc123     (Status: 200) [Size: 88]
+        alternatives:
+          - trigger: "everything returns the same 401/403"
+            cause: "None of the candidates are valid, or the header name is wrong."
+            fix: "Double-check the exact header name the API expects; confirm at least one known-good key returns 200 as a sanity check."
+            check: "Test one confirmed-valid value manually with curl first."
+      - step_id: fz3
+        title: "FUZZ in the request body — brute-force a POST field"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "`-B`/`--body` sets the raw POST body, and FUZZ can go inside it too — e.g. a login form's password field. Pair with `-m POST` (method) since a body only makes sense on a request that actually sends one."
+          why: "Login forms, search boxes, and other POST-based inputs aren't reachable by putting FUZZ in the URL — the body is where their data actually lives."
+          where: "ACTION_OPTIONS (-B, -m); -u is still the fixed endpoint the POST goes to."
+        find_it: "Capture a real login/form POST request (browser dev tools or Burp) to see the exact field names and body format expected."
+        command_anatomy:
+          - {token: "gobuster fuzz -u http://TARGET/login -m POST", does: "POST to a fixed login endpoint"}
+          - {token: "-B \"username=admin&password=FUZZ\"", does: "the POST body; FUZZ sits in the password field"}
+          - {token: "-w passwords.txt", does: "candidate passwords"}
+        try_this: "gobuster fuzz -u http://TARGET/login -m POST -B \"username=admin&password=FUZZ\" -w passwords.txt"
+        success_criteria: "One candidate produces a distinctly different response (redirect to a dashboard, different size/status) from all the failed attempts."
+        expected_output: |
+          [+] FUZZ: hunter2          (Status: 302) [Size: 0]
+        alternatives:
+          - trigger: "this looks like a login brute-force attack"
+            cause: "It is — password-guessing against a live login form is exactly what this technique does."
+            fix: "Only ever run this against systems you own or have explicit written authorization to test; consider hydra for large-scale credential attacks instead (purpose-built for this)."
+            check: "Confirm authorization before running against any real login form."
+      - step_id: fz4
+        title: "Filtering fuzz-mode results"
+        slot_target: ACTION_OPTIONS
+        explanation:
+          what: "Fuzz mode's status filter is `-b`/`--exclude-statuscodes` — an EXCLUDE list only, there's no whitelist (`-s`) counterpart like dir mode has. `--exclude-length` works the same as in dir mode."
+          why: "Without filtering, a fuzz run against a parameter that always returns 200 (just with different content) buries the real finding in noise."
+          where: "ACTION_OPTIONS; fuzz-mode-only status semantics."
+        find_it: "Run once without filtering first to see what the 'normal/failed' response looks like, then exclude that pattern."
+        command_anatomy:
+          - {token: "gobuster fuzz -u ... -w ...", does: "the fuzz scan"}
+          - {token: "-b 404", does: "exclude responses with this status code"}
+          - {token: "--exclude-length 1234", does: "exclude responses of this exact body size (the common 'failed attempt' page)"}
+        try_this: "gobuster fuzz -u \"http://TARGET/page.php?id=FUZZ\" -w common.txt --exclude-length 1234"
+        success_criteria: "Only the genuinely different responses remain — not every single attempt."
+        expected_output: |
+          [+] FUZZ: 42          (Status: 200) [Size: 512]
+        alternatives:
+          - trigger: "everything still looks the same"
+            cause: "The app doesn't vary status/size in a way that reveals success — it may need content comparison instead."
+            fix: "Try -e (not available in fuzz mode) — instead manually diff a couple of full responses with curl to spot what actually differs."
+            check: "curl a known-bad and a suspected-good value and diff the bodies by eye."
+
+  - flow_id: pattern_resume
+    title: "Replacement patterns & resuming large scans (reference)"
+    goal: "Combine multiple wordlist substitutions per guess, and pick a big scan back up without starting over."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, EXTRA_FILES]
+    steps:
+      - step_id: pr1
+        title: "Replacement patterns — combine a word with extra context"
+        slot_target: null
+        glossary_refs: [replacement_pattern]
+        explanation:
+          what: "`-p <file>` (--pattern) reads a file of PATTERNS — each line can contain the placeholder {GOBUSTER} which gets replaced by every wordlist word, letting you test variations like {GOBUSTER}.bak, admin-{GOBUSTER}, or {GOBUSTER}/config on top of the plain wordlist itself. `--discover-pattern <file>` (--pd) applies a second pattern file only to words that ALREADY succeeded, to explore around a real find."
+          why: "A wordlist alone gives you one shape per line. Patterns let you multiply a small wordlist into many realistic variations without hand-writing every combination."
+          where: "A standalone flag alongside -w, not tied to any slot position."
+        find_it: "Write a small text file, one pattern per line, using {GOBUSTER} where the wordlist word should go — e.g. `{GOBUSTER}.bak` and `.{GOBUSTER}.swp`."
+        command_anatomy:
+          - {token: "gobuster dir -u ... -w common.txt", does: "the normal directory scan"}
+          - {token: "-p patterns.txt", does: "also try each pattern in this file, substituting {GOBUSTER} with the current word"}
+        try_this: "printf '{GOBUSTER}.bak\\n{GOBUSTER}.old\\n' > patterns.txt && gobuster dir -u http://TARGET -w /usr/share/wordlists/dirb/common.txt -p patterns.txt"
+        success_criteria: "Results include both the plain words AND the pattern variations (admin.bak, admin.old, ...)."
+        expected_output: |
+          /admin                (Status: 301) [Size: 312]
+          /admin.bak            (Status: 200) [Size: 88]
+        alternatives:
+          - trigger: "'no {GOBUSTER} placeholder found' or patterns are ignored"
+            cause: "A line in the pattern file doesn't contain the literal {GOBUSTER} placeholder."
+            fix: "Every line in the pattern file needs {GOBUSTER} somewhere in it — plain text lines without it are invalid patterns."
+            check: "Re-check each line of the pattern file for the exact placeholder spelling."
+      - step_id: pr2
+        title: "Resume a big scan from where it stopped"
+        slot_target: null
+        glossary_refs: [wordlist]
+        explanation:
+          what: "`--wordlist-offset <n>` skips the first N lines of the wordlist and starts from line N+1 — effectively resuming a scan that got interrupted partway through a large list."
+          why: "Re-running a multi-hour scan against a huge wordlist from line 1 after a Ctrl+C or dropped connection wastes real time — the offset picks up close to where it stopped."
+          where: "A standalone flag alongside -w."
+        find_it: "Check the progress output/log from the interrupted run for how many entries it had already tried (gobuster's progress line shows a count like '128000 / 500000')."
+        command_anatomy:
+          - {token: "gobuster dir -u ... -w bigwordlist.txt", does: "the original scan"}
+          - {token: "--wordlist-offset 128000", does: "skip the first 128000 lines, resume from there"}
+        try_this: "gobuster dir -u http://TARGET -w bigwordlist.txt --wordlist-offset 128000"
+        success_criteria: "The progress counter starts near 128000 instead of 0 — no re-scanning of already-tried entries."
+        expected_output: |
+          Progress: 128034 / 500000 (25.61%)
+        alternatives:
+          - trigger: "unsure of the exact offset / lost the progress count"
+            cause: "The interrupted run's progress output wasn't saved."
+            fix: "Estimate conservatively (round DOWN) — re-trying a few hundred already-tried entries costs seconds; skipping real ones costs findings."
+            check: "When in doubt, use a smaller offset than you think you need."
+
+  - flow_id: tls_client_certs
+    title: "Client certificates, custom methods & network presentation (reference, advanced)"
+    goal: "Authenticate at the TLS layer, change the HTTP method, and control which local interface/IP gobuster uses."
+    command_builder_id: gobuster
+    slots: [PROGRAM, TARGET_PIVOT, ACTION_OPTIONS, ENV_INTERFACE]
+    steps:
+      - step_id: tc1
+        title: "Authenticate with a TLS client certificate"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [client_cert]
+        explanation:
+          what: "Some sites require a CLIENT certificate (not a server cert — YOUR machine proves its identity to the server) before they'll respond at all — common on internal/corporate apps. `--client-cert-pem`/`--client-cert-pem-key` supply a PEM cert+key pair; `--client-cert-p12`/`--client-cert-p12-password` supply a bundled .p12 file instead. `--tls-renegotiation` allows an older TLS handshake style some legacy servers still require."
+          why: "Without the right client certificate, these servers refuse the TLS handshake before gobuster ever gets to send a single request — every attempt fails identically, which is a strong hint you need this."
+          where: "ACTION_OPTIONS; HTTP-speaking modes only (dir/vhost/fuzz/s3/gcs)."
+        find_it: "You'll be issued (or need to export) a client certificate for the specific engagement — this isn't something you generate yourself for a normal test. PEM files are plain text starting with -----BEGIN CERTIFICATE-----; .p12 is a binary bundle."
+        command_anatomy:
+          - {token: "gobuster dir -u https://internal.site -w ...", does: "the normal directory scan, but against a cert-gated site"}
+          - {token: "--client-cert-pem client.pem", does: "the client's public certificate"}
+          - {token: "--client-cert-pem-key client.key", does: "the matching private key (must have no password)"}
+        try_this: "gobuster dir -u https://internal.site -w common.txt --client-cert-pem client.pem --client-cert-pem-key client.key"
+        success_criteria: "Requests succeed where they previously all failed identically at the TLS handshake stage."
+        expected_output: |
+          /dashboard             (Status: 200) [Size: 4210]
+        alternatives:
+          - trigger: "'tls: certificate required' or every single request fails the same way"
+            cause: "The server needs a client certificate and none was supplied (or the key has a password, which --client-cert-pem-key doesn't support)."
+            fix: "Confirm you have the right cert+key pair for this specific target; strip any password from the key file first if needed."
+            check: "Test the cert+key pair with curl --cert/--key first to isolate the problem from gobuster itself."
+      - step_id: tc2
+        title: "Override the HTTP method, and pick your network presentation"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [http_method]
+        explanation:
+          what: "`-m <METHOD>` (--method) sends every request with a different HTTP verb (POST, PUT, DELETE...) instead of the default GET — useful for APIs that only respond to specific methods, or fuzz mode's POST-body fuzzing (fz3 in the fuzz mode flow). `--no-canonicalize-headers` sends header NAMES exactly as you typed them instead of gobuster normalizing casing (X-custom-HEADER stays as-is instead of becoming X-Custom-Header) — some picky servers care about this. `--interface <name>` / `--local-ip <ip>` pick which network interface or local IP address gobuster sends from (mutually exclusive with each other)."
+          why: "REST APIs often expose completely different (and more interesting) endpoints under PUT/DELETE than under GET. --interface/--local-ip matter on a multi-homed machine (VPN + regular network) where the wrong interface means your requests never reach the target at all."
+          where: "ACTION_OPTIONS (-m, --no-canonicalize-headers); ENV_INTERFACE (--interface/--local-ip)."
+        find_it: "For -m, check API documentation or a captured request for the method it actually expects. For --interface, list yours with `ip a`."
+        command_anatomy:
+          - {token: "gobuster dir -u http://TARGET/api -w ...", does: "the normal directory scan"}
+          - {token: "-m PUT", does: "send every request as PUT instead of GET"}
+          - {token: "--interface eth0", does: "send from this network interface specifically"}
+        try_this: "gobuster dir -u http://TARGET/api -w common.txt -m PUT"
+        success_criteria: "Different (often more revealing) results than the same scan run with the default GET."
+        expected_output: |
+          /users/1               (Status: 200) [Size: 340]
+        alternatives:
+          - trigger: "--interface and --local-ip together give an error"
+            cause: "gobuster only accepts one way of specifying your outbound network identity, not both."
+            fix: "Pick ONE — usually --interface is simpler unless you specifically need a non-default IP on that interface."
+            check: "Re-run with only one of the two set."
 
 quick_build:
   builder: gobuster

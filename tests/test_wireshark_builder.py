@@ -96,3 +96,119 @@ def test_snaplen_and_no_promiscuous_in_env():
 def test_capture_filter_on_read_file_is_noted():
     plan = build({"read_file": "cap.pcap", "capture_filter": "tcp port 80"})
     assert any("only applies to live capture" in n for n in plan.notes)
+
+
+def test_list_link_types_needs_interface():
+    with pytest.raises(ValueError):
+        build({"list_link_types": True})
+
+
+def test_list_link_types_is_standalone():
+    plan = build({"list_link_types": True, "source_iface": "eth0"})
+    assert plan.slot_values[Slot.TARGET_PIVOT] == ["-i", "eth0"]
+    assert plan.slot_values[Slot.ENV_INTERFACE] == ["-L"]
+
+
+def test_read_filter_auto_adds_two_pass():
+    plan = build({"read_file": "cap.pcap", "read_filter": "tcp"})
+    assert "-R" in plan.array_form and "tcp" in plan.array_form
+    assert "-2" in plan.slot_values[Slot.GLOBAL_OPTIONS]
+    assert any("Added -2" in n for n in plan.notes)
+
+
+def test_two_pass_explicit_not_duplicated_by_read_filter():
+    plan = build({"read_file": "cap.pcap", "two_pass": True, "read_filter": "tcp"})
+    assert plan.slot_values[Slot.GLOBAL_OPTIONS].count("-2") == 1
+    assert not any("Added -2" in n for n in plan.notes)
+
+
+def test_name_resolve_flags_and_quiet_errors_only():
+    plan = build({"read_file": "cap.pcap", "name_resolve_flags": "mnNtdv", "quiet_errors_only": True})
+    assert "-N" in plan.array_form and "mnNtdv" in plan.array_form
+    assert "-Q" in plan.slot_values[Slot.GLOBAL_OPTIONS]
+
+
+def test_output_type_without_fields():
+    plan = build({"read_file": "cap.pcap", "output_type": "json"})
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == ["-T", "json"]
+
+
+def test_output_type_ignored_when_fields_set():
+    plan = build({"read_file": "cap.pcap", "fields": "ip.src", "output_type": "json"})
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == ["-T", "fields", "-e", "ip.src"]
+    assert any("Output type is ignored" in n for n in plan.notes)
+
+
+def test_protocol_filters_note_without_qualifying_output_type():
+    plan = build({"read_file": "cap.pcap", "protocol_filter": "http tcp"})
+    assert "-j" in plan.array_form
+    assert any("ek, pdml or json" in n for n in plan.notes)
+
+    plan2 = build({"read_file": "cap.pcap", "output_type": "json", "protocol_filter_top": "http"})
+    assert "-J" in plan2.array_form
+    assert not any("ek, pdml or json" in n for n in plan2.notes)
+
+
+def test_timestamp_and_seconds_format():
+    plan = build({"read_file": "cap.pcap", "timestamp_format": "ad", "seconds_format": "hms"})
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == ["-t", "ad", "-u", "hms"]
+
+
+def test_verbose_tree_and_detail_protocols():
+    plan = build({"read_file": "cap.pcap", "verbose_tree": True, "detail_protocols": "http,tcp"})
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == ["-V", "-O", "http,tcp"]
+    assert not plan.notes
+
+
+def test_detail_protocols_without_verbose_tree_is_noted():
+    plan = build({"read_file": "cap.pcap", "detail_protocols": "http"})
+    assert any("normally used together with -V" in n for n in plan.notes)
+
+
+def test_hex_dump_and_hexdump_opts():
+    plan = build({"read_file": "cap.pcap", "hexdump_opts": "noascii"})
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == ["-x", "--hexdump", "noascii"]
+
+
+def test_print_even_writing_without_write_is_noted():
+    plan = build({"read_file": "cap.pcap", "print_even_writing": True})
+    assert "-P" in plan.array_form
+    assert any("no extra effect without" in n for n in plan.notes)
+
+
+def test_color_output_and_dissection_controls():
+    plan = build({
+        "read_file": "cap.pcap", "color_output": True,
+        "only_protocols": "http,tcp", "enable_protocol": "http2",
+        "disable_protocol": "quic",
+    })
+    assert plan.slot_values[Slot.ACTION_OPTIONS] == [
+        "--color", "--only-protocols", "http,tcp",
+        "--enable-protocol", "http2", "--disable-protocol", "quic",
+    ]
+
+
+def test_ring_duration_alongside_filesize_and_files():
+    plan = build({
+        "source_iface": "eth0", "write": "~/roll.pcapng",
+        "ring_filesize": 1000, "ring_duration": 3600, "ring_files": 5,
+    })
+    assert plan.slot_values[Slot.OUTPUT_OPTIONS] == [
+        "-w", "~/roll.pcapng",
+        "-b", "filesize:1000", "-b", "duration:3600", "-b", "files:5",
+    ]
+
+
+def test_output_format_save_network_addrs_export_objects():
+    plan = build({
+        "read_file": "cap.pcap", "output_format": "pcap",
+        "save_network_addrs": True, "export_objects": "http,/tmp/out",
+    })
+    assert plan.slot_values[Slot.OUTPUT_OPTIONS] == [
+        "-F", "pcap", "-W", "n", "--export-objects", "http,/tmp/out",
+    ]
+
+
+def test_monitor_mode_and_buffer_size_in_env():
+    plan = build({"source_iface": "wlan0", "monitor_mode": True, "buffer_size": 4})
+    assert plan.slot_values[Slot.ENV_INTERFACE] == ["-I", "-B", "4"]

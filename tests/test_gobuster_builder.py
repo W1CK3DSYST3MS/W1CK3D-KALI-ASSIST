@@ -13,9 +13,9 @@ def test_dir_mode_uses_dash_u():
     assert plan.slot_values[Slot.TARGET_PIVOT] == ["-u", "http://site"]
 
 
-def test_dns_mode_uses_dash_d():
+def test_dns_mode_uses_dash_dash_domain():
     plan = build({"mode": "dns", "target": "example.com", "wordlist": "w.txt"})
-    assert plan.slot_values[Slot.TARGET_PIVOT] == ["-d", "example.com"]
+    assert plan.slot_values[Slot.TARGET_PIVOT] == ["--domain", "example.com"]
 
 
 def test_tftp_mode_uses_dash_s():

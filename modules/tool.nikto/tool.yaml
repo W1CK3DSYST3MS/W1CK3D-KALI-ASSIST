@@ -76,9 +76,18 @@ flows:
         slot_target: ACTION_OPTIONS
         glossary_refs: [tuning]
         explanation:
-          what: "`-Tuning` limits which categories run. Digits: 1 = interesting files, 2 = misconfig, 3 = info disclosure, 4 = XSS, 9 = SQLi. Combine them (1234)."
+          what: >
+            `-Tuning` limits which categories run — the FULL set (nikto -H): 0 = file
+            upload, 1 = interesting file / seen in logs, 2 = misconfiguration / default
+            file, 3 = information disclosure, 4 = injection (XSS/script/HTML), 5 = remote
+            file retrieval (inside webroot), 6 = denial of service, 7 = remote file
+            retrieval (server-wide), 8 = command execution / remote shell, 9 = SQL
+            injection, a = authentication bypass, b = software identification, c = remote
+            source inclusion, d = web service, e = administrative console, x = reverse the
+            selection (run everything EXCEPT the listed categories). Combine any of them,
+            e.g. -Tuning 1234.
           why: "A full scan tests everything and is slow/loud. Tuning to what you care about is faster and kinder to the target."
-          where: "ACTION_OPTIONS; the digits pick categories."
+          where: "ACTION_OPTIONS; the characters pick categories."
         find_it: "Decide what you care about. A good general choice is 1234 (files + misconfig + info + XSS). Avoid 6 (DoS) on anything you can't disrupt."
         command_anatomy:
           - {token: "nikto -h http://TARGET", does: "the scan from step 2"}
@@ -191,10 +200,16 @@ flows:
         slot_target: ACTION_OPTIONS
         glossary_refs: [tuning]
         explanation:
-          what: "`-Tuning` picks categories: 1 files, 2 misconfig, 3 info, 4 XSS, 5 remote file, 6 DoS, 9 SQLi, 0 upload, x exclude."
-          why: "Faster and less noisy; combine digits e.g. -Tuning 1234."
+          what: >
+            `-Tuning` picks categories. Numbers: 0 upload, 1 interesting files, 2
+            misconfig, 3 info disclosure, 4 XSS/injection, 5 remote file retrieval
+            (webroot), 6 DoS, 7 remote file retrieval (server-wide), 8 command
+            execution, 9 SQLi. Letters: a auth bypass, b software ID, c remote source
+            inclusion, d web service, e admin console. x reverses the set (run
+            everything EXCEPT what you list).
+          why: "Faster and less noisy; combine characters e.g. -Tuning 1234."
           where: "ACTION_OPTIONS."
-        find_it: "Combine the digits for what you want; skip 6 (DoS)."
+        find_it: "Combine the characters for what you want; skip 6 (DoS) unless you're allowed to disrupt the target."
         command_anatomy:
           - {token: "-Tuning 1234", does: "run categories 1,2,3,4 only"}
         try_this: "nikto -h http://site -Tuning 1234"
@@ -360,6 +375,28 @@ flows:
             cause: "Every run silently checks CIRT.net for a newer nikto release unless told not to."
             fix: "Add `-nocheck` to any scan to skip that check entirely."
             check: "The scan starts immediately with no update check."
+      - step_id: nk7b
+        title: "Control the update-check prompt, and sanity-check nikto itself"
+        slot_target: GLOBAL_OPTIONS
+        explanation:
+          what: "`-ask yes|no|auto` controls what happens when the online version check DOES run: yes = ask before sending anything (the default), no = never ask and never send, auto = send without asking. `-dbcheck` verifies nikto's own plugin/database files parse correctly — no scan, no target, just a syntax check. `-Version` prints the versions of nikto and its plugins/database and exits — also no scan."
+          why: "-ask matters if you skip -nocheck but don't want an interactive prompt (e.g. scripting nikto). -dbcheck and -Version are quick sanity checks worth running after any manual edit to nikto's plugin/database files, or just to confirm what version you're running before reporting a finding."
+          where: "-ask is GLOBAL_OPTIONS, alongside -nocheck. -dbcheck/-Version replace the whole command — no host needed."
+        find_it: "No target needed for any of these three."
+        command_anatomy:
+          - {token: "nikto -dbcheck", does: "check plugin/database files for syntax errors, then exit"}
+          - {token: "nikto -Version", does: "print nikto + plugin + database versions, then exit"}
+        try_this: "nikto -dbcheck && nikto -Version"
+        success_criteria: "-dbcheck reports no syntax errors; -Version prints a clean version list."
+        expected_output: |
+          + No syntax errors found.
+          Nikto: 2.6.0
+          Database: 20240918
+        alternatives:
+          - trigger: "-dbcheck reports a syntax error"
+            cause: "A plugin or database file was hand-edited (or corrupted) and no longer parses."
+            fix: "Revert the change, or reinstall nikto with `sudo apt install --reinstall nikto` to restore the shipped files."
+            check: "Re-run -dbcheck until it reports clean."
   - flow_id: integration
     title: "Integration & reading results (reference)"
     goal: "Chain the web-recon tools; verify findings."
@@ -438,7 +475,7 @@ quick_build:
       label: "Test categories (-Tuning)"
       type: string
       placeholder: "1234  (files, misconfig, info, XSS)"
-      help: "Digits pick which categories run: 1 files, 2 misconfig, 3 info disclosure, 4 XSS, 5 remote file, 6 DoS, 9 SQLi. Combine digits, e.g. 1234. Avoid 6 unless you're allowed to disrupt the target."
+      help: "Combine any of: 0 upload, 1 interesting files, 2 misconfig, 3 info disclosure, 4 XSS/injection, 5 remote file (webroot), 6 DoS, 7 remote file (server-wide), 8 command execution, 9 SQLi, a auth bypass, b software ID, c remote source inclusion, d web service, e admin console, x = reverse (run everything EXCEPT listed). Avoid 6 unless you're allowed to disrupt the target."
     - field_id: vhost
       label: "Virtual host / Host header (-vhost)"
       type: string
@@ -489,3 +526,100 @@ quick_build:
       label: "List available plugins instead of scanning (-list-plugins)"
       type: bool
       help: "Prints every installed plugin and exits — doesn't scan anything. Ignores the other fields above."
+    - field_id: dbcheck
+      label: "Check plugin/database files for syntax errors (-dbcheck)"
+      type: bool
+      help: "Diagnostic only — verifies nikto's own data files parse correctly. Doesn't scan anything, ignores the other fields."
+    - field_id: version_info
+      label: "Print plugin & database versions (-Version)"
+      type: bool
+      help: "Diagnostic only — doesn't scan anything, ignores the other fields."
+    - field_id: nocheck
+      label: "Skip nikto's own update-check on startup (-nocheck)"
+      type: bool
+      help: "nikto silently checks CIRT.net for a newer nikto release every run unless told not to."
+    - field_id: ask
+      label: "Update-check prompt behaviour (-ask)"
+      type: choice
+      choices: ["yes", "no", "auto"]
+      help: "yes = ask each time (default), no = never ask/never send, auto = send without asking. Ignored if Skip update-check above is on."
+    - field_id: display_options
+      label: "Extra -Display sub-flags"
+      type: string
+      placeholder: "1 2 3 4 D E P S combined, e.g. 124  (optional)"
+      help: "1=show redirects, 2=show cookies received, 3=show all 200/OK responses, 4=show URLs needing auth, D=debug output, E=display all HTTP errors, P=print progress, S=scrub IPs/hostnames from output. Combines with the Verbose checkbox below (which is just shorthand for V) into one -Display value."
+    - field_id: check6
+      label: "Check IPv6 connectivity first (-check6)"
+      type: bool
+      help: "Tries to reach ipv6.google.com (or the host set in nikto.conf) before scanning — a quick sanity check, not part of the scan itself."
+    - field_id: ip_version
+      label: "Force IP version"
+      type: choice
+      choices: [ipv4, ipv6]
+      help: "-ipv4/-ipv6 — force one address family instead of letting nikto pick. Leave blank for the default."
+    - field_id: nolookup
+      label: "Skip DNS lookups (-nolookup)"
+      type: bool
+      help: "Faster when you already have an IP and don't need hostname resolution."
+    - field_id: nocookies
+      label: "Don't reuse response cookies in later requests (-nocookies)"
+      type: bool
+    - field_id: noslash
+      label: "Strip trailing slash from URLs (-noslash)"
+      type: bool
+      help: "e.g. '/admin/' becomes '/admin' — some servers/WAFs behave differently with vs without it."
+    - field_id: no404
+      label: "Disable nikto's 404-page guessing (-no404)"
+      type: bool
+      help: "Turn on if a custom error page is confusing nikto's false-positive detection."
+    - field_id: followredirects
+      label: "Follow 3xx redirects (-followredirects)"
+      type: bool
+    - field_id: nointeractive
+      label: "Disable interactive keypresses (-nointeractive)"
+      type: bool
+      help: "Useful when scripting nikto — no prompts waiting on stdin."
+    - field_id: useragent
+      label: "Custom User-Agent (-useragent)"
+      type: string
+      placeholder: "optional — overrides nikto's own default User-Agent string"
+    - field_id: add_header
+      label: "Add a custom HTTP header (-Add-header)"
+      type: string
+      placeholder: "X-Forwarded-For: 127.0.0.1  (optional, one header)"
+    - field_id: ignore_code
+      label: "Always ignore these HTTP status codes (-404code)"
+      type: string
+      placeholder: "302,301  (optional — treat as 'not found', cuts false positives)"
+    - field_id: ignore_string
+      label: "Always ignore this string in the response body (-404string)"
+      type: string
+      placeholder: "optional — a literal string or regex; also treated as 'not found'"
+    - field_id: cgidirs
+      label: "CGI directories to check (-Cgidirs)"
+      type: string
+      placeholder: "none, all, or  /cgi/ /cgi-a/  (optional)"
+      help: "Which paths nikto treats as CGI script directories. 'all' checks every known CGI path nikto knows; 'none' skips CGI checks entirely."
+    - field_id: platform
+      label: "Target platform (-Platform)"
+      type: choice
+      choices: [nix, win, all]
+      help: "Focuses platform-specific checks (e.g. Windows-only vs *nix-only file paths). Leave blank for nikto's own detection."
+    - field_id: root
+      label: "Prepend a root path to every request (-root)"
+      type: string
+      placeholder: "/app  (optional — when the site lives in a subdirectory)"
+    - field_id: userdbs
+      label: "Load only user-supplied databases (-Userdbs)"
+      type: choice
+      choices: [all, tests]
+      help: "all = skip nikto's standard databases entirely, load only your own user dbs. tests = keep standard databases but also load user db_tests. Advanced/rare."
+    - field_id: config
+      label: "Custom nikto.conf path (-config)"
+      type: path
+      placeholder: "optional — use a config file other than the default"
+    - field_id: option_override
+      label: "Override one nikto.conf setting (-Option)"
+      type: string
+      placeholder: "KEY=VALUE  (optional, advanced)"
+      help: "Overrides a single nikto.conf entry for this run without editing the file. The real -Option flag can be repeated for multiple overrides; this form supports one."

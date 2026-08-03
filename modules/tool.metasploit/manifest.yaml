@@ -8,7 +8,7 @@ requires:
   modules: []
 provides:
   tool: metasploit
-  flows: [setup_db, search_use, configure_run, auxiliary, sessions_meterpreter, post, payloads, msfvenom, handler, workflow_db, maintenance]
+  flows: [guided, resume_existing, setup_db, search_use, configure_run, auxiliary, sessions_meterpreter, post, payloads, msfvenom, msfvenom_deepdive, handler, workflow_db, maintenance, console_launch_modes]
   glossary_terms: [framework, module_types, exploit, payload, auxiliary, post, meterpreter, rhosts_lhost, staged_stageless, reverse_bind, session, job, handler, datastore, workspace, msfvenom, msfdb, template_injection]
 content:
   tool: tool.yaml
